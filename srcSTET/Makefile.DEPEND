@@ -1,0 +1,14 @@
+main_stet.o:\
+	ModGrid.o \
+	ModSeMpi.o \
+	${SHAREDIR}/ModMpi.o \
+	${SHAREDIR}/CON_planet.o \
+	ModSeState.o \
+	${SHAREDIR}/ModIoUnit.o
+
+ModGrid.o:\
+	${SHAREDIR}/ModPlanetConst.o \
+	${SHAREDIR}/ModNumConst.o \
+	${SHAREDIR}/ModIoUnit.o \
+	${SHAREDIR}/ModPlotFile.o
+

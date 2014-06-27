@@ -1,0 +1,45 @@
+ModIndicesInterfaces.o:\
+	${SHAREDIR}/ModKind.o
+
+ModIndices.o:\
+	${SHAREDIR}/ModKind.o \
+	${SHAREDIR}/ModIoUnit.o
+
+read_NGDC_indices.o:\
+	${SHAREDIR}/ModKind.o \
+	ModIndices.o \
+	${SHAREDIR}/CON_geopack.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+read_SWPC_indices.o:\
+	${SHAREDIR}/ModKind.o \
+	ModIndices.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+read_NOAAHPI_indices.o:\
+	${SHAREDIR}/ModKind.o \
+	ModIndices.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+read_MHDIMF_indices.o:\
+	${SHAREDIR}/ModKind.o \
+	ModIndices.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+insert_into_indices_array.o:\
+	ModIndices.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+indices_set_inputs.o:\
+	ModIndices.o
+
+indices_library.o:\
+	ModIndices.o \
+	${SHAREDIR}/ModKind.o
+
+IO_library.o:\
+	ModIndices.o
+
+IO_set_inputs.o:\
+	ModIndices.o
+

@@ -1,0 +1,82 @@
+ModEIE_Interface.o:\
+	${SHAREDIR}/ModKind.o
+
+ED_ModInterface.o:\
+	ED_R_elec_ed_lup_subs.inc
+
+AMIE_Library.o:\
+	ModAMIE_Interface.o \
+	ModErrors.o \
+	ModEIE_Interface.o
+
+EIE_End.o:\
+	ModEIE_Interface.o
+
+EIE_Initialize.o:\
+	ModErrors.o \
+	ModEIE_Interface.o \
+	ModEIEFiles.o \
+	${SHAREDIR}/ModIoUnit.o \
+	ModWeimer.o \
+	ModWeimer05.o
+
+EIE_Library.o:\
+	ModErrors.o \
+	ModEIE_Interface.o
+
+EIE_IoLibrary.o:\
+	ModEIE_Interface.o \
+	ModErrors.o \
+	ModWeimer.o \
+	ModWeimer05.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+EIE_UaLibrary.o:\
+	ModEIE_Interface.o \
+	ModErrors.o \
+	ModWeimer.o \
+	ModWeimer05.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+EIE_set_inputs.o:\
+	ModEIE_Interface.o \
+	ModEIEFiles.o \
+	ModExtras.o \
+	${SHAREDIR}/ModTimeConvert.o
+
+readAMIEoutput.o:\
+	ModAMIE_Interface.o \
+	ModEIEFiles.o \
+	${SHAREDIR}/ModTimeConvert.o \
+	${SHAREDIR}/ModIoUnit.o
+
+readMHDoutput.o:\
+	ModMHD_Interface.o \
+	ModEIEFiles.o \
+	${SHAREDIR}/ModTimeConvert.o \
+	${SHAREDIR}/ModIoUnit.o
+
+ihp.o:\
+	ModEIEConductance.o \
+	ModEIEFiles.o \
+	ModEIE_Interface.o \
+	ModErrors.o \
+	${SHAREDIR}/ModIoUnit.o
+
+MHD_Library.o:\
+	ModMHD_Interface.o \
+	ModErrors.o \
+	ModEIE_Interface.o
+
+ED_Interface.o:\
+	ED_R_elec_ed_lup_subs.inc
+
+ED_ReadIonHeat.o:\
+	ED_ModIons.o \
+	${SHAREDIR}/ModIoUnit.o \
+	${SHAREDIR}/ModNumConst.o
+
+ED_r_elec_ed_lup_subs.o:\
+	ED_R_elec_ed_lup_subs.inc \
+	${SHAREDIR}/ModIoUnit.o
+
