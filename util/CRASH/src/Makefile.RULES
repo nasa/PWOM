@@ -1,3 +1,0 @@
-ModFermiGas.o: ModFermiGas.f90
-	${COMPILE.f90} ${Cflag0} ModFermiGas.f90
-

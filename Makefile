@@ -190,6 +190,7 @@ PDF:
 clean:
 	@touch ${INSTALLFILES}
 	cd src; make clean
+	cd srcSTET; make clean
 	cd srcInterface; make clean
 	cd doc/Tex; make clean
 	cd srcPostProc; make clean

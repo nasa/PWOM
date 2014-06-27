@@ -1,3 +1,0 @@
-ModMpiOrig.o: ModMpiOrig.f90
-	${CUSTOMPATH_MPI}mpif90 ${Cflag0} ModMpiOrig.f90
-
