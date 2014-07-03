@@ -32,6 +32,8 @@ Module ModSeGrid
   integer, public,allocatable :: nThetaAlt_II(:,:)! number of PA points at 
                                                   !  each alt
   
+  real, public,allocatable    :: mu_II(:,:)      !Cosine of local PA at each alt
+
   !B Grid
   real, public, allocatable :: Bfield_IC(:,:) ! Bfield in G at each alt step and
                                              ! for each line
