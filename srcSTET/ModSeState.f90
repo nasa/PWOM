@@ -10,8 +10,7 @@ Module ModSeState
   real, public :: specup(Elen,Slen+2*JMAX),specdn(Elen,Slen+2*JMAX)
   real, public :: lphiup(0:Angles,Slen,Elen),lphidn(0:Angles,Slen,Elen)
   real, public :: liphiup(0:IONANG,2*JMAX,Elen),liphidn(0:IONANG,2*JMAX,Elen)
-
-  real, public :: t,delt,time,epsilon
+  real, public :: t,delt,epsilon
 
   ! Ring current parameters for coulomb collisions
   real :: NRC,TRC,MRC,IRC,SRC            !,Iterm1,Iterm2
@@ -24,20 +23,22 @@ contains
     
     USE ModSeGrid, only: nEnergy, EnergyGrid_I, DeltaE_I, EnergyMin, EnergyMax,&
          EqAngleGrid_IG,nThetaAlt_II,dTheta_II,mu_II,&
-         FieldLineGrid_IC,nTop,Bfield_I,BFieldEq_I, BFieldIono_I, &
+         FieldLineGrid_IC,nTop,Bfield_IC, BFieldIono_I, &
          nIono, nPlas, nPoint,nAngle
     
     USE ModSeBackground, only: eThermalDensity_IC,eThermalTemp_IC
 
-    use ModNumConst,    ONLY: cPi
+    use ModMath, only: midpnt_int
     
+    use ModNumConst,    ONLY: cPi
+
     IMPLICIT NONE
-    INCLUDE 'numbers.h'
+!    INCLUDE 'numbers.h'
     integer, intent(in) :: iLine
     REAL h,p,Fcheck, sigmaO,muO,velt,coef, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
          Fsum, delE,Flasti, Flastt,Qstar, Theta,s1,s2
-    INTEGER i,j,k,,i1,jj,Ist, &
+    INTEGER i,j,k,i1,jj,Ist, &
          flag,count,warning,SPick,space,ii
 
     real :: cascade, lossum
@@ -134,8 +135,9 @@ contains
              specup(j,i)=-.5*specup(j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,27) t,j,i,i1,nThetaAlt_II(iLine,i)/4,flag,(phiup(k,i1,j),k=0,nThetaAlt_II(iLine,i)
-                WRITE (10,27) t,j,i,i1,nThetaAlt_II(iLine,i),flag,(phiup(k,i1,j),k=nThetaAlt_II(iLine,i)/2+1 &
+                WRITE (10,27) t,j,i,i1,nThetaAlt_II(iLine,i)/4,flag,(phiup(k,i1,j),k=0,nThetaAlt_II(iLine,i))
+                WRITE (10,27) t,j,i,i1,nThetaAlt_II(iLine,i),flag,&
+                     (phiup(k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
              h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            ! End Upward Region #2 loop
@@ -217,8 +219,9 @@ contains
     
 9999 IF (warning.GT.0) THEN
        PRINT *, 'Negative Densities Occurred:',newphi,warning
-       PRINT *, t,j,i,k,Bfield_IC(iLine,i),BFieldIono_I(iLine),BFieldIono_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,mu(k,i),del1, &
-            dTheta_II(iLine,i),beta(i),sigmaO,p,count,Qstar
+       PRINT *, t,j,i,k,Bfield_IC(iLine,i),BFieldIono_I(iLine),&
+            BFieldIono_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,mu(k,i),&
+            del1, dTheta_II(iLine,i),beta(i),sigmaO,p,count,Qstar
        PRINT *, phiup(k,i1,j),phidn(k,i1,j)
        STOP
     ELSE IF (warning.LT.0) THEN
@@ -289,6 +292,7 @@ contains
     RETURN
   END SUBROUTINE NumCalcVar
 
+
   !=============================================================================
   !* ------------------------------------------------------------------ **
   !*  Subroutine IonoVar3 sets collisional energy loss terms to zero,
@@ -339,64 +343,42 @@ contains
     del2=grid(kk+1)-grid(kk)
     RETURN
   END SUBROUTINE ThetaVar1
-
   !=============================================================================
-  !* ------------------------------------------------------------------ **
-  !  Subroutine NumCalcVar finds alpha(k) and sigma(k).
-  !*  VARIABLE DESCRIPTIONS
-  !*      alpha   Flux attenuator for this pitch angle
-  !*      alp      Flux attenuator for the previous pitch angle
-  !*      sigma   Flux offset for this angle: [flux]
-  !*      sig      Flux offset for the previous angle; [flux]
-  !*      del1    Pitch angle step between this and the previous step; rad
-  !*      del2    Pitch angle step between this and the next step; rad
-  !*      muO     Cosine of the equatorial pitch angle
-  !*      mu      Cosine of the actual pitch angle
-  !*      BB      Magnetic field strength for this step; G
-  !*      BO      Magnetic field strength at the equator; G
-  !*      beta    Energy loss parameters; ????
-  !*      lbeta   Previous energy step's beta; ????
-  !*      Fj      Flux for previous E for same space, time, and angle step
-  !*      Fi      Flux for previous space for same angle, time, and E step
-  !*      Ft      Flux for previous time for same E, space, and angle step
-  !*      vt      Velocity of an electron at this energy * delt; cm
-  !*      h       Size of this step; cm
-  !*      dE      Energy step size; eV
-  !*      Qstar   Electron production rate(primary plus secondary;
-  !*                cm-3 s-1 rad-1 ????
-  !*      p
-  !*      q
-  !*      a,b,c,d
-  !*
-  SUBROUTINE NumCalcVar(alpha,alp,sigma,sig,mu,coef,muO,del1, &
-       del2,beta,lbeta,Fi,Fj,Ft,vt,h,dE,Qstar,kk,s1,s2,cascade,lossum)
-    REAL alpha,alp,sigma,sig,mu,coef,muO,del1,del2,beta,lbeta,s1,s2, &
-         Fi,Fj,Ft,vt,h,dE,a,b,c,d,p,q,Qstar,lossum,cascade,kk
-
-    p=kk*s1*(muO**4+coef-1)/((muO**3)*(1-muO**2)**.5)
-    q=kk*s1*ABS((coef-1+muO**2)/muO**2)
-    a=(2*q-p*del2)/(del1*(del1+del2))
-    b=(2*q+p*del1)/(del2*(del1+del2))
-    c=(2*q+(del1-del2)*p)/(del1*del2)+s2*(kk*mu/h+beta/dE+lossum)+1/vt
-    d=s2*(lbeta*Fj/dE+kk*mu*Fi/h+Qstar+cascade)+Ft/vt
-    IF (b.LT.0.) b=0.
-    alpha=b/(c-a*alp)
-    sigma=(a*sig+d)/(c-a*alp)
-    IF ((d.LT.0).OR.(d-d.NE.0)) THEN
-       PRINT *,'NEG D ',p,q,a,b,c,d,sigma,sig,alpha,alp
-       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar,cascade
-    ELSE IF ((sigma.LT.0).OR.(sigma-sigma.NE.0)) THEN
-       PRINT *,'NEG SIGMA ',p,q,a,b,c,d,sigma,sig,alpha,alp
-       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
-    ELSE IF ((alpha.LT.0).OR.(alpha-alpha.NE.0)) THEN
-       PRINT *,'NEG ALPHA ',p,q,a,b,c,d,sigma,sig,alpha,alp
-       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
-    END IF
-    !      PRINT 10, BB,BO/BB,muO,del1,del2,p,q,a,b,alpha
-10  FORMAT (10(1PG11.4,1X))
-    RETURN
-  END SUBROUTINE NumCalcVar
   
+  !* ------------------------------------------------------------------ **
+  !  Subroutine CheckConv sees if a flux has converged or not.
+  !*  VARIABLE DESCRIPTIONS
+  !*      epsil   Convergence parameter in the iteration loop
+  !*      flag    Indicates whether the fluxes have converged
+  !*  FLUX VARIABLES; cm-2 s-1 eV-1 sr-1
+  !*        flux      Current flux value to be checked
+  !*      oldflux      Previous value to check against
+  !*
+  SUBROUTINE CheckConv(flux,oldflux,epsil,flag)
+    REAL   ,  intent(in) :: flux,oldflux,epsil
+    INTEGER, intent(out) :: flag
+    
+    real :: integer
+    !--------------------------------------------------------------------------
+    
+    IF (flux.GT.1E-20) THEN
+       error=ABS(flux-oldflux)/flux
+       IF (error.GT.epsil) flag=1
+    END IF
+    RETURN
+  END SUBROUTINE CheckConv
+  !=============================================================================
+  
+  subroutine allocate_state_arrays
 
+    if(.not.allocated(phiup)) allocate(phiup(0:Angles,0:nPoint,nEnergy))
+    if(.not.allocated(phidn)) allocate(phidn(0:Angles,0:nPoint,nEnergy))
+
+  real, public :: iphiup(0:IONANG,0:2*JMAX,Elen),iphidn(0:IONANG,0:2*JMAX,Elen)
+  real, public :: specup(Elen,Slen+2*JMAX),specdn(Elen,Slen+2*JMAX)
+  real, public :: lphiup(0:Angles,Slen,Elen),lphidn(0:Angles,Slen,Elen)
+  real, public :: liphiup(0:IONANG,2*JMAX,Elen),liphidn(0:IONANG,2*JMAX,Elen)
+
+  end subroutine allocate_state_arrays
 
 end Module ModSeState
