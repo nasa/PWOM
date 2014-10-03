@@ -102,5 +102,5 @@ contains
     IF (isw.EQ.-1) res = -res
     erf = res
     RETURN
- END IF
+  END FUNCTION erf
 end Module ModMath
