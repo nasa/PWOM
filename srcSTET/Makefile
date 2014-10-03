@@ -12,6 +12,8 @@ include Makefile.RULES
 MODULES = \
 	ModGrid.o\
 	ModSeMpi.o\
+	ModMath.o\
+	ModBackground.o\
 	ModSeState.o
 
 METHODS = \
