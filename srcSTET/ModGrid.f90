@@ -36,7 +36,10 @@ Module ModSeGrid
 
   !B Grid
   real, public, allocatable :: Bfield_IC(:,:) ! Bfield in G at each alt step and
-                                             ! for each line
+                                              ! for each line
+  real, public, allocatable :: BFieldIono_I(:)! B at ionosphere for each line
+  real, allocatable         :: BFieldEq_I(:)  ! B at equator for each line
+
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
 
   real, public :: nAngle=135 ! number of points in equatorial angle
@@ -51,7 +54,7 @@ Module ModSeGrid
   real, public :: nZone=4! number of pitchangle zones
   real, public :: MaxTheta
 
-  real, allocatable :: BFieldEq_I(:), BFieldIono_I(:)
+
 
 
   !E Grid
