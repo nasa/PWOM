@@ -3,7 +3,7 @@ Module ModSeBackground
 
   private !except
 
-  real, allocatable :: eThermalDensity_IC(:,:),eThermalTemp_IC(:,:)
+  real, public,allocatable :: eThermalDensity_IC(:,:),eThermalTemp_IC(:,:)
   
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
@@ -16,7 +16,7 @@ contains
          allocate(eThermalDensity_IC(nLine,nPoint))
     if(.not.allocated(eThermalTemp_IC)) &
          allocate(eThermalTemp_IC(nLine,nPoint))
-  end subroutine allocate_grid_arrays
+  end subroutine allocate_background_arrays
 
   !============================================================================
 end Module ModSeBackground
