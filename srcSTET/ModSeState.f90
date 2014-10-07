@@ -9,17 +9,17 @@ Module ModSeState
   !/
   
   ! Flux in the plasmasphere from first to second (up) ionosphere 
-  real, public,allocatable :: phiup(:,:,:),phidn(:,:,:)
+  real, public,allocatable :: phiup(:,:,:,:),phidn(:,:,:,:)
   
   ! Flux in the ionosphere from first to second (up) ionosphere 
-  real, public,allocatable :: iphiup(:,:,:),iphidn(:,:,:)
+  real, public,allocatable :: iphiup(:,:,:,:),iphidn(:,:,:,:)
   
   ! Flux from previous time step
-  real, public,allocatable :: lphiup(:,:,:),lphidn(:,:,:)
-  real, public,allocatable :: liphiup(:,:,:),liphidn(:,:,:)
+  real, public,allocatable :: lphiup(:,:,:,:),lphidn(:,:,:,:)
+  real, public,allocatable :: liphiup(:,:,:,:),liphidn(:,:,:,:)
   
   !Omnidirectional flux for upward/downward-directed hemisphere
-  real, public,allocatable :: specup(:,:),specdn(:,:)
+  real, public,allocatable :: specup(:,:,:),specdn(:,:,:)
   
   real, public :: delt,epsilon
 
@@ -27,6 +27,10 @@ Module ModSeState
   real :: NRC,TRC,MRC,IRC           !,Iterm1,Iterm2
   real,allocatable :: SRC(:)
   integer,parameter :: NRing=6 ! ring current Maxwellian fits
+
+  !public methods
+  public :: update_se_state
+  public :: se_update_state_test
 contains
   SUBROUTINE update_se_state(iLine)
     !*  This subroutine used to be the main program, until other operators
@@ -85,11 +89,12 @@ contains
           IF (count.GT.countmax-2) WRITE (10,*) 'Count: ',count
           !*  Upward Region #2: the plasmasphere
           do k=0,nThetaAlt_II(iLine,nIono)
-             phiup(k,0,j)=iphiup(k,nIono,j)
+             phiup(iLine,k,0,j)=iphiup(iLine,k,nIono,j)
           end do
           h=FieldLineGrid_IC(iLine,nIono+1)-FieldLineGrid_IC(iLine,nIono)
           FIELDLINE_UPWARD: DO i=nIono+1,nIono+nPlas
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
+             write(*,*)'test1'
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
@@ -104,9 +109,9 @@ contains
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phiup(k,i1-1,j)
-                Flastj=phiup(k,i1,j+1)
-                Flastt=lphiup(k,i1,j)
+                Flasti=phiup(iLine,k,i1-1,j)
+                Flastj=phiup(iLine,k,i1,j+1)
+                Flastt=lphiup(iLine,k,i1,j)
                 !write(*,*)' i,j,k', i,j,k
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_II(k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
@@ -120,39 +125,39 @@ contains
              ELSE
                 p=-s1/SQRT(ABS(1./coef-1.))
              END IF
-             Flastt=lphiup(nThetaAlt_II(iLine,i),i1,j)
-             Fsum=phiup(nThetaAlt_II(iLine,i)-1,i1,j)+phidn(nThetaAlt_II(iLine,i)-1,i1,j)
-             Fcheck=phiup(nThetaAlt_II(iLine,i),i1,j)
-             Flastj=phiup(nThetaAlt_II(iLine,i),i1,j+1)
+             Flastt=lphiup(iLine,nThetaAlt_II(iLine,i),i1,j)
+             Fsum=phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
+             Fcheck=phiup(iLine,nThetaAlt_II(iLine,i),i1,j)
+             Flastj=phiup(iLine,nThetaAlt_II(iLine,i),i1,j+1)
              newphi=(Flastt/velt-p*Fsum/(2.*dTheta_II(iLine,i))+s2*(lbeta(i)* &
                   Flastj/delE+Qstar+cascade))/ &
                   (1/velt-p/dTheta_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,2,*9999)
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phiup(nThetaAlt_II(iLine,i),i1,j)=newphi
+             phiup(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
              do k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phiup(k,i1,j)+sigma(k)
-                Fcheck=phiup(k-1,i1,j)
+                newphi=alpha(k)*phiup(iLine,k,i1,j)+sigma(k)
+                Fcheck=phiup(iLine,k-1,i1,j)
                 !            CALL CheckWarn(newphi,warning,3,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phiup(k-1,i1,j)=newphi
+                phiup(iLine,k-1,i1,j)=newphi
              end do
-             CALL midpnt_int(specup(j,i),phiup(0,i1,j),mu_II(0,i),1, &
+             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,i1,j),mu_II(0,i),1, &
                   nThetaAlt_II(iLine,i)+1,nAngle+1,1)
-             specup(j,i)=-.5*specup(j,i)
+             specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,27) time,j,i,i1,nThetaAlt_II(iLine,i)/4,&
-                     flag,(phiup(k,i1,j),k=0,nThetaAlt_II(iLine,i))
+                     flag,(phiup(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i))
                 WRITE (10,27) time,j,i,i1,nThetaAlt_II(iLine,i),flag,&
-                     (phiup(k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
+                     (phiup(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
              h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            ! End Upward Region #2 loop
           end DO FIELDLINE_UPWARD
           !*  Downward Region #2: the plasmasphere
           do k=0,nThetaAlt_II(iLine,nIono)
-             phidn(k,nPlas+1,j)=iphidn(k,nIono+1,j)
+             phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
           end do
           h=FieldLineGrid_IC(iLine,nIono+nPlas)-FieldLineGrid_IC(iLine,nIono+nPlas+1)
           FIELDLINE_DOWN: DO i=nIono+nPlas,nIono+1,-1
@@ -173,9 +178,9 @@ contains
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phidn(k,i1+1,j)
-                Flastj=phidn(k,i1,j+1)
-                Flastt=lphidn(k,i1,j)
+                Flasti=phidn(iLine,k,i1+1,j)
+                Flastj=phidn(iLine,k,i1,j+1)
+                Flastt=lphidn(iLine,k,i1,j)
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      -mu_II(k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
@@ -188,32 +193,32 @@ contains
              ELSE
                 p=s1/SQRT(ABS(1./coef-1.))
              END IF
-             Flastt=phidn(nThetaAlt_II(iLine,i),i1,j)
-             Fsum=phidn(nThetaAlt_II(iLine,i)-1,i1,j)+phiup(nThetaAlt_II(iLine,i)-1,i1,j)
-             Fcheck=phidn(nThetaAlt_II(iLine,i),i1,j)
-             Flastj=phidn(nThetaAlt_II(iLine,i),i1,j+1)
+             Flastt=phidn(iLine,nThetaAlt_II(iLine,i),i1,j)
+             Fsum=phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
+             Fcheck=phidn(iLine,nThetaAlt_II(iLine,i),i1,j)
+             Flastj=phidn(iLine,nThetaAlt_II(iLine,i),i1,j+1)
              newphi=(Flastt/velt+p*Fsum/(2.*dTheta_II(iLine,i))+s2*(lbeta(i)* &
                   Flastj/delE+Qstar+cascade))/ &
                   (1/velt+p/dTheta_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,5,*9999)
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phidn(nThetaAlt_II(iLine,i),i1,j)=newphi
+             phidn(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
              DO k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phidn(k,i1,j)+sigma(k)
-                Fcheck=phidn(k-1,i1,j)
+                newphi=alpha(k)*phidn(iLine,k,i1,j)+sigma(k)
+                Fcheck=phidn(iLine,k-1,i1,j)
                 !            CALL CheckWarn(newphi,warning,6,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phidn(k-1,i1,j)=newphi
+                phidn(iLine,k-1,i1,j)=newphi
              end DO
-             CALL midpnt_int(specdn(j,i),phidn(0,i1,j),mu_II(0,i),1, &
+             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,i1,j),mu_II(0,i),1, &
                   nThetaAlt_II(iLine,i)+1,nAngle+1,1)
-             specdn(j,i)=.5*specdn(j,i)
+             specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,27) time,j,i,i1,flag,&
-                     (phidn(k,i1,j),k=0,nThetaAlt_II(iLine,i)/2,2)
+                     (phidn(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i)/2,2)
                 WRITE (10,27) time,j,i,i1,flag,&
-                     (phidn(k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
+                     (phidn(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
              h=FieldLineGrid_IC(iLine,i-1)-FieldLineGrid_IC(iLine,i)            ! End Downward Region #2 loop
@@ -232,7 +237,7 @@ contains
        PRINT *, time,j,i,k,Bfield_IC(iLine,i),BFieldIono_I(iLine),&
             BFieldIono_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,mu_II(k,i),&
             del1, dTheta_II(iLine,i),beta(i),sigmaO,p,count,Qstar
-       PRINT *, phiup(k,i1,j),phidn(k,i1,j)
+       PRINT *, phiup(iLine,k,i1,j),phidn(iLine,k,i1,j)
        STOP
     ELSE IF (warning.LT.0) THEN
        PRINT *, 'No convergence: ',count,Time,warning,j
@@ -320,15 +325,17 @@ contains
   !NOTE: CHECK HOW SRC is defined
   SUBROUTINE CoulVar(i,beta,sigO1,TE,ZE,KE)
     USE ModSeGrid, only: nPoint
-    EXTERNAL G,erf
-    REAL beta,sigO1,TE,ZE,KE,G,MRC(NRing),NRC(NRing),TRC(NRing),A,MC, &
-         X,erf
+    use ModMath, only: G,erf
+    REAL beta,sigO1,TE,ZE,KE,MRC(NRing),NRC(NRing),TRC(NRing),A,MC,X
     INTEGER n,IRC,i                              !,Iterm1,Iterm2
     
     DATA A/2.6E-12/, MC/1837./
     !write(*,*) 'KE, TE',KE, TE
+    write(*,*) 'test1'
     X=SQRT(KE/TE)
+    write(*,*) 'test2', X
     beta=ZE/TE*G(X)                  ! ion infl. --> zero
+    write(*,*) 'test3'
     sigO1=ZE*(1.+erf(X)-G(X))            ! ion infl. = ZE (thus the 1.
     do n=1,IRC                  ! Ring current influence
        X=SQRT(KE*MC*MRC(n)/TRC(n))
@@ -380,24 +387,190 @@ contains
   END SUBROUTINE CheckConv
   !=============================================================================
   
+  !* ------------------------------------------------------------------ **
+  !  Subroutine CheckFlag sees if the loop  ended due to convergence or
+  !  not.
+  !*  VARIABLE DESCRIPTIONS
+  !*      flag    Indicates whether the fluxes have converged
+  !*      check      The number to check flag against
+  !*      warn    Indicates (nonzero) negative densities have occurred
+  !*      mark      Value warn is set to if check fails (for diagnostics)
+  !*
+  SUBROUTINE CheckFlag(flag,check,warn,mark,*)
+    INTEGER flag,check,warn,mark
+    IF (flag.EQ.check) THEN
+       warn=mark
+       PRINT *, 'Flag=',flag
+       RETURN 1
+    END IF
+    RETURN
+  END SUBROUTINE CheckFlag
+
+  !=============================================================================
+  !* ------------------------------------------------------------------ **
+  !*  Pass fluxes to "last time step fluxes" and set flux arrays to zero.
+  SUBROUTINE InitPlas(iLine,DoSavePreviousAndReset)
+    USE ModSeGrid, only: nEnergy, nPlas,nIono,nThetaAlt_II
+    IMPLICIT NONE
+
+    integer, intent(in) :: iLine
+    logical, intent(in) :: DoSavePreviousAndReset
+    real :: c
+    INTEGER iPlas,j,iAngle,iAlt
+
+    ! Set upper energy boundary condition on the flux. 
+    ! Set fluxes at nEnergy+1 to fluxes at nEnergy times a constant <= 1 
+    do iPlas=1,nPlas
+       iAlt=iPlas+nIono
+       do iAngle=0,nThetaAlt_II(iLine,iAlt)
+          
+          ! set bc for fluxes up
+          c=0.
+          IF (phiup(iLine,iAngle,iPlas,nEnergy-1).GT.0.) c=min(1., &
+               .75*phiup(iLine,iAngle,iPlas,nEnergy)/phiup(iLine,iAngle,iPlas,nEnergy-1))
+          phiup(iLine,iAngle,iPlas,nEnergy+1)=phiup(iLine,iAngle,iPlas,nEnergy)*c
+
+          ! set bc for fluxes down
+          c=0.
+          IF (phidn(iLine,iAngle,iPlas,nEnergy-1).GT.0.) c=min(1., &
+               .75*phidn(iLine,iAngle,iPlas,nEnergy)/phidn(iLine,iAngle,iPlas,nEnergy-1))
+          phidn(iLine,iAngle,iPlas,nEnergy+1)=phidn(iLine,iAngle,iPlas,nEnergy)*c
+       end do
+    end do
+    
+    ! Only update nEnergy+1 values?
+    if (.not.DoSavePreviousAndReset) RETURN
+
+!*  Move current time fluxes to previous time fluxes
+    lphiup(iLine,:,1:nPlas,1:nEnergy) = phiup(iLine,:,1:nPlas,1:nEnergy)
+    lphidn(iLine,:,1:nPlas,1:nEnergy) = phidn(iLine,:,1:nPlas,1:nEnergy)
+
+!*  Reset current time fluxes
+    phiup(iLine,:,:,:)=0.0
+    phidn(iLine,:,:,:)=0.0
+
+    RETURN
+  END SUBROUTINE InitPlas
+  !=============================================================================
+  !* ------------------------------------------------------------------ **
+  !*  Pass fluxes to "last time step fluxes" and set flux arrays to zero.
+  SUBROUTINE InitIono(iLine,DoSavePreviousAndReset)
+    USE ModSeGrid, only: nEnergy, nPlas,nIono,nThetaAlt_II
+    IMPLICIT NONE
+
+    integer, intent(in) :: iLine
+    logical, intent(in) :: DoSavePreviousAndReset
+    real :: c
+    INTEGER iIono,j,iAngle,iAlt
+
+    ! Set upper energy boundary condition on the flux. 
+    ! Set fluxes at nEnergy+1 to fluxes at nEnergy times a constant <= 1 
+    do iIono=1,nIono
+       iAlt=iIono
+       do iAngle=0,nThetaAlt_II(iLine,iAlt)
+          
+          ! set bc for fluxes up
+          c=0.
+          IF (iphiup(iLine,iAngle,iIono,nEnergy-1).GT.0.) c=min(1., &
+               .75*iphiup(iLine,iAngle,iIono,nEnergy) &
+               /iphiup(iLine,iAngle,iIono,nEnergy-1))
+          iphiup(iLine,iAngle,iIono,nEnergy+1)=&
+               iphiup(iLine,iAngle,iIono,nEnergy)*c
+
+          ! set bc for fluxes down
+          c=0.
+          IF (iphidn(iLine,iAngle,iIono,nEnergy-1).GT.0.) c=min(1., &
+               .75*iphidn(iLine,iAngle,iIono,nEnergy) &
+               /iphidn(iLine,iAngle,iIono,nEnergy-1))
+          iphidn(iLine,iAngle,iIono,nEnergy+1)=&
+               iphidn(iLine,iAngle,iIono,nEnergy)*c
+
+       end do
+    end do
+    
+    ! Only update nEnergy+1 values?
+    if (.not.DoSavePreviousAndReset) RETURN
+
+!*  Move current time fluxes to previous time fluxes
+    liphiup(iLine,:,1:2*nIono,1:nEnergy) = iphiup(iLine,:,1:2*nIono,1:nEnergy)
+    liphidn(iLine,:,1:2*nIono,1:nEnergy) = iphidn(iLine,:,1:2*nIono,1:nEnergy)
+
+!*  Reset current time fluxes
+    iphiup(iLine,:,:,:)=0.0
+    iphidn(iLine,:,:,:)=0.0
+
+    RETURN
+  END SUBROUTINE InitIono
+
+  !============================================================================
+  !  This subroutine checks for "time" convergence for a particular line
+  SUBROUTINE check_time(iLine,flag)
+    use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine,&
+         nThetaAlt_II
+
+    integer,intent(in) :: iLine
+    integer,intent(out):: flag
+    integer :: iEnergy, iAngle, iAlt, iIono
+    integer ibad
+    real    :: flux, oldflux
+    !--------------------------------------------------------------------------
+
+    Ibad=0
+    flag=0
+
+    ! loop over all energy, altitudes, and angles to evaluate convergence
+    do iEnergy=nEnergy,1,-1
+       do iAlt=1,nPoint
+          do iAngle=0,nThetaAlt_II(iLine,iAlt)
+             !choose what region to set the flux from
+             IF (iAlt <= nIono) THEN
+                !ionosphere 1
+                flux=iphiup(iLine,iAngle,iAlt,iEnergy)
+                oldflux=liphiup(iLine,iAngle,iAlt,iEnergy)
+             elseif(iAlt >nIono .and. iAlt <=nPoint-nIono) then
+                !plasmasphere
+                flux=phiup(iLine,iAngle,iAlt,iEnergy)
+                oldflux=lphiup(iLine,iAngle,iAlt,iEnergy)
+             else
+                !ionosphere 2
+                iIono=iAlt-nPlas
+                flux=iphiup(iLine,iAngle,iIono,iEnergy)
+                oldflux=liphiup(iLine,iAngle,iIono,iEnergy)
+             endif
+             
+             ! check the convergence
+             call CheckConv(flux,oldflux,epsilon,flag)
+
+             if (flag ==1 .and. oldflux > 0.0) Ibad=Ibad+1
+             
+          end do
+       end do
+    end do
+    write(*,*), 'check_time: Ibad=',Ibad
+    RETURN
+  END SUBROUTINE check_time
+  
+  !============================================================================
   subroutine allocate_state_arrays
-    use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint
+    use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine
     
     
-    if(.not.allocated(phiup)) allocate(phiup(0:nAngle,0:nPlas,nEnergy))
-    if(.not.allocated(phidn)) allocate(phidn(0:nAngle,0:nPlas,nEnergy))
+    if(.not.allocated(phiup)) allocate(phiup(nLine,0:nAngle,0:nPlas,nEnergy+1))
+    if(.not.allocated(phidn)) allocate(phidn(nLine,0:nAngle,0:nPlas,nEnergy+1))
 
-    if(.not.allocated(iphiup)) allocate(iphiup(0:nAngle,0:2*nIono,nEnergy))
-    if(.not.allocated(iphidn)) allocate(iphidn(0:nAngle,0:2*nIono,nEnergy))
+    if(.not.allocated(iphiup)) &
+         allocate(iphiup(nLine,0:nAngle,0:2*nIono,nEnergy+1))
+    if(.not.allocated(iphidn)) &
+         allocate(iphidn(nLine,0:nAngle,0:2*nIono,nEnergy+1))
 
-    if(.not.allocated(specup)) allocate(specup(nEnergy,nPoint))
-    if(.not.allocated(specdn)) allocate(specdn(nEnergy,nPoint))
+    if(.not.allocated(specup)) allocate(specup(nLine,nEnergy,nPoint))
+    if(.not.allocated(specdn)) allocate(specdn(nLine,nEnergy,nPoint))
 
-    if(.not.allocated(lphiup)) allocate(lphiup(0:nAngle,nPlas,nEnergy))
-    if(.not.allocated(lphidn)) allocate(lphidn(0:nAngle,nPlas,nEnergy))    
+    if(.not.allocated(lphiup)) allocate(lphiup(nLine,0:nAngle,nPlas,nEnergy))
+    if(.not.allocated(lphidn)) allocate(lphidn(nLine,0:nAngle,nPlas,nEnergy))
 
-    if(.not.allocated(liphiup)) allocate(liphiup(0:nAngle,2*nIono,nEnergy))
-    if(.not.allocated(liphidn)) allocate(liphidn(0:nAngle,2*nIono,nEnergy))    
+    if(.not.allocated(liphiup))allocate(liphiup(nLine,0:nAngle,2*nIono,nEnergy))
+    if(.not.allocated(liphidn))allocate(liphidn(nLine,0:nAngle,2*nIono,nEnergy))
 
     if(.not.allocated(SRC))    allocate(SRC(nPoint))
   end subroutine allocate_state_arrays
@@ -408,14 +581,21 @@ contains
     use ModSeBackground
     Use ModSeGrid, only:create_se_test_grid,nLine,nPoint
 
+    integer :: iLine=1, flag=1
+    logical :: DoSavePreviousAndReset = .false.
+    !--------------------------------------------------------------------------
+
     ! First set up the grid that we will update the state in (this is the same 
     ! as the unit test for the grid).
+    write(*,*) 'creating grid'
     call create_se_test_grid
 
     ! Allocate the state arrays
+    write(*,*) 'allocating state arrays'
     call allocate_state_arrays
     
     ! Allocate the background right
+    write(*,*) 'allocating background arrays'
     call allocate_background_arrays(nLine,nPoint)
     
     ! Fill the background arrays
@@ -423,19 +603,33 @@ contains
     eThermalTemp_IC(:,:) = 1.0
     
     ! Define the initial state in the ionosphere
-    iphiup(:,:,:)=1.0
-    iphidn(:,:,:)=1.0
+    do iLine=1,nLine
+       iphiup(iLine,:,:,:)=1.0
+       iphidn(iLine,:,:,:)=1.0
 
+       phiup(iLine,:,:,:)=0.00001
+       phidn(iLine,:,:,:)=0.00001
+    end do
+    
     ! Set the timestep and convergence criteria
     delt=1.0e5
     epsilon = 0.01
 
-    ITERATION_LOOP: do
-
+    write(*,*) 'Starting Time loop'
+    TIME_LOOP: do while (flag == 1)
+       ! Initialize the plasmasphere
+       write(*,*) 'Initializing plasmasphere'
+       call initplas(1,DoSavePreviousAndReset)
+       
        ! update the SE state
+       write(*,*) 'update se state'
        call update_se_state(1)
-
-    end do ITERATION_LOOP
-
+       
+       ! check convergence
+       write(*,*) 'check for convergence'
+       call check_time(1,flag)
+       
+    end do TIME_LOOP
+    
   end subroutine se_update_state_test
 end Module ModSeState
