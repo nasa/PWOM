@@ -7,6 +7,7 @@ Module ModMath
   
   public :: midpnt_int
   public :: erf
+  public :: G
 
 contains
 
@@ -103,4 +104,17 @@ contains
     erf = res
     RETURN
   END FUNCTION erf
+
+  !* ------------------------------------------------------------------ **
+  !*  The G function
+  FUNCTION G(X)
+    REAL G,X,pi
+    DATA pi/3.1415926/
+    X2=X*X
+    !write(*,*) 'X, X2',X, X2
+    G=.5*erf(X)/X2 - EXP(-X2)/SQRT(pi)/X
+    RETURN
+  END FUNCTION G
+
+
 end Module ModMath
