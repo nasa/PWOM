@@ -5,6 +5,7 @@ Module ModSeBackground
 
   real, public,allocatable :: eThermalDensity_IC(:,:),eThermalTemp_IC(:,:)
   
+  public :: allocate_background_arrays
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
   
