@@ -1,6 +1,7 @@
 program main_stet
   use ModSeGrid
   use ModSeMpi
+  use ModSeState,only:se_update_state_test
   use ModMPI
   use CON_planet, ONLY: init_planet_const, set_planet_defaults
 
@@ -30,8 +31,8 @@ program main_stet
   call set_planet_defaults
 
   write(*,*) 'starting se_grid_test'
-  call se_grid_test
-
+!  call se_grid_test
+  call se_update_state_test
 
 end program main_stet
 
