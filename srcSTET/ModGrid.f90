@@ -56,7 +56,7 @@ Module ModSeGrid
 
   !E Grid
   character(len=10) :: TypeGridE
-  integer,public :: nEnergy=80
+  integer,public :: nEnergy
   real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
   
@@ -105,6 +105,8 @@ contains
        call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
        write(*,*) 'calc equatorial PA grid', iLine
        call calc_equatorial_pitchangle(iLine,Beq,Biono)
+       write(*,*) 'calc energy grid', iLine
+       call calc_energy_grid
     enddo
   end subroutine init_se_grid
 
@@ -133,7 +135,6 @@ contains
 
     
     do iAlt = 1, nPoint
-       write(*,*) iAlt
        if (iAlt <= nIono1) then
           !set alt zone 1 of N. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = BaseAltIono+(iAlt-1)*DrIono1
@@ -208,7 +209,7 @@ contains
     ! Set Maximum number of points in equatorial PA
     MaxTheta = sum(nTheta_II(iLine,:))
     
-    if (.not.allocated(tmp_array)) allocate(tmp_array(MaxTheta))
+    if (.not.allocated(tmp_array)) allocate(tmp_array(0:MaxTheta))
     
     ! Set the theta range for each zone and each line
     !  (currently assumes 4 zones)
@@ -238,7 +239,6 @@ contains
                + sum(ThetaZone_II(iLine,1:3))
        end if
  
-       write(*,*) 'iAngle,EqAngleGrid_IG(iLine,iAngle)',iAngle,EqAngleGrid_IG(iLine,iAngle)
    end do
     
     ! Fill in Ghost Cells of Equatorial Angle Grid
@@ -291,10 +291,12 @@ contains
 
     select case(TypeGridE)
     case('ConstDE')
-       EnergyMin=EnergyMax-nEnergy*DeltaE_I(1)
+       EnergyMin=EnergyMax-nEnergy*DeltaE
+       write(*,*)EnergyMin
        do iEnergy = 1, nEnergy
           !Constant DeltaE grid
           EnergyGrid_I(iEnergy)=EnergyMin+DeltaE*(iEnergy-0.5)
+          write(*,*) iEnergy,EnergyGrid_I(iEnergy)
           DeltaE_I(iEnergy)=DeltaE
        end do
     case('ConstLogDE')
@@ -346,7 +348,7 @@ contains
     if(.not.allocated(ThetaZone_II))    allocate(ThetaZone_II(nLine,nZone))
     if(.not.allocated(dTheta_II))       allocate(dTheta_II(nLine,nZone))
     if(.not.allocated(nThetaAlt_II))    allocate(nThetaAlt_II(nLine,nPoint))
-    if(.not.allocated(EqAngleGrid_IG))  allocate(EqAngleGrid_IG(nLine,nPoint))
+    if(.not.allocated(EqAngleGrid_IG))  allocate(EqAngleGrid_IG(nLine,0:nAngle))
     if(.not.allocated(Bfield_IC))       allocate(Bfield_IC(nLine,nPoint))
     if(.not.allocated(Lshell_I))        allocate(Lshell_I(nLine))
     if(.not.allocated(FieldLineGrid_IC))allocate(FieldLineGrid_IC(nLine,nPoint))
@@ -412,6 +414,12 @@ contains
     DrIono4 = 5e6
     nIono4  = 2    
 
+    ! set the energy parameters for the energy grid
+    TypeGridE = 'ConstDE'
+    nEnergy=100
+    EnergyMax=100.5
+    DeltaE = 1.0
+
     ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
     write(*,*) 'allocating arrays'
     call allocate_grid_arrays
@@ -425,8 +433,10 @@ contains
     nAngle = sum(nTheta_II(1,:))
 
     write(*,*) nLine,Lshell_I
+
     write(*,*) 'calling init_se_grid'
     call init_se_grid
+    write(*,*) 'EnergyGrid_I',EnergyGrid_I
   end subroutine create_se_test_grid
   !============================================================================
   ! UNIT test for SE grid
