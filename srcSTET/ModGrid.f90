@@ -42,20 +42,17 @@ Module ModSeGrid
 
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
 
-  real, public :: nAngle=135 ! number of points in equatorial angle
-  real, public :: nPoint=200 ! total number of points on grid
-  real, public :: nIono =30  ! number of points in each ionosphere
-  real, public :: nPlas =140  ! number of points in plasmasphere
-  real, public :: nPlasHalf   ! number of points from BasePlas to equator
-  real, public :: nTop   ! number of points to top (in open) 
+  integer, public :: nAngle=135 ! number of points in equatorial angle
+  integer, public :: nPoint=200 ! total number of points on grid
+  integer, public :: nIono =30  ! number of points in each ionosphere
+  integer, public :: nPlas =140  ! number of points in plasmasphere
+  integer, public :: nPlasHalf   ! number of points from BasePlas to equator
+  integer, public :: nTop   ! number of points to top (in open) 
                          !   or equatorial (in closed)
 
-  real, public :: nLine=1! number of field lines
-  real, public :: nZone=4! number of pitchangle zones
-  real, public :: MaxTheta
-
-
-
+  integer, public :: nLine=1! number of field lines
+  integer, public :: nZone=4! number of pitchangle zones
+  integer, public :: MaxTheta
 
   !E Grid
   character(len=10) :: TypeGridE
@@ -63,7 +60,12 @@ Module ModSeGrid
   real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
   
+
+  ! public methods
+  public :: allocate_grid_arrays
+  public :: init_se_grid
   public :: se_grid_test
+  public :: create_se_test_grid
 
 
 
@@ -396,10 +398,11 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_grid
+
   !============================================================================
-  ! UNIT test for SE grid
-  subroutine se_grid_test
-    
+  ! Test Grid: This is a routine that creates the test grid for all unit tests 
+  ! (since all other modules rely on the grid)
+  subroutine create_se_test_grid
     DrIono1 = 1e6
     nIono1  = 12
     DrIono2 = 2e6
@@ -424,6 +427,11 @@ contains
     write(*,*) nLine,Lshell_I
     write(*,*) 'calling init_se_grid'
     call init_se_grid
+  end subroutine create_se_test_grid
+  !============================================================================
+  ! UNIT test for SE grid
+  subroutine se_grid_test
+    call create_se_test_grid
     write(*,*) 'calling plot_grid'
     call plot_grid
   end subroutine se_grid_test
