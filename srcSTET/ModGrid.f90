@@ -101,6 +101,7 @@ contains
        MLAT1=PhiBasePlas*180./cPi
        Beq   = 0.31/Lshell_I(iLine)**3
        Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
+       BFieldIono_I(iLine) = Biono
        write(*,*) 'calc bfield and s grid for iLine = ', iLine
        call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
        write(*,*) 'calc equatorial PA grid', iLine
@@ -202,7 +203,7 @@ contains
     integer :: iAlt, iAngle
     real    :: LocalThetaMax
 
-    real, allocatable :: tmp_array(:)
+    integer, allocatable :: tmp_array(:)
     !--------------------------------------------------------------------------
     
     
@@ -255,7 +256,7 @@ contains
        where(EqAngleGrid_IG(iLine,:) <= LocalThetaMax)
           Tmp_array = 1 
        end where
-       nThetaAlt_II(iLine,iAlt) = sum(Tmp_array)
+       nThetaAlt_II(iLine,iAlt) = max(sum(Tmp_array)-1,0)
     enddo
     
   end subroutine calc_equatorial_pitchangle
@@ -299,6 +300,7 @@ contains
           write(*,*) iEnergy,EnergyGrid_I(iEnergy)
           DeltaE_I(iEnergy)=DeltaE
        end do
+       DeltaE_I(nEnergy+1)=DeltaE
     case('ConstLogDE')
        ! Constant log(DeltaE) grid
        EnergySide2=alog(EnergyMax)+0.5*DeltaE-DeltaE*nEnergy
@@ -350,9 +352,10 @@ contains
     if(.not.allocated(nThetaAlt_II))    allocate(nThetaAlt_II(nLine,nPoint))
     if(.not.allocated(EqAngleGrid_IG))  allocate(EqAngleGrid_IG(nLine,0:nAngle))
     if(.not.allocated(Bfield_IC))       allocate(Bfield_IC(nLine,nPoint))
+    if(.not.allocated(BFieldIono_I))    allocate(BFieldIono_I(nLine))
     if(.not.allocated(Lshell_I))        allocate(Lshell_I(nLine))
     if(.not.allocated(FieldLineGrid_IC))allocate(FieldLineGrid_IC(nLine,nPoint))
-    if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy))
+    if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy+1))
     if(.not.allocated(EnergyGrid_I))    allocate(EnergyGrid_I(nEnergy))
   end subroutine allocate_grid_arrays
 
