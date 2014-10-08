@@ -426,15 +426,22 @@ contains
           
           ! set bc for fluxes up
           c=0.
-          IF (phiup(iLine,iAngle,iPlas,nEnergy-1).GT.0.) c=min(1., &
-               .75*phiup(iLine,iAngle,iPlas,nEnergy)/phiup(iLine,iAngle,iPlas,nEnergy-1))
-          phiup(iLine,iAngle,iPlas,nEnergy+1)=phiup(iLine,iAngle,iPlas,nEnergy)*c
+          write(*,*) 'iPlas,iAlt, iAngle',iPlas,iAlt, iAngle
+          IF (phiup(iLine,iAngle,iPlas,nEnergy-1).GT.0.) &
+               c=min(1., .75*phiup(iLine,iAngle,iPlas,nEnergy)&
+               /phiup(iLine,iAngle,iPlas,nEnergy-1))
+         
+          phiup(iLine,iAngle,iPlas,nEnergy+1)=&
+               phiup(iLine,iAngle,iPlas,nEnergy)*c
 
           ! set bc for fluxes down
           c=0.
-          IF (phidn(iLine,iAngle,iPlas,nEnergy-1).GT.0.) c=min(1., &
-               .75*phidn(iLine,iAngle,iPlas,nEnergy)/phidn(iLine,iAngle,iPlas,nEnergy-1))
-          phidn(iLine,iAngle,iPlas,nEnergy+1)=phidn(iLine,iAngle,iPlas,nEnergy)*c
+          IF (phidn(iLine,iAngle,iPlas,nEnergy-1).GT.0.) &
+               c=min(1., .75*phidn(iLine,iAngle,iPlas,nEnergy)&
+               /phidn(iLine,iAngle,iPlas,nEnergy-1))
+         
+          phidn(iLine,iAngle,iPlas,nEnergy+1)=&
+               phidn(iLine,iAngle,iPlas,nEnergy)*c
        end do
     end do
     
