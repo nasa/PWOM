@@ -31,20 +31,23 @@ Module ModSeGrid
                                                   !  on each line
   integer, public,allocatable :: nThetaAlt_II(:,:)! number of PA points at 
                                                   !  each alt
+  real, public,allocatable    :: dThetaEnd_II(:,:)   ! PA spacing at edge 
+                                                     !of PA range 
   
-  real, public,allocatable    :: mu_II(:,:)      !Cosine of local PA at each alt
+  real, public,allocatable    :: mu_III(:,:,:)   !Cosine of local PA at each alt
+
 
   !B Grid
   real, public, allocatable :: Bfield_IC(:,:) ! Bfield in G at each alt step and
                                               ! for each line
   real, public, allocatable :: BFieldIono_I(:)! B at ionosphere for each line
-  real, allocatable         :: BFieldEq_I(:)  ! B at equator for each line
+  real, public,allocatable  :: BFieldEq_I(:)  ! B at equator for each line
 
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
 
   integer, public :: nAngle=135 ! number of points in equatorial angle
   integer, public :: nPoint=200 ! total number of points on grid
-  integer, public :: nIono =30  ! number of points in each ionosphere
+  integer, public :: nIono =34  ! number of points in each ionosphere
   integer, public :: nPlas =140  ! number of points in plasmasphere
   integer, public :: nPlasHalf   ! number of points from BasePlas to equator
   integer, public :: nTop   ! number of points to top (in open) 
@@ -102,10 +105,13 @@ contains
        Beq   = 0.31/Lshell_I(iLine)**3
        Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
        BFieldIono_I(iLine) = Biono
+       BFieldEq_I(iLine)   = Beq
        write(*,*) 'calc bfield and s grid for iLine = ', iLine
        call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
        write(*,*) 'calc equatorial PA grid', iLine
        call calc_equatorial_pitchangle(iLine,Beq,Biono)
+       write(*,*) 'calc mu'
+       call calc_mu(iLine,Beq)
        write(*,*) 'calc energy grid', iLine
        call calc_energy_grid
     enddo
@@ -163,17 +169,16 @@ contains
           ! Get B and Delta s at each point
 !          write(*,*) 'Bfield_IC(iLine,iAlt)',Bfield_IC(iLine,iAlt)
           FieldLineGrid_IC(iLine,iAlt)=FieldLineGrid_IC(iLine,iAlt-1)+DeltaS
-          
        elseif(iAlt < nPoint-nIono1-nIono2-nIono3) then
           !set alt zone 4 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
                FieldLineGrid_IC(iLine,nPoint-nIono-1)&
-               +(iAlt-nPlas-nIono)*DrIono4
+               +(iAlt-nPlas-nIono+1)*DrIono4
        elseif(iAlt < nPoint-nIono1-nIono2) then
           !set alt zone 3 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
                FieldLineGrid_IC(iLine,nPoint-nIono1-nIono2-nIono3-1)&
-               +(iAlt-nIono4-nPlas-nIono)*DrIono3
+               +(iAlt-nIono4-nPlas-nIono+1)*DrIono3
        elseif(iAlt < nPoint-nIono1)then
           !set alt zone 2 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
@@ -183,7 +188,7 @@ contains
           !set alt zone 1 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
                FieldLineGrid_IC(iLine,nPoint-nIono1-nIono2-1)&
-               +(iAlt-nIono4-nIono3-nIono2-nPlas-nIono)*DrIono3
+               +(iAlt-nIono4-nIono3-nIono2-nPlas-nIono+1)*DrIono3
        endif
        
 !       write(*,*) 'iAlt,FieldLineGrid_IC(iLine,iAlt)',iAlt,FieldLineGrid_IC(iLine,iAlt)/1e5
@@ -257,10 +262,38 @@ contains
           Tmp_array = 1 
        end where
        nThetaAlt_II(iLine,iAlt) = max(sum(Tmp_array)-1,0)
+       
+       ! Set dThetaEnd, the delta theta at the end of the PA grid
+       dThetaEnd_II(iLine,iAlt)=EqAngleGrid_IG(iLine,nThetaAlt_II(iLine,iAlt)) &
+            - EqAngleGrid_IG(iLine,nThetaAlt_II(iLine,iAlt)-1)
     enddo
     
+
   end subroutine calc_equatorial_pitchangle
 
+  !============================================================================
+  ! subroutine to calculate the array, mu_III, that holds cos(local PA)
+  subroutine calc_mu(iLine,Beq)
+    integer, intent(in) :: iLine
+    real   , intent(in) :: Beq
+    
+    real    :: coef
+    integer :: iAngle, iAlt
+    !---------------------------------------------------------------------------
+    
+    ALONG_LINE: do iAlt= 1, nPoint
+       coef = min(1.0,Beq/Bfield_IC(iLine,iAlt))
+       
+       ! set mu at 0 and 90 local PA
+       mu_III(iLine,0,iAlt) = 1.0
+       mu_III(iLine,nThetaAlt_II(iLine,iAlt),iAlt) = 0.0
+       ! set mu at angles between 0 and 90 
+      ANGLE: do iAngle=1,nThetaAlt_II(iLine,iAlt)-1
+          mu_III(iLine,iAngle,iAlt) = &
+               sqrt(1.0-1.0/coef*(1.0-(cos(EqAngleGrid_IG(iLine,iAngle)))**2.0))
+       end do ANGLE
+    end do ALONG_LINE
+  end subroutine calc_mu
   !============================================================================
   ! Subroutine SpaceVar calculates h and Bfield for a given spatial step.
   !  VARIABLE DESCRIPTIONS
@@ -293,11 +326,9 @@ contains
     select case(TypeGridE)
     case('ConstDE')
        EnergyMin=EnergyMax-nEnergy*DeltaE
-       write(*,*)EnergyMin
        do iEnergy = 1, nEnergy
           !Constant DeltaE grid
           EnergyGrid_I(iEnergy)=EnergyMin+DeltaE*(iEnergy-0.5)
-          write(*,*) iEnergy,EnergyGrid_I(iEnergy)
           DeltaE_I(iEnergy)=DeltaE
        end do
        DeltaE_I(nEnergy+1)=DeltaE
@@ -349,14 +380,19 @@ contains
     if(.not.allocated(nTheta_II))       allocate(nTheta_II(nLine,nZone))
     if(.not.allocated(ThetaZone_II))    allocate(ThetaZone_II(nLine,nZone))
     if(.not.allocated(dTheta_II))       allocate(dTheta_II(nLine,nZone))
+    if(.not.allocated(dThetaEnd_II))    allocate(dThetaEnd_II(nLine,nPoint))
     if(.not.allocated(nThetaAlt_II))    allocate(nThetaAlt_II(nLine,nPoint))
     if(.not.allocated(EqAngleGrid_IG))  allocate(EqAngleGrid_IG(nLine,0:nAngle))
     if(.not.allocated(Bfield_IC))       allocate(Bfield_IC(nLine,nPoint))
     if(.not.allocated(BFieldIono_I))    allocate(BFieldIono_I(nLine))
+    if(.not.allocated(BFieldEq_I))    allocate(BFieldEq_I(nLine))
     if(.not.allocated(Lshell_I))        allocate(Lshell_I(nLine))
     if(.not.allocated(FieldLineGrid_IC))allocate(FieldLineGrid_IC(nLine,nPoint))
     if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy+1))
     if(.not.allocated(EnergyGrid_I))    allocate(EnergyGrid_I(nEnergy))
+    if(.not.allocated(mu_III))          allocate(mu_III(nLine,0:nAngle,nPoint))
+
+ 
   end subroutine allocate_grid_arrays
 
   !============================================================================
@@ -417,6 +453,7 @@ contains
     DrIono4 = 5e6
     nIono4  = 2    
 
+    nIono=nIono1+nIono2+nIono3+nIono4
     ! set the energy parameters for the energy grid
     TypeGridE = 'ConstDE'
     nEnergy=100
@@ -434,8 +471,6 @@ contains
     nTheta_II(1,4)=20
 
     nAngle = sum(nTheta_II(1,:))
-
-    write(*,*) nLine,Lshell_I
 
     write(*,*) 'calling init_se_grid'
     call init_se_grid
