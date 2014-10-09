@@ -23,8 +23,11 @@ Module ModSeState
   
   real, public :: delt,epsilon
 
-  ! Ring current parameters for coulomb collisions
-  real :: NRC,TRC,MRC,IRC           !,Iterm1,Iterm2
+  ! Ring current parameters for coulomb collisions (note that ring.dat would 
+  ! need to be read in the future to use this feature.
+  integer,parameter :: IRC=0 
+  real :: NRC(IRC),TRC(IRC),MRC(IRC)          !,Iterm1,Iterm2
+
   real,allocatable :: SRC(:)
   integer,parameter :: NRing=6 ! ring current Maxwellian fits
 
@@ -38,8 +41,8 @@ contains
     !*  driver program, 'stet1.f' (Super_Thermal_electron_Transport_Model).
     
     USE ModSeGrid, only: nEnergy, EnergyGrid_I, DeltaE_I, EnergyMin, EnergyMax,&
-         EqAngleGrid_IG,nThetaAlt_II,dTheta_II,mu_II,&
-         FieldLineGrid_IC,nTop,Bfield_IC, BFieldIono_I, &
+         EqAngleGrid_IG,nThetaAlt_II,dThetaEnd_II,mu_III,&
+         FieldLineGrid_IC,nTop,Bfield_IC, BFieldEq_I, &
          nIono, nPlas, nPoint,nAngle
     
     USE ModSeBackground, only: eThermalDensity_IC,eThermalTemp_IC
@@ -93,18 +96,18 @@ contains
           end do
           h=FieldLineGrid_IC(iLine,nIono+1)-FieldLineGrid_IC(iLine,nIono)
           FIELDLINE_UPWARD: DO i=nIono+1,nIono+nPlas
+!             write(*,*) 'Start FieldLine up'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
-             write(*,*)'test1'
+
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
              i1=i-nIono
-             coef=BFieldIono_I(iLine)/Bfield_IC(iLine,i)
+             coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
              CALL IonoVar3(Qstar, cascade, lossum)
              do k=1,nThetaAlt_II(iLine,i)-1
                 CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
-                !write(*,*) 'k,i,ko(i),angles,Theta*180.0/3.14159', k,i,
-                IF (k.EQ.nThetaAlt_II(iLine,i)-1) del2=dTheta_II(iLine,i)
+                IF (k.EQ.nThetaAlt_II(iLine,i)-1) del2=dThetaEnd_II(iLine,i)
                 muO=cos(Theta)
                 sigmaO=sigO1
                 s1=sigmaO
@@ -112,16 +115,15 @@ contains
                 Flasti=phiup(iLine,k,i1-1,j)
                 Flastj=phiup(iLine,k,i1,j+1)
                 Flastt=lphiup(iLine,k,i1,j)
-                !write(*,*)' i,j,k', i,j,k
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
-                     mu_II(k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
+                     mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
                      cascade,lossum)
                 !            CALL CheckWarn(sigma(k+1),warning,1,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,1,*9999)
              end do
              IF (i.EQ.nTop) THEN
-                p=-2.*s1/dTheta_II(iLine,i)
+                p=-2.*s1/dThetaEnd_II(iLine,i)
              ELSE
                 p=-s1/SQRT(ABS(1./coef-1.))
              END IF
@@ -129,10 +131,11 @@ contains
              Fsum=phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
              Fcheck=phiup(iLine,nThetaAlt_II(iLine,i),i1,j)
              Flastj=phiup(iLine,nThetaAlt_II(iLine,i),i1,j+1)
-             newphi=(Flastt/velt-p*Fsum/(2.*dTheta_II(iLine,i))+s2*(lbeta(i)* &
-                  Flastj/delE+Qstar+cascade))/ &
-                  (1/velt-p/dTheta_II(iLine,i)+s2*(beta(i)/delE+lossum))
+             newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_II(iLine,i)) &
+                  +s2*(lbeta(i)* Flastj/delE+Qstar+cascade))/ &
+                  (1/velt-p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,2,*9999)
+             
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              phiup(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
              do k=nThetaAlt_II(iLine,i),1,-1
@@ -142,8 +145,8 @@ contains
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
                 phiup(iLine,k-1,i1,j)=newphi
              end do
-             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,i1,j),mu_II(0,i),1, &
-                  nThetaAlt_II(iLine,i)+1,nAngle+1,1)
+             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,i1,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
@@ -153,7 +156,9 @@ contains
                      (phiup(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
-             h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            ! End Upward Region #2 loop
+             h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            
+             
+! End Upward Region #2 loop
           end DO FIELDLINE_UPWARD
           !*  Downward Region #2: the plasmasphere
           do k=0,nThetaAlt_II(iLine,nIono)
@@ -161,19 +166,20 @@ contains
           end do
           h=FieldLineGrid_IC(iLine,nIono+nPlas)-FieldLineGrid_IC(iLine,nIono+nPlas+1)
           FIELDLINE_DOWN: DO i=nIono+nPlas,nIono+1,-1
+!             write(*,*) 'Start FieldLine Down'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
              i1=i-nIono
-             coef=BFieldIono_I(iLine)/Bfield_IC(iLine,i)
+             coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
              CALL IonoVar3(Qstar, cascade, lossum)
              DO k=1,nThetaAlt_II(iLine,i)-1
                 CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
                 Theta=cPi-Theta
                 del1=-del1
                 del2=-del2
-                IF (k.EQ.nThetaAlt_II(iLine,i)-1) del2=-dTheta_II(iLine,i)
+                IF (k.EQ.nThetaAlt_II(iLine,i)-1) del2=-dThetaEnd_II(iLine,i)
                 muO=cos(Theta)
                 sigmaO=sigO1
                 s1=sigmaO
@@ -182,14 +188,14 @@ contains
                 Flastj=phidn(iLine,k,i1,j+1)
                 Flastt=lphidn(iLine,k,i1,j)
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
-                     -mu_II(k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
+                     -mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
                      cascade,lossum)
                 !            CALL CheckWarn(sigma(k+1),warning,4,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,4,*9999)
              enddo
              IF (i.EQ.nTop) THEN
-                p=2.*s1/dTheta_II(iLine,i)
+                p=2.*s1/dThetaEnd_II(iLine,i)
              ELSE
                 p=s1/SQRT(ABS(1./coef-1.))
              END IF
@@ -197,9 +203,9 @@ contains
              Fsum=phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
              Fcheck=phidn(iLine,nThetaAlt_II(iLine,i),i1,j)
              Flastj=phidn(iLine,nThetaAlt_II(iLine,i),i1,j+1)
-             newphi=(Flastt/velt+p*Fsum/(2.*dTheta_II(iLine,i))+s2*(lbeta(i)* &
-                  Flastj/delE+Qstar+cascade))/ &
-                  (1/velt+p/dTheta_II(iLine,i)+s2*(beta(i)/delE+lossum))
+             newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_II(iLine,i))+s2*(lbeta(i)* &
+                  Flastj/delE+Qstar+cascade))&
+                  /(1/velt+p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,5,*9999)
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              phidn(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
@@ -210,8 +216,8 @@ contains
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
                 phidn(iLine,k-1,i1,j)=newphi
              end DO
-             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,i1,j),mu_II(0,i),1, &
-                  nThetaAlt_II(iLine,i)+1,nAngle+1,1)
+             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,i1,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
@@ -234,9 +240,10 @@ contains
     
 9999 IF (warning.GT.0) THEN
        PRINT *, 'Negative Densities Occurred:',newphi,warning
-       PRINT *, time,j,i,k,Bfield_IC(iLine,i),BFieldIono_I(iLine),&
-            BFieldIono_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,mu_II(k,i),&
-            del1, dTheta_II(iLine,i),beta(i),sigmaO,p,count,Qstar
+       PRINT *, time,j,i,k,Bfield_IC(iLine,i),BFieldEq_I(iLine),&
+            BFieldEq_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,&
+            mu_III(iLine,k,i),del1, dThetaEnd_II(iLine,i),beta(i),sigmaO,p,count,&
+            Qstar
        PRINT *, phiup(iLine,k,i1,j),phidn(iLine,k,i1,j)
        STOP
     ELSE IF (warning.LT.0) THEN
@@ -262,7 +269,7 @@ contains
 !*      muO     Cosine of the equatorial pitch angle
 !*      mu      Cosine of the actual pitch angle
 !*      BB      Magnetic field strength for this step; G
-!*      BFieldIono_I(iLine)      Magnetic field strength at the equator; G
+!*      BFieldEq_I(iLine)      Magnetic field strength at the equator; G
 !*      beta    Energy loss parameters; ????
 !*      lbeta   Previous energy step's beta; ????
 !*      Fj      Flux for previous E for same space, time, and angle step
@@ -282,13 +289,14 @@ contains
     REAL alpha,alp,sigma,sig,mu,coef,muO,del1,del2,beta,lbeta,s1,s2, &
          Fi,Fj,Ft,vt,h,dE,a,b,c,d,p,q,Qstar,lossum,cascade,kk
     
-    !write(*,*) 'muO, BB, BFieldIono_I(iLine)',muO, BB, BFieldIono_I(iLine)
+    !write(*,*) 'muO, BB, BFieldEq_I(iLine)',muO, BB, BFieldEq_I(iLine)
     p=kk*s1*(muO**4+coef-1)/((muO**3)*(1-muO**2)**.5)
     q=kk*s1*ABS((coef-1+muO**2)/muO**2)
     a=(2*q-p*del2)/(del1*(del1+del2))
     b=(2*q+p*del1)/(del2*(del1+del2))
     c=(2*q+(del1-del2)*p)/(del1*del2)+s2*(kk*mu/h+beta/dE+lossum)+1/vt
     d=s2*(lbeta*Fj/dE+kk*mu*Fi/h+Qstar+cascade)+Ft/vt
+
     IF (b.LT.0.) b=0.
     alpha=b/(c-a*alp)
     sigma=(a*sig+d)/(c-a*alp)
@@ -302,7 +310,7 @@ contains
        PRINT *,'NEG ALPHA ',p,q,a,b,c,d,sigma,sig,alpha,alp
        PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
     END IF
-    !      PRINT 10, BB,BFieldIono_I(iLine)/BB,muO,del1,del2,p,q,a,b,alpha
+    !      PRINT 10, BB,BFieldEq_I(iLine)/BB,muO,del1,del2,p,q,a,b,alpha
 10  FORMAT (10(1PG11.4,1X))
     RETURN
   END SUBROUTINE NumCalcVar
@@ -326,16 +334,13 @@ contains
   SUBROUTINE CoulVar(i,beta,sigO1,TE,ZE,KE)
     USE ModSeGrid, only: nPoint
     use ModMath, only: G,erf
-    REAL beta,sigO1,TE,ZE,KE,MRC(NRing),NRC(NRing),TRC(NRing),A,MC,X
-    INTEGER n,IRC,i                              !,Iterm1,Iterm2
+    REAL beta,sigO1,TE,ZE,KE,A,MC,X
+    INTEGER n,i                              !,Iterm1,Iterm2
     
     DATA A/2.6E-12/, MC/1837./
     !write(*,*) 'KE, TE',KE, TE
-    write(*,*) 'test1'
     X=SQRT(KE/TE)
-    write(*,*) 'test2', X
     beta=ZE/TE*G(X)                  ! ion infl. --> zero
-    write(*,*) 'test3'
     sigO1=ZE*(1.+erf(X)-G(X))            ! ion infl. = ZE (thus the 1.
     do n=1,IRC                  ! Ring current influence
        X=SQRT(KE*MC*MRC(n)/TRC(n))
@@ -355,7 +360,7 @@ contains
     REAL Theta,del1,del2,grid(0:nAngle)
     INTEGER k,kk
     !*
-    kk=k+1            ! Because grid should start at 0, not 1
+    kk=k
     Theta=grid(kk)
     del1=grid(kk)-grid(kk-1)
     del2=grid(kk+1)-grid(kk)
@@ -372,10 +377,11 @@ contains
   !*        flux      Current flux value to be checked
   !*      oldflux      Previous value to check against
   !*
-  SUBROUTINE CheckConv(flux,oldflux,epsil,flag)
+  SUBROUTINE CheckConv(flux,oldflux,epsil,flag, DoReportError)
     REAL   ,  intent(in) :: flux,oldflux,epsil
     INTEGER, intent(out) :: flag
-    
+    LOGICAL,optional,intent(in) :: DoReportError
+
     real :: error
     !--------------------------------------------------------------------------
     
@@ -383,6 +389,9 @@ contains
        error=ABS(flux-oldflux)/flux
        IF (error.GT.epsil) flag=1
     END IF
+    if (present(DoReportError) .and. DoReportError) then
+       write(*,*) 'Error is:',error,'Epsilon is:',epsil
+    endif
     RETURN
   END SUBROUTINE CheckConv
   !=============================================================================
@@ -426,7 +435,6 @@ contains
           
           ! set bc for fluxes up
           c=0.
-          write(*,*) 'iPlas,iAlt, iAngle',iPlas,iAlt, iAngle
           IF (phiup(iLine,iAngle,iPlas,nEnergy-1).GT.0.) &
                c=min(1., .75*phiup(iLine,iAngle,iPlas,nEnergy)&
                /phiup(iLine,iAngle,iPlas,nEnergy-1))
@@ -517,7 +525,7 @@ contains
 
     integer,intent(in) :: iLine
     integer,intent(out):: flag
-    integer :: iEnergy, iAngle, iAlt, iIono
+    integer :: iEnergy, iAngle, iAlt, iIono,iPlas
     integer ibad
     real    :: flux, oldflux
     !--------------------------------------------------------------------------
@@ -536,8 +544,9 @@ contains
                 oldflux=liphiup(iLine,iAngle,iAlt,iEnergy)
              elseif(iAlt >nIono .and. iAlt <=nPoint-nIono) then
                 !plasmasphere
-                flux=phiup(iLine,iAngle,iAlt,iEnergy)
-                oldflux=lphiup(iLine,iAngle,iAlt,iEnergy)
+                iPlas=iAlt-nIono
+                flux=phiup(iLine,iAngle,iPlas,iEnergy)
+                oldflux=lphiup(iLine,iAngle,iPlas,iEnergy)
              else
                 !ionosphere 2
                 iIono=iAlt-nPlas
@@ -546,7 +555,7 @@ contains
              endif
              
              ! check the convergence
-             call CheckConv(flux,oldflux,epsilon,flag)
+             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.true.)
 
              if (flag ==1 .and. oldflux > 0.0) Ibad=Ibad+1
              
@@ -562,8 +571,8 @@ contains
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine
     
     
-    if(.not.allocated(phiup)) allocate(phiup(nLine,0:nAngle,0:nPlas,nEnergy+1))
-    if(.not.allocated(phidn)) allocate(phidn(nLine,0:nAngle,0:nPlas,nEnergy+1))
+    if(.not.allocated(phiup)) allocate(phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1))
+    if(.not.allocated(phidn)) allocate(phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1))
 
     if(.not.allocated(iphiup)) &
          allocate(iphiup(nLine,0:nAngle,0:2*nIono,nEnergy+1))
@@ -613,6 +622,9 @@ contains
     do iLine=1,nLine
        iphiup(iLine,:,:,:)=1.0
        iphidn(iLine,:,:,:)=1.0
+
+       liphiup(iLine,:,:,:)=1.0
+       liphidn(iLine,:,:,:)=1.0
 
        phiup(iLine,:,:,:)=0.00001
        phidn(iLine,:,:,:)=0.00001
