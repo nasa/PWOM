@@ -61,7 +61,7 @@ contains
          flag,count,warning,SPick,space,ii
 
     !set maximum iterations
-    integer, parameter :: countmax=300
+    integer, parameter :: countmax=600
 
     real :: cascade, lossum
     
@@ -150,9 +150,9 @@ contains
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,27) time,j,i,i1,nThetaAlt_II(iLine,i)/4,&
+                WRITE (10,*) time,j,i,i1,nThetaAlt_II(iLine,i)/4,&
                      flag,(phiup(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i))
-                WRITE (10,27) time,j,i,i1,nThetaAlt_II(iLine,i),flag,&
+                WRITE (10,*) time,j,i,i1,nThetaAlt_II(iLine,i),flag,&
                      (phiup(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
@@ -221,9 +221,9 @@ contains
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,27) time,j,i,i1,flag,&
+                WRITE (10,*) time,j,i,i1,flag,&
                      (phidn(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i)/2,2)
-                WRITE (10,27) time,j,i,i1,flag,&
+                WRITE (10,*) time,j,i,i1,flag,&
                      (phidn(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
@@ -251,7 +251,7 @@ contains
        STOP
     END IF
     !  Format for the nonconvergent output
-27  FORMAT (5I4,1P,100E10.3)
+!!!27  FORMAT (100E10.3,4I4,1P,100E10.3)
     
     RETURN
   END SUBROUTINE update_se_state
@@ -556,7 +556,7 @@ contains
              
              ! check the convergence
              call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.true.)
-
+             write(*,*) 'iAlt,flux,oldflux',iAlt,flux,oldflux
              if (flag ==1 .and. oldflux > 0.0) Ibad=Ibad+1
              
           end do
@@ -598,7 +598,7 @@ contains
     Use ModSeGrid, only:create_se_test_grid,nLine,nPoint
 
     integer :: iLine=1, flag=1
-    logical :: DoSavePreviousAndReset = .false.
+    logical :: DoSavePreviousAndReset = .true.
     !--------------------------------------------------------------------------
 
     ! First set up the grid that we will update the state in (this is the same 
@@ -620,11 +620,11 @@ contains
     
     ! Define the initial state in the ionosphere
     do iLine=1,nLine
-       iphiup(iLine,:,:,:)=1.0
-       iphidn(iLine,:,:,:)=1.0
+       iphiup(iLine,:,:,:)=1.0e5
+       iphidn(iLine,:,:,:)=1.0e5
 
-       liphiup(iLine,:,:,:)=1.0
-       liphidn(iLine,:,:,:)=1.0
+       liphiup(iLine,:,:,:)=1.0e5
+       liphidn(iLine,:,:,:)=1.0e5
 
        phiup(iLine,:,:,:)=0.00001
        phidn(iLine,:,:,:)=0.00001
