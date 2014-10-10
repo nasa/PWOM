@@ -377,10 +377,11 @@ contains
   !*        flux      Current flux value to be checked
   !*      oldflux      Previous value to check against
   !*
-  SUBROUTINE CheckConv(flux,oldflux,epsil,flag, DoReportError)
+  SUBROUTINE CheckConv(flux,oldflux,epsil,flag, DoReportError, ReturnError)
     REAL   ,  intent(in) :: flux,oldflux,epsil
     INTEGER, intent(out) :: flag
     LOGICAL,optional,intent(in) :: DoReportError
+    real,optional,intent(out) :: ReturnError
 
     real :: error
     !--------------------------------------------------------------------------
@@ -392,6 +393,8 @@ contains
     if (present(DoReportError) .and. DoReportError) then
        write(*,*) 'Error is:',error,'Epsilon is:',epsil
     endif
+    
+    if (present(ReturnError)) ReturnError=error
     RETURN
   END SUBROUTINE CheckConv
   !=============================================================================
@@ -528,11 +531,14 @@ contains
     integer :: iEnergy, iAngle, iAlt, iIono,iPlas
     integer ibad
     real    :: flux, oldflux
+    
+    real ::   error, ErrorMax, FluxAtMax, OldFluxAtMax
+    integer:: iAltAtMax,iAngleAtMAx,iEnergyAtMax
     !--------------------------------------------------------------------------
 
     Ibad=0
     flag=0
-
+    errormax=0.0
     ! loop over all energy, altitudes, and angles to evaluate convergence
     do iEnergy=nEnergy,1,-1
        do iAlt=1,nPoint
@@ -555,14 +561,35 @@ contains
              endif
              
              ! check the convergence
-             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.true.)
-             write(*,*) 'iAlt,flux,oldflux',iAlt,flux,oldflux
+             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.false.,&
+                  ReturnError=error)
+             
+             !find maximum error and associated values to report at end of check
+             ErrorMax = max(error,errormax)
+             ! If a new errormax update the associated iAltAtMax and fluxes
+             if (ErrorMax==error) then
+                iAltAtMax   = iAlt
+                iAngleAtMax = iAngle
+                iEnergyAtMax= iEnergy
+                FluxAtMax   = flux
+                OldFluxAtMax= oldflux
+             endif
+
              if (flag ==1 .and. oldflux > 0.0) Ibad=Ibad+1
              
           end do
        end do
     end do
+    !report results of check_time
+    write(*,*), 'FINISHED check_time, Report:'
     write(*,*), 'check_time: Ibad=',Ibad
+    write(*,*), 'check_time: ErrorMax=',ErrorMax
+    write(*,*), 'check_time: iAltAtMax=',iAltAtMax
+    write(*,*), 'check_time: iAngleAtMax=',iAngleAtMax
+    write(*,*), 'check_time: nThetaAtMax=',nThetaAlt_II(iLine,iAltAtMax)
+    write(*,*), 'check_time: iEnergyAtMax=',iEnergyAtMax
+    write(*,*), 'check_time: FluxAtMax=',FluxAtMax
+    write(*,*), 'check_time: OldFluxMax=',OldFluxAtMax
     RETURN
   END SUBROUTINE check_time
   
@@ -595,10 +622,12 @@ contains
   ! UNIT test for SE update states
   subroutine se_update_state_test
     use ModSeBackground
-    Use ModSeGrid, only:create_se_test_grid,nLine,nPoint
-
+    use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
+    use ModSePlot, only: plot_state
+    
     integer :: iLine=1, flag=1
     logical :: DoSavePreviousAndReset = .true.
+    integer :: nStep
     !--------------------------------------------------------------------------
 
     ! First set up the grid that we will update the state in (this is the same 
@@ -635,6 +664,11 @@ contains
     epsilon = 0.01
 
     write(*,*) 'Starting Time loop'
+    nStep = 0
+
+    ! plot initial state
+    call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+
     TIME_LOOP: do while (flag == 1)
        ! Initialize the plasmasphere
        write(*,*) 'Initializing plasmasphere'
@@ -648,6 +682,13 @@ contains
        write(*,*) 'check for convergence'
        call check_time(1,flag)
        
+       ! increment step
+       nStep=nStep+1
+
+       ! plot output
+       call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+       
+
     end do TIME_LOOP
     
   end subroutine se_update_state_test
