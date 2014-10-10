@@ -13,8 +13,11 @@ MODULES = \
 	ModGrid.o\
 	ModSeMpi.o\
 	ModMath.o\
+	ModSePlot.o\
 	ModBackground.o\
 	ModSeState.o
+
+
 
 METHODS = \
 
