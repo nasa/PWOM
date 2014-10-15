@@ -35,7 +35,7 @@ Module ModSeState
   public :: update_se_state
   public :: se_update_state_test
 contains
-  SUBROUTINE update_se_state(iLine)
+  SUBROUTINE update_se_state(iLine,IsOpen)
     !*  This subroutine used to be the main program, until other operators
     !*  added (3/23/95). Now it is one of several operators called by the
     !*  driver program, 'stet1.f' (Super_Thermal_electron_Transport_Model).
@@ -54,16 +54,20 @@ contains
     IMPLICIT NONE
 !    INCLUDE 'numbers.h'
     integer, intent(in) :: iLine
+    logical, intent(in) :: IsOpen
     REAL h,p,Fcheck, sigmaO,muO,velt,coef, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
          Fsum, delE,Flasti, Flastt,Qstar, Theta,s1,s2
-    INTEGER i,j,k,i1,jj,Ist, &
+    INTEGER i,j,k,iPlas,jj,Ist, &
          flag,count,warning,SPick,space,ii
 
     !set maximum iterations
     integer, parameter :: countmax=600
 
     real :: cascade, lossum
+    
+    !Altitude range variables
+    integer :: nAltMin, nAltMax
     
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
@@ -95,14 +99,26 @@ contains
              phiup(iLine,k,0,j)=iphiup(iLine,k,nIono,j)
           end do
           h=FieldLineGrid_IC(iLine,nIono+1)-FieldLineGrid_IC(iLine,nIono)
-          FIELDLINE_UPWARD: DO i=nIono+1,nIono+nPlas
+          
+          !check if field line is open and set bounds for up and down loop
+          if (IsOpen) then
+             ! open line so detach hemispheres
+             nAltMin = nIono+1
+             nAltMax = nTop
+          else
+             ! closed line so keep hemispheres attached
+             nAltMin = nIono+1
+             nAltMax = nIono+nPlas
+          endif
+          
+          FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
 !             write(*,*) 'Start FieldLine up'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
 
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
-             i1=i-nIono
+             iPlas=i-nIono
              coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
              CALL IonoVar3(Qstar, cascade, lossum)
              do k=1,nThetaAlt_II(iLine,i)-1
@@ -112,9 +128,9 @@ contains
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phiup(iLine,k,i1-1,j)
-                Flastj=phiup(iLine,k,i1,j+1)
-                Flastt=lphiup(iLine,k,i1,j)
+                Flasti=phiup(iLine,k,iPlas-1,j)
+                Flastj=phiup(iLine,k,iPlas,j+1)
+                Flastt=lphiup(iLine,k,iPlas,j)
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
@@ -127,33 +143,33 @@ contains
              ELSE
                 p=-s1/SQRT(ABS(1./coef-1.))
              END IF
-             Flastt=lphiup(iLine,nThetaAlt_II(iLine,i),i1,j)
-             Fsum=phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
-             Fcheck=phiup(iLine,nThetaAlt_II(iLine,i),i1,j)
-             Flastj=phiup(iLine,nThetaAlt_II(iLine,i),i1,j+1)
+             Flastt=lphiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)
+             Fsum=phiup(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)+phidn(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)
+             Fcheck=phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)
+             Flastj=phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j+1)
              newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_II(iLine,i)) &
                   +s2*(lbeta(i)* Flastj/delE+Qstar+cascade))/ &
                   (1/velt-p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,2,*9999)
              
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phiup(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
+             phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)=newphi
              do k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phiup(iLine,k,i1,j)+sigma(k)
-                Fcheck=phiup(iLine,k-1,i1,j)
+                newphi=alpha(k)*phiup(iLine,k,iPlas,j)+sigma(k)
+                Fcheck=phiup(iLine,k-1,iPlas,j)
                 !            CALL CheckWarn(newphi,warning,3,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phiup(iLine,k-1,i1,j)=newphi
+                phiup(iLine,k-1,iPlas,j)=newphi
              end do
-             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,i1,j),&
+             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,iPlas,j),&
                   mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,*) time,j,i,i1,nThetaAlt_II(iLine,i)/4,&
-                     flag,(phiup(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i))
-                WRITE (10,*) time,j,i,i1,nThetaAlt_II(iLine,i),flag,&
-                     (phiup(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
+                WRITE (10,*) time,j,i,iPlas,nThetaAlt_II(iLine,i)/4,&
+                     flag,(phiup(iLine,k,iPlas,j),k=0,nThetaAlt_II(iLine,i))
+                WRITE (10,*) time,j,i,iPlas,nThetaAlt_II(iLine,i),flag,&
+                     (phiup(iLine,k,iPlas,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
              h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            
@@ -161,17 +177,41 @@ contains
 ! End Upward Region #2 loop
           end DO FIELDLINE_UPWARD
           !*  Downward Region #2: the plasmasphere
-          do k=0,nThetaAlt_II(iLine,nIono)
-             phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
-          end do
-          h=FieldLineGrid_IC(iLine,nIono+nPlas)-FieldLineGrid_IC(iLine,nIono+nPlas+1)
-          FIELDLINE_DOWN: DO i=nIono+nPlas,nIono+1,-1
+
+          !check if field line is open and set bounds for up and down loop
+          if (IsOpen) then
+             ! open line so detach hemispheres
+             nAltMin = nIono+1
+             nAltMax = nTop
+             !set step
+             h = &
+                  FieldLineGrid_IC(iLine,nTop) &
+                  -FieldLineGrid_IC(iLine,nTop+1)
+             !fill bc from iono
+             do k=0,nThetaAlt_II(iLine,nTop)
+                phidn(iLine,k,nTop+1,j) = 0.0
+             end do
+          else
+             ! closed line so keep hemispheres attached
+             nAltMin = nIono+1
+             nAltMax = nIono+nPlas
+             !set step
+             h = &
+                  FieldLineGrid_IC(iLine,nIono+nPlas) &
+                  -FieldLineGrid_IC(iLine,nIono+nPlas+1)
+             !fill bc from iono
+             do k=0,nThetaAlt_II(iLine,nIono)
+                phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
+             end do
+          endif
+          
+          FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
 !             write(*,*) 'Start FieldLine Down'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
-             i1=i-nIono
+             iPlas=i-nIono
              coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
              CALL IonoVar3(Qstar, cascade, lossum)
              DO k=1,nThetaAlt_II(iLine,i)-1
@@ -184,9 +224,9 @@ contains
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phidn(iLine,k,i1+1,j)
-                Flastj=phidn(iLine,k,i1,j+1)
-                Flastt=lphidn(iLine,k,i1,j)
+                Flasti=phidn(iLine,k,iPlas+1,j)
+                Flastj=phidn(iLine,k,iPlas,j+1)
+                Flastt=lphidn(iLine,k,iPlas,j)
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      -mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
@@ -199,32 +239,32 @@ contains
              ELSE
                 p=s1/SQRT(ABS(1./coef-1.))
              END IF
-             Flastt=phidn(iLine,nThetaAlt_II(iLine,i),i1,j)
-             Fsum=phidn(iLine,nThetaAlt_II(iLine,i)-1,i1,j)+phiup(iLine,nThetaAlt_II(iLine,i)-1,i1,j)
-             Fcheck=phidn(iLine,nThetaAlt_II(iLine,i),i1,j)
-             Flastj=phidn(iLine,nThetaAlt_II(iLine,i),i1,j+1)
+             Flastt=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)
+             Fsum=phidn(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)+phiup(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)
+             Fcheck=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)
+             Flastj=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j+1)
              newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_II(iLine,i))+s2*(lbeta(i)* &
                   Flastj/delE+Qstar+cascade))&
                   /(1/velt+p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,5,*9999)
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phidn(iLine,nThetaAlt_II(iLine,i),i1,j)=newphi
+             phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)=newphi
              DO k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phidn(iLine,k,i1,j)+sigma(k)
-                Fcheck=phidn(iLine,k-1,i1,j)
+                newphi=alpha(k)*phidn(iLine,k,iPlas,j)+sigma(k)
+                Fcheck=phidn(iLine,k-1,iPlas,j)
                 !            CALL CheckWarn(newphi,warning,6,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phidn(iLine,k-1,i1,j)=newphi
+                phidn(iLine,k-1,iPlas,j)=newphi
              end DO
-             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,i1,j),&
+             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,iPlas,j),&
                   mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,*) time,j,i,i1,flag,&
-                     (phidn(iLine,k,i1,j),k=0,nThetaAlt_II(iLine,i)/2,2)
-                WRITE (10,*) time,j,i,i1,flag,&
-                     (phidn(iLine,k,i1,j),k=nThetaAlt_II(iLine,i)/2+1, &
+                WRITE (10,*) time,j,i,iPlas,flag,&
+                     (phidn(iLine,k,iPlas,j),k=0,nThetaAlt_II(iLine,i)/2,2)
+                WRITE (10,*) time,j,i,iPlas,flag,&
+                     (phidn(iLine,k,iPlas,j),k=nThetaAlt_II(iLine,i)/2+1, &
                      nThetaAlt_II(iLine,i),2)
              END IF
              h=FieldLineGrid_IC(iLine,i-1)-FieldLineGrid_IC(iLine,i)            ! End Downward Region #2 loop
@@ -244,7 +284,7 @@ contains
             BFieldEq_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,&
             mu_III(iLine,k,i),del1, dThetaEnd_II(iLine,i),beta(i),sigmaO,p,count,&
             Qstar
-       PRINT *, phiup(iLine,k,i1,j),phidn(iLine,k,i1,j)
+       PRINT *, phiup(iLine,k,iPlas,j),phidn(iLine,k,iPlas,j)
        STOP
     ELSE IF (warning.LT.0) THEN
        PRINT *, 'No convergence: ',count,Time,warning,j
@@ -628,6 +668,7 @@ contains
     integer :: iLine=1, flag=1
     logical :: DoSavePreviousAndReset = .true.
     integer :: nStep
+    logical :: IsOpen
     !--------------------------------------------------------------------------
 
     ! First set up the grid that we will update the state in (this is the same 
@@ -644,7 +685,8 @@ contains
     call allocate_background_arrays(nLine,nPoint)
     
     ! Fill the background arrays
-    eThermalDensity_IC(:,:) = 0.00001
+!    eThermalDensity_IC(:,:) = 0.00001
+    eThermalDensity_IC(:,:) = 1.0e2
     eThermalTemp_IC(:,:) = 1.0
     
     ! Define the initial state in the ionosphere
@@ -661,7 +703,7 @@ contains
     
     ! Set the timestep and convergence criteria
     delt=1.0e5
-    epsilon = 0.01
+    epsilon = 0.4
 
     write(*,*) 'Starting Time loop'
     nStep = 0
@@ -669,6 +711,7 @@ contains
     ! plot initial state
     call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
 
+    IsOpen = .true.
     TIME_LOOP: do while (flag == 1)
        ! Initialize the plasmasphere
        write(*,*) 'Initializing plasmasphere'
@@ -676,7 +719,7 @@ contains
        
        ! update the SE state
        write(*,*) 'update se state'
-       call update_se_state(1)
+       call update_se_state(1, IsOpen)
        
        ! check convergence
        write(*,*) 'check for convergence'
