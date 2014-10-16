@@ -63,6 +63,8 @@ Module ModSeGrid
   real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
   
+  ! Potential 
+  real, public, allocatable :: Efield_IC(:,:), DeltaPotential_C(:,:)
 
   ! public methods
   public :: allocate_grid_arrays
@@ -385,12 +387,14 @@ contains
     if(.not.allocated(EqAngleGrid_IG))  allocate(EqAngleGrid_IG(nLine,0:nAngle))
     if(.not.allocated(Bfield_IC))       allocate(Bfield_IC(nLine,nPoint))
     if(.not.allocated(BFieldIono_I))    allocate(BFieldIono_I(nLine))
-    if(.not.allocated(BFieldEq_I))    allocate(BFieldEq_I(nLine))
+    if(.not.allocated(BFieldEq_I))      allocate(BFieldEq_I(nLine))
     if(.not.allocated(Lshell_I))        allocate(Lshell_I(nLine))
     if(.not.allocated(FieldLineGrid_IC))allocate(FieldLineGrid_IC(nLine,nPoint))
     if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy+1))
     if(.not.allocated(EnergyGrid_I))    allocate(EnergyGrid_I(nEnergy))
     if(.not.allocated(mu_III))          allocate(mu_III(nLine,0:nAngle,nPoint))
+    if(.not.allocated(Efield_IC))       allocate(Efield_IC(nLine,nPoint))
+    if(.not.allocated(DeltaPot_IC))     allocate(DeltaPot_IC(nLine,nPoint))
 
  
   end subroutine allocate_grid_arrays

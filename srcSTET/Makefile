@@ -10,9 +10,9 @@ include Makefile.DEPEND
 include Makefile.RULES
 
 MODULES = \
+	ModMath.o\
 	ModGrid.o\
 	ModSeMpi.o\
-	ModMath.o\
 	ModSePlot.o\
 	ModBackground.o\
 	ModSeState.o
