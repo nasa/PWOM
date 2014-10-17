@@ -158,7 +158,60 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_state
+  
   !============================================================================
+  ! 1D output plots of integrated quantities along the field (for now just pot)
+  subroutine plot_along_field
+    use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPotential_C, nLine, nPoint
 
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IV(:,:)
+    integer, parameter :: nDim =1, nVar=1, S_=1, Pot_=1
+    character(len=100),parameter :: NamePlotVar='S Pot g r'
+    character(len=100) :: NamePlot
+    character(len=*),parameter :: NameHeader='Pot output'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iLine,iPoint
+    logical,save :: IsFirst
+    !--------------------------------------------------------------------------
+    allocate(Coord_DI(nDim,nPoint), PlotState_IV(nPoint,nVar))
+    
+    do iLine=1,nLine
+       PlotState_IIV = 0.0
+       Coord_DII     = 0.0
+       
+       !Set Coordinates along field line and PA
+       do iPoint=1,nPoint
+          Coord_DI(S_,iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+          PlotState_IV(iPointPot_) = DeltaPotential_C(iLine,iPoint)
+       enddo
+       
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'STET_1D_iLine',iLine,'.out'
+       
+       !Plot grid for given line. Overwrite old results on firstcall
+       if(IsFirst) then
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+               nDimIn=nDim,CoordIn_DI=Coord_DI,                &
+               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+               nDimIn=nDim,CoordIn_DI=Coord_DI,                &
+               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+       end if
+    end do
+    
+    deallocate(Coord_DI, PlotState_IV)
+  end subroutine plot_along_field
+
+
+  !============================================================================
 
 end Module ModSePlot
