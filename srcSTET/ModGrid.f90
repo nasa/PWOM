@@ -64,7 +64,8 @@ Module ModSeGrid
   real,   public :: EnergyMin, EnergyMax, DeltaE
   
   ! Potential 
-  real, public, allocatable :: Efield_IC(:,:), DeltaPotential_C(:,:)
+  real, public, allocatable :: Efield_IC(:,:) ! in volts/m
+  real, public, allocatable :: DeltaPotential_C(:,:) !in eV
 
   ! public methods
   public :: allocate_grid_arrays
@@ -375,7 +376,43 @@ contains
     end select
  
   end subroutine calc_energy_grid
-  !==========================================================================
+  !=============================================================================
+  subroutine calc_potential(iLine)
+    use ModMath, only: midpnt_int
+    use ModConst,only: cElectronCharge
+    integer, intent(in) :: iLine
+    integer :: iAlt
+    real    :: Pot,TotalPot
+    !--------------------------------------------------------------------------
+    
+    !Get total potential drop from ionosphere to equator (assuming same Efield
+    ! on both halves of field line
+    call midpnt_int(TotalPot,Efield_IC(iLine,:),&
+         FieldLineGrid_IC(iLine,:),1,nTop,nPoint,1)    
+    
+    TotalPot = -cElectronCharge*TotalPot
+
+    !fill the DeltaPot_IC array
+    do iAlt=1,nTop
+       call midpnt_int(Pot,Efield_IC(iLine,:),&
+            FieldLineGrid_IC(iLine,:),iAlt,nTop,nPoint,1)
+       
+       DeltaPot_IC(iLine,iAlt) = TotalPot+ElectronCharge* Pot
+    end do
+    
+    do iAlt=nTop+1,nPoint
+       call midpnt_int(Pot,Efield_IC(iLine,:),&
+            FieldLineGrid_IC(iLine,:),nTop,iAlt,nPoint,1)
+
+       DeltaPot_IC(iLine,iAlt) = TotalPot+ElectronCharge* Pot
+    end do
+    
+    !calculate the Kinetic Energy array Now that we know the potential energy
+    do iAlt=1,nPoint 
+       KineticEnergy = 
+    
+  end subroutine calc_potential
+  !=============================================================================
   subroutine allocate_grid_arrays
     
     ! Allocate PA related grid
@@ -443,6 +480,7 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_grid
+
 
   !============================================================================
   ! Test Grid: This is a routine that creates the test grid for all unit tests 
