@@ -65,7 +65,7 @@ Module ModSeGrid
   
   ! Potential 
   real, public, allocatable :: Efield_IC(:,:) ! in volts/m
-  real, public, allocatable :: DeltaPotential_C(:,:) !in eV
+  real, public, allocatable :: DeltaPot_IC(:,:) !in eV
 
   ! public methods
   public :: allocate_grid_arrays
@@ -397,19 +397,16 @@ contains
        call midpnt_int(Pot,Efield_IC(iLine,:),&
             FieldLineGrid_IC(iLine,:),iAlt,nTop,nPoint,1)
        
-       DeltaPot_IC(iLine,iAlt) = TotalPot+ElectronCharge* Pot
+       DeltaPot_IC(iLine,iAlt) = TotalPot+cElectronCharge*Pot
     end do
     
     do iAlt=nTop+1,nPoint
        call midpnt_int(Pot,Efield_IC(iLine,:),&
             FieldLineGrid_IC(iLine,:),nTop,iAlt,nPoint,1)
 
-       DeltaPot_IC(iLine,iAlt) = TotalPot+ElectronCharge* Pot
+       DeltaPot_IC(iLine,iAlt) = TotalPot+cElectronCharge* Pot
     end do
-    
-    !calculate the Kinetic Energy array Now that we know the potential energy
-    do iAlt=1,nPoint 
-       KineticEnergy = 
+
     
   end subroutine calc_potential
   !=============================================================================

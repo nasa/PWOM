@@ -14,6 +14,8 @@ MODULES = \
 	ModGrid.o\
 	ModSeMpi.o\
 	ModSePlot.o\
+	geomag.o\
+	iri90.o\
 	ModBackground.o\
 	ModSeState.o
 
