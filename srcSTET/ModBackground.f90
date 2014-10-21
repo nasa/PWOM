@@ -21,12 +21,43 @@ Module ModSeBackground
   ! exponent for extending solution above IRI or PWOM solution 
   real :: ZEP
 
+  ! Neutral Atmosphere arrays and variables
+  nNeutralSpecies = 3
+  real, allocatable :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
+  real, allocatable :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
+  integer,parameter :: O_=1, O2_=2, N2_=3
+
+  ! Logical variables for if we are calculating photo e spectrum in iono 1 or 2
+  logical :: DoCalcPeIono1=.true., DoCalcPeIono2=.true.
+
+  ! Arrays that hold the photo electron production spectrum in iono 1 or 2
+  real, allocatable :: ePhotoProdSpec1_IIC(:,:,:),ePhotoProdSpec2_IIC(:,:,:)
+
   public :: allocate_background_arrays
   public :: fill_thermal_plasma_empirical
   public :: background_test
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
-  
+  !=============================================================================
+  subroutine set_footpoint_locations(iLine)
+    integer, intent(in) :: iLine
+    !---------------------------------------------------------------------------
+
+    !  Find the geographic coordinates for our geomagnetic coordinates iono1
+    CALL GEOMAG(1,gLon1_I(iLine),gLat1_I(iLine),mLon_I(iLine),mLat_I(iLine))
+    write(*,*) 'finish geomag'
+    IF (DoAlignDipoleRot) THEN
+       gLat1_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want the
+       gLon1_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligned
+    END IF
+    
+    !  Find the geographic coordinates for our geomagnetic coordinates iono2
+    CALL GEOMAG(1,gLon2_I(iLine),gLat2_I(iLine),mLon_I(iLine),-mLat_I(iLine))
+    IF (DoAlignDipoleRot) THEN
+       gLat2_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want t
+       gLon2_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligne
+    END IF
+  end subroutine set_footpoint_locations
   !=============================================================================
   subroutine fill_thermal_plasma_empirical(iLine,AP,F107,F107A,t)
     use ModSeGrid, only: nIono1,nIono2,nIono,nPlas, nPoint, &
@@ -146,22 +177,14 @@ contains
     !\
     ! Work on first ionosphere
     !/
-    !  Find the geographic coordinates for our geomagnetic coordinates
-    write(*,*) 'calling geomag'
-    CALL GEOMAG(1,gLon1_I(iLine),gLat1_I(iLine),mLon_I(iLine),mLat_I(iLine))
-    write(*,*) 'finish geomag'
-    IF (DoAlignDipoleRot) THEN
-       gLat1_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want the
-       gLon1_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligned
-    END IF
-
+ 
     !  Calculate the local solar time
     STL1=(UT/240+gLon1_I(iLine))/15
     IF (STL1.LT.0.) STL1=STL1+24.
     IF (STL1.GT.24.) STL1=STL1-24.
     write(*,*) 'calling iri'
     CALL IRI90(JF,JMAG,gLat1_I(iLine),gLon1_I(iLine),RZ12,MMDD,STL1, &
-         FieldLineGrid_IC(iLine,i)/1e5,nIono,' ',IriOutput_VC,OARR)
+         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,' ',IriOutput_VC,OARR)
     write(*,*) 'finish iri'
     do i=nIono,1,-1
        eThermalDensity_IC(iLine,i)=IriOutput_VC(1,i)*PerM3toPerCm3 
@@ -172,11 +195,6 @@ contains
     !\
     ! Work on second ionosphere
     !/
-    CALL GEOMAG(1,gLon2_I(iLine),gLat2_I(iLine),mLon_I(iLine),-mLat_I(iLine))
-    IF (DoAlignDipoleRot) THEN
-       gLat2_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want t
-       gLon2_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligne
-    END IF
     
     !  Calculate the local solar time
     STL2=(UT/240+gLon2_I(iLine))/15
@@ -185,7 +203,7 @@ contains
     
     !  Call IRI for the second ionosphere
     CALL IRI90(JF,JMAG,gLat2_I(iLine),gLon2_I(iLine),RZ12,MMDD,STL1, &
-         FieldLineGrid_IC(iLine,i)/1e5,nIono,' ',IriOutput_VC,OARR)
+         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,' ',IriOutput_VC,OARR)
     
     do i=nIono,1,-1
        j=nPoint-i+1
@@ -195,7 +213,65 @@ contains
     end do
     
   end SUBROUTINE get_iri
-  
+  !============================================================================
+  ! subroutine that fills the neutral atmosphere and PE production spectrum
+  subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
+    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC
+    use ModSeProduction,only:RCOLUM
+    use EUA_ModMsis90, ONLY: GTD6,TSELEC
+    use ModNumConst, only: cDegToRad
+    integer, intent(in) :: iLine
+
+    real    :: STL1, STL2 ! Solar Local Time in iono 1 or 2
+    ! production variables
+    real    :: SZA1,SZA2
+    real,allocatable :: ColumnDens_IC(:,:)
+   
+    !MSIS variables
+    integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
+    real :: SW(25),DN,TN
+    DATA sw/8*1.,-1.,16*1./
+    
+    !set the solar flux
+    CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
+    
+    !  Calculate the local solar time
+    STL1=(UT/240+gLon1_I(iLine))/15
+    IF (STL1.LT.0.) STL1=STL1+24.
+    IF (STL1.GT.24.) STL1=STL1-24.
+    
+    !  Call MSIS to get the neutral densities and temperature
+    CALL TSELEC(SW)
+    do  iIono=1,nIono
+       CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+            gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
+       NeutralDens1_IIC(iLine,O_ ,iIono)=DN(msisO_)
+       NeutralDens1_IIC(iLine,O2_,iIono)=DN(msisO2_)
+       NeutralDens1_IIC(iLine,N2_,iIono)=DN(msisN2_)
+       NeutralTemp1_IC (iLine,iIono)=TN(2)
+    end do
+    
+    ! Calculate the solar zenith angle
+    CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
+    SZA1=SZA1*cDegToRad
+
+    !  Set the slant path column densities for O,O2 and N2
+    CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
+         NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:), &
+         ColumnDens_IC,nIono)    
+    
+    !  Calculate the photoelectron production spectrum
+    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
+       CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
+            nIono,0)
+    ELSE
+       do i=1,Iono
+          do j=1,Jo
+             ePhotoProdSpec1_IIC(iLine,j,i)=0.
+	  end do
+       end do
+    END IF
+  end subroutine get_neutrals_and_pe_spectrum
   !============================================================================
   
   subroutine plot_background
@@ -272,6 +348,14 @@ contains
     write(*,*) 'allocating background arrays'
     call allocate_background_arrays(nLine,nPoint)
     
+    !set zep and thining parameters
+    ZEP = 1
+    facn =-1
+    fact = 0
+    
+    !align dipole and rotation
+    DoAlignDipoleRot = .true.
+    
     ! set location of field line
     mLat_I(iLine)=60.0 
     mLon_I(iLine)=0.0
@@ -285,9 +369,9 @@ contains
 
   end subroutine background_test
   !=============================================================================
-  subroutine allocate_background_arrays(nLine,nPoint)
-    integer, intent(in) :: nLine, nPoint
-    
+  subroutine allocate_background_arrays
+    use ModSeGrid,     ONLY: nLine, nPoint, nIono, nEnergy
+        
     if(.not.allocated(eThermalDensity_IC)) &
          allocate(eThermalDensity_IC(nLine,nPoint))
     if(.not.allocated(eThermalTemp_IC)) &
@@ -304,8 +388,30 @@ contains
          allocate(gLat2_I(nLine))
     if(.not.allocated(gLon2_I)) &
          allocate(gLon2_I(nLine))
+
+    if(.not.allocated(NeutralDens1_IIC)) &
+         allocate(NeutralDens1_IIC(nLine,nNeutralSpecies,nIono))
+    if(.not.allocated(NeutralDens2_IIC)) &
+         allocate(NeutralDens2_IIC(nLine,nNeutralSpecies,nIono))
+
+    if(.not.allocated(NeutralTemp1_IC)) &
+         allocate(NeutralTemp1_IC(nLine,nIono))
+    if(.not.allocated(NeutralTemp2_IC)) &
+         allocate(NeutralTemp2_IC(nLine,nIono))
+
+    if(.not.allocated(ePhotoProdSpec1_IIC)) &
+         allocate(ePhotoProdSpec1_IIC(nLine,nEnergy,nIono))
+    if(.not.allocated(ePhotoProdSpec2_IIC)) &
+         allocate(ePhotoProdSpec2_IIC(nLine,nEnergy,nIono))
+
+
+(:,:,:)
+    
     
   end subroutine allocate_background_arrays
   
+
+
+
   !=============================================================================
 end Module ModSeBackground
