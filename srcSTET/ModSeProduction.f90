@@ -15,7 +15,7 @@ Module ModSeProduction
   ! WAVE1   Array of minimum boundaries for radiation intervals; Ang
   ! WAVE2   Array of maximum boundaries for radiation intervals: Ang
   ! SFLUX   Array of solar flux intensities in the intervals defined 
-  real :: WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
+  real  :: WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
 
   ! store the slant column density
   real, allocatable ::ZCOL(:,:)
@@ -481,6 +481,8 @@ contains
     ! First time only:  pack photoabsorption, photoioniation cross sections
     ! and convert to cm2; pack branching ratios; calculate energy losses:
     !
+    
+
     IF (IFIRST .EQ. 1) THEN
        IFIRST = 0
        DO  L=1,LMAX
@@ -492,6 +494,7 @@ contains
           SIGION(3,L) = SIGIN2(L) * 1.E-18
        end DO
           !
+
        DO  L=1,LMAX
           DO  K=1,NST
              PROB(K,1,L) = PROBO(K,L)
@@ -500,8 +503,11 @@ contains
           end do
        end DO
        !
+       write(*,*) 'test1'
+
        DO  L=1,LMAX
           DO  I=1,NMAJ
+    
              IF (WAVE1(L).LE.AUGL(I)) THEN
                 EPB1(I,L)=C1/WAVE1(L)-AUGE(I)
                 EPB2(I,L)=C1/WAVE2(L)-AUGE(I)
@@ -518,8 +524,11 @@ contains
              END IF
           end do
        end do
+       write(*,*) 'test2'
+
 !
     ENDIF
+
     !
     !
     ! Zero arrays:
@@ -535,6 +544,8 @@ contains
           PESPEC(M,J) = 0.
        end do
     end do
+
+
     !
     !
     ! Calculate attenuated solar flux at all altitudes and wavelengths:
@@ -955,8 +966,7 @@ contains
     !
 !    PARAMETER (LMAX=59)
     !
-    DIMENSION WAVE1(LMAX), WAVE2(LMAX), SFLUX(LMAX), &
-         WAVEL(LMAX), WAVES(LMAX), RFLUX(LMAX), XFLUX(LMAX), &
+    DIMENSION WAVEL(LMAX), WAVES(LMAX), RFLUX(LMAX), XFLUX(LMAX), &
          SCALE1(LMAX), SCALE2(LMAX), &
          TCHR0(LMAX), TCHR1(LMAX), TCHR2(LMAX), &
          TCOR0(LMAX), TCOR1(LMAX), TCOR2(LMAX), &
@@ -1130,7 +1140,6 @@ contains
          0.0188158,0.00341563,3.91238e-05,6.08654e-08, 2.52/
     
     
-    
     !
     ! Linear Interpolation between SC#21REFW and F79050:
     !
@@ -1227,7 +1236,10 @@ contains
        SFLUX(L) = SFLUX(L) * 1.E9
     end do
     !
+
+
     RETURN
+    
   END SUBROUTINE SSFLUX
 
 
