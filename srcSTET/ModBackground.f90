@@ -9,7 +9,7 @@ Module ModSeBackground
                               gLat2_I(:), gLon2_I(:)
 
 
-  real, public :: UT = 0.0
+  real, public :: UT = 43200.0 ! default at noon
   integer      :: Idate=97046 !day in the form of YYDDD
 
   ! when the dipole and rotation axis are aligned
@@ -266,6 +266,7 @@ contains
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
+    write(*,*) 'SZA1',SZA1
     !  Calculate the photoelectron production spectrum
     IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
@@ -304,7 +305,8 @@ contains
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens2_IIC(iLine,:,:),NeutralTemp2_IC(iLine,:),nIono)    
-    
+
+    write(*,*) 'SZA1',SZA2    
     !  Calculate the photoelectron production spectrum
     IF ((SZA2.LT.2.).AND.(DoCalcPeIono2)) THEN
        CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
@@ -319,69 +321,155 @@ contains
   end subroutine get_neutrals_and_pe_spectrum
   !============================================================================
   
-  subroutine plot_background
-    use ModSeGrid,     ONLY: FieldLineGrid_IC, nLine, nPoint
-
+  subroutine plot_background(iLine,nStep,time)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC, nLine, nPoint,nIono
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
+
+    integer, intent(in) :: iLine,nStep
+    real,    intent(in) :: time
+
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=2, eDens_=1,eTemp_=2
-    character(len=100),parameter :: NamePlotVar='S ne te g r'
+    integer, parameter :: nDim =1, nVar=5, eDens_=1,eTemp_=2, &
+                          VarO_=3,VarO2_=4,VarN2_=5
+    character(len=100),parameter :: NamePlotVar='S ne te nO nO2 nN2 g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='background output'
     character(len=5) :: TypePlot='ascii'
-    integer :: iLine,iPoint
+    integer :: iPoint
     logical,save :: IsFirstCall =.true.
     !--------------------------------------------------------------------------
     allocate(Coord_I(nPoint), PlotState_IV(nPoint,nVar))
     
-    do iLine=1,nLine
-       PlotState_IV = 0.0
-       Coord_I     = 0.0
-       
-       !Set Coordinates along field line and PA
-       do iPoint=1,nPoint
-          Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
-          PlotState_IV(iPoint,eDens_) = eThermalDensity_IC(iLine,iPoint)
-          PlotState_IV(iPoint,eTemp_) = eThermalTemp_IC(iLine,iPoint)
-       enddo
-       
-       ! set name for plotfile
-       write(NamePlot,"(a,i4.4,a)") 'background_iLine',iLine,'.out'
-       
-       !Plot grid for given line. Overwrite old results on firstcall
-       if(IsFirstCall) then
-          call save_plot_file(NamePlot, TypePositionIn='rewind', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
-               nDimIn=nDim,CoordIn_I=Coord_I,                &
-               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
-          IsFirstCall = .false.
-       else
-          call save_plot_file(NamePlot, TypePositionIn='append', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
-               nDimIn=nDim,CoordIn_I=Coord_I,                &
-               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
-       end if
-    end do
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
     
+    !Set Coordinates along field line and PA
+    do iPoint=1,nPoint
+       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+       PlotState_IV(iPoint,eDens_) = eThermalDensity_IC(iLine,iPoint)
+       PlotState_IV(iPoint,eTemp_) = eThermalTemp_IC(iLine,iPoint)
+       if (iPoint <= nIono) then
+          PlotState_IV(iPoint,VarO_)  = NeutralDens1_IIC(iLine,O_,iPoint)
+          PlotState_IV(iPoint,VarO2_) = NeutralDens1_IIC(iLine,O2_,iPoint)
+          PlotState_IV(iPoint,VarN2_) = NeutralDens1_IIC(iLine,N2_,iPoint)
+       elseif(iPoint>nPoint-nIono) then
+          PlotState_IV(iPoint,VarO_)  = &
+               NeutralDens2_IIC(iLine,O_,nPoint-iPoint+1)
+          PlotState_IV(iPoint,VarO2_) = &
+               NeutralDens2_IIC(iLine,O2_,nPoint-iPoint+1)
+          PlotState_IV(iPoint,VarN2_) = &
+               NeutralDens2_IIC(iLine,N2_,nPoint-iPoint+1)
+       else
+          !neutral atmosphere not considered in plasmaphere
+          PlotState_IV(iPoint,VarO_)  = 0.0
+          PlotState_IV(iPoint,VarO2_) = 0.0
+          PlotState_IV(iPoint,VarN2_) = 0.0
+       endif
+    enddo
+    
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'background_iLine',iLine,'.out'
+    
+    !Plot grid for given line. Overwrite old results on firstcall
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn= nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn= nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+    end if
+     
     deallocate(Coord_I, PlotState_IV)
   end subroutine plot_background
 
 
   !============================================================================
+  !============================================================================
+  ! save state plot for verification
+  subroutine plot_ephoto_prod(iLine,nStep,time)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
 
+    integer, intent(in) :: iLine, nStep
+    real,    intent(in) :: time
+
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+    real, parameter     :: rEarthCM = 6375.0e5
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=2, E_=1, S_=2
+    integer, parameter :: spec1_=1, spec2_=2
+
+    character(len=100),parameter :: NamePlotVar='E[eV] Alt[km] eProd1[cm-3eV-1s-1sr-1] eProd2[cm-3eV-1s-1sr-1] g r'
+    character(len=*),parameter :: NameHeader='ePhoto Production Spectrum output'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iEnergy,iIono
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+    allocate(Coord_DII(nDim,nEnergy,nIono),PlotState_IIV(nEnergy,nIono,nVar))
+
+
+       PlotState_IIV = 0.0
+       Coord_DII     = 0.0
+       
+       !Set Coordinates along field line and PA
+       do iEnergy=1,nEnergy
+          do iIono=1,nIono
+             Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
+             Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iIono)/1e5
+             PlotState_IIV(iEnergy,iIono,spec1_)  = &
+                  ePhotoProdSpec1_IIC(iLine,iEnergy,iIono)&
+                  /4.0/cPi/DeltaE_I(iEnergy)
+             PlotState_IIV(iEnergy,iIono,spec2_)  = &
+                  ePhotoProdSpec2_IIC(iLine,iEnergy,iIono)&
+                  /4.0/cPi/DeltaE_I(iEnergy)
+          enddo
+       enddo
+
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'ephotoprod_iLine',iLine,'.out'
+       
+       !Plot grid for given line
+       if(IsFirstCall) then
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_ephoto_prod
+  
   !============================================================================
   ! UNIT test for SE update states
   subroutine background_test
     use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
     
-    integer :: iLine=1, flag=1
+    integer :: iLine=1, flag=1, nStep=0
+    real    :: time=0
     logical :: DoSavePreviousAndReset = .true.
     
-    real :: Ap =0.0, F107=80, F107A=80, t=0
+    real :: Ap(7), F107=80, F107A=80, t=0
     !--------------------------------------------------------------------------
 
     ! First set up the grid that we will update the state in (this is the same 
@@ -405,12 +493,22 @@ contains
     mLat_I(iLine)=60.0 
     mLon_I(iLine)=0.0
     
+    !set glat and glon coords
+    call set_footpoint_locations(iLine)
+    
     ! Fill the background arrays
     write(*,*) 'filling background arrays'
     call fill_thermal_plasma_empirical(iLine,F107,F107A,t)
+    
+    ! Get the neutral atmosphere and photo e production spectrum
+    AP(:)=4.0
+    call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
 
     ! plot initial state
-    call plot_background
+    call plot_background(iLine,nStep,time)
+    
+    ! plot ephoto production
+    call plot_ephoto_prod(iLine,nStep,time)
 
   end subroutine background_test
   !=============================================================================
