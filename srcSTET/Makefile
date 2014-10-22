@@ -16,6 +16,7 @@ MODULES = \
 	ModSePlot.o\
 	geomag.o\
 	iri90.o\
+	ModSeProduction.o\
 	ModBackground.o\
 	ModSeState.o
 
