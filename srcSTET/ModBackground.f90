@@ -22,10 +22,10 @@ Module ModSeBackground
   real :: ZEP
 
   ! Neutral Atmosphere arrays and variables
-  nNeutralSpecies = 3
-  real, allocatable :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
-  real, allocatable :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
-  integer,parameter :: O_=1, O2_=2, N2_=3
+  integer, parameter :: nNeutralSpecies = 3
+  real, allocatable  :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
+  real, allocatable  :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
+  integer,parameter  :: O_=1, O2_=2, N2_=3
 
   ! Logical variables for if we are calculating photo e spectrum in iono 1 or 2
   logical :: DoCalcPeIono1=.true., DoCalcPeIono2=.true.
@@ -59,12 +59,12 @@ contains
     END IF
   end subroutine set_footpoint_locations
   !=============================================================================
-  subroutine fill_thermal_plasma_empirical(iLine,AP,F107,F107A,t)
+  subroutine fill_thermal_plasma_empirical(iLine,F107,F107A,t)
     use ModSeGrid, only: nIono1,nIono2,nIono,nPlas, nPoint, &
                          FieldLineGrid_IC,Bfield_IC
     
     integer, intent(in) :: iLine
-    real   , intent(in) :: AP, F107, F107A, t
+    real   , intent(in) :: F107, F107A, t
     integer :: iIono,iIono2,iPlas,nTopIono1,nTopIono2
     real    :: factor
 
@@ -216,12 +216,15 @@ contains
   !============================================================================
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
-    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC
-    use ModSeProduction,only:RCOLUM
+    use ModSeGrid, only: nIono,nEnergy,nPoint,FieldLineGrid_IC
+    use ModSeProduction,only:RCOLUM,ESPEC,SOLZEN,SSFLUX
     use EUA_ModMsis90, ONLY: GTD6,TSELEC
     use ModNumConst, only: cDegToRad
     integer, intent(in) :: iLine
-
+    real   , intent(in) :: F107, F107A,AP(7)
+    
+    integer :: iIono, iEnergy ! loop variables
+    
     real    :: STL1, STL2 ! Solar Local Time in iono 1 or 2
     ! production variables
     real    :: SZA1,SZA2
@@ -229,12 +232,16 @@ contains
    
     !MSIS variables
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
-    real :: SW(25),DN,TN
+    real :: SW(25),DN(8),TN(2)
     DATA sw/8*1.,-1.,16*1./
-    
+    !--------------------------------------------------------------------------
+ 
     !set the solar flux
     CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
-    
+
+    !\
+    ! Work on ionosphere 1
+    !/
     !  Calculate the local solar time
     STL1=(UT/240+gLon1_I(iLine))/15
     IF (STL1.LT.0.) STL1=STL1+24.
@@ -257,17 +264,55 @@ contains
 
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
-         NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:), &
-         ColumnDens_IC,nIono)    
+         NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
     !  Calculate the photoelectron production spectrum
     IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
             nIono,0)
     ELSE
-       do i=1,Iono
-          do j=1,Jo
-             ePhotoProdSpec1_IIC(iLine,j,i)=0.
+       do iIono=1,nIono
+          do iEnergy=1,nEnergy
+             ePhotoProdSpec1_IIC(iLine,iEnergy,iIono)=0.
+	  end do
+       end do
+    END IF
+
+    !\
+    ! Work on ionosphere 2
+    !/
+    !  Calculate the local solar time
+    STL2=(UT/240+gLon2_I(iLine))/15
+    IF (STL2.LT.0.) STL2=STL2+24.
+    IF (STL2.GT.24.) STL2=STL2-24.
+    
+    !  Call MSIS to get the neutral densities and temperature
+    CALL TSELEC(SW)
+    do  iIono=1,nIono
+       CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+            gLat2_I(iLine),gLon2_I(iLine),STL2,F107A,F107,AP,48,DN,TN)
+       NeutralDens2_IIC(iLine,O_ ,iIono)=DN(msisO_)
+       NeutralDens2_IIC(iLine,O2_,iIono)=DN(msisO2_)
+       NeutralDens2_IIC(iLine,N2_,iIono)=DN(msisN2_)
+       NeutralTemp2_IC (iLine,iIono)=TN(2)
+    end do
+    
+    ! Calculate the solar zenith angle
+    CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
+    SZA2=SZA2*cDegToRad
+
+    !  Set the slant path column densities for O,O2 and N2
+    CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
+         NeutralDens2_IIC(iLine,:,:),NeutralTemp2_IC(iLine,:),nIono)    
+    
+    !  Calculate the photoelectron production spectrum
+    IF ((SZA2.LT.2.).AND.(DoCalcPeIono2)) THEN
+       CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
+            nIono,nPoint)
+    ELSE
+       do iIono=1,nIono
+          do iEnergy=1,nEnergy
+             ePhotoProdSpec2_IIC(iLine,iEnergy,iIono)=0.
 	  end do
        end do
     END IF
@@ -346,7 +391,7 @@ contains
 
     ! Allocate the background right
     write(*,*) 'allocating background arrays'
-    call allocate_background_arrays(nLine,nPoint)
+    call allocate_background_arrays
     
     !set zep and thining parameters
     ZEP = 1
@@ -362,7 +407,7 @@ contains
     
     ! Fill the background arrays
     write(*,*) 'filling background arrays'
-    call fill_thermal_plasma_empirical(iLine,AP,F107,F107A,t)
+    call fill_thermal_plasma_empirical(iLine,F107,F107A,t)
 
     ! plot initial state
     call plot_background
@@ -405,9 +450,6 @@ contains
          allocate(ePhotoProdSpec2_IIC(nLine,nEnergy,nIono))
 
 
-(:,:,:)
-    
-    
   end subroutine allocate_background_arrays
   
 
