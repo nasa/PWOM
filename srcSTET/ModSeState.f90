@@ -682,7 +682,7 @@ contains
     
     ! Allocate the background right
     write(*,*) 'allocating background arrays'
-    call allocate_background_arrays(nLine,nPoint)
+    call allocate_background_arrays
     
     ! Fill the background arrays
 !    eThermalDensity_IC(:,:) = 0.00001
