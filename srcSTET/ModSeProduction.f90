@@ -5,6 +5,7 @@ Module ModSeProduction
   public :: RCOLUM
   public :: espec
   public :: SOLZEN
+  public :: SSFLUX
   
   !number of wavelengthincrements
   integer, parameter :: LMAX=59
@@ -258,7 +259,7 @@ contains
          SIGIO(LMAX), SIGIO2(LMAX), SIGIN2(LMAX), &
          PROBO(NST,LMAX), PROBO2(NST,LMAX), PROBN2(NST,LMAX), &
          PHOTOI(NST,NMAJ,IONO), PHOTOD(NST,NMAJ,IONO), &
-         BSO2(LMAX), AUGE(NMAJ), AUGL(NMAJ), TAU(LMAX), LAUG(NMAJ &
+         BSO2(LMAX), AUGE(NMAJ), AUGL(NMAJ), TAU(LMAX), LAUG(NMAJ), &
          EPA(NST,NST,NMAJ,LMAX),EPB1(NMAJ,LMAX),EPB2(NMAJ,LMAX)
     !
     SAVE SIGION, SIGABS, PROB, EPSIL1, EPSIL2, EPA, EPB1, EPB2
@@ -491,8 +492,8 @@ contains
           SIGION(3,L) = SIGIN2(L) * 1.E-18
        end DO
           !
-       DO 20 L=1,LMAX
-          DO 20 K=1,NST
+       DO  L=1,LMAX
+          DO  K=1,NST
              PROB(K,1,L) = PROBO(K,L)
              PROB(K,2,L) = PROBO2(K,L)
              PROB(K,3,L) = PROBN2(K,L)
@@ -504,8 +505,8 @@ contains
              IF (WAVE1(L).LE.AUGL(I)) THEN
                 EPB1(I,L)=C1/WAVE1(L)-AUGE(I)
                 EPB2(I,L)=C1/WAVE2(L)-AUGE(I)
-                DO 42 K1=1,NNN(I)
-                   DO 42 K2=1,NNN(I)
+                DO  K1=1,NNN(I)
+                   DO  K2=1,NNN(I)
                       EPA(K1,K2,I,L)=AUGE(I)-TPOT(K1,I)-TPOT(K2,I)
                    end do
                 end do
@@ -555,7 +556,7 @@ contains
           ! O(1S), photodissociation of N2, and photoionization of NO by solar
           ! Ly-alpha:
           !
-          IF (WAVE1(L) .LT. 1751. AND. WAVE2(L) .GT. 1349.) &
+          IF (WAVE1(L) .LT. 1751 .AND. WAVE2(L) .GT. 1349.) &
                PHOTOD(1,2,J) = PHOTOD(1,2,J)+ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J)
           PHOTOD(2,2,J) = PHOTOD(2,2,J) + ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J) &
                * BSO2(L)
@@ -654,8 +655,10 @@ contains
                       !
                       E1= EPA(K1,K2,I,L)
                       E2= E1
-                      IF (E1.LT.Emin .OR. E1.GT.Emax) GO TO 310
-                      DSPECT = ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)*PROB(K1,I,L)*PROB(K2,I,LA
+                      IF (E1.LT.Emin .OR. E1.GT.Emax) cycle
+                      DSPECT = &
+                           ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)&
+                           *PROB(K1,I,L)*PROB(K2,I,LA)
                       PHOTOI(K1,I,J) = PHOTOI(K1,I,J) + DSPECT      ! Technically, it's
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
@@ -1115,16 +1118,16 @@ contains
          0.012,   0.00,    0.00,    0.00,    0.00/
     
     ! FISM spectrum for 46th day of 1997
-    DATA FISM/    305.263, 176.664, 93.7853, 64.2060,  43.7263, 24.415 &
-         16.4750, 12.9340,24.5531,  7.09041, 37.1989,336.710 &
-         11.5175,  3.33318,2.55812, 3.60368,  1.51270, 3.032 &
-         2.32707, 4.82513,5.20694, 6.12267,  3.70282, 2.498 &
-         0.482684,0.273679,0.0777309,0.792697,0.275682,0.54 &
-         0.492563,1.92352, 0.601734,0.684815,1.40116,0.6644 &
-         1.00781, 0.925885,0.287596,0.606941,0.663962,0.472 &
-         1.33970, 5.87943, 0.308720,0.941772,0.0145345,0.40 &
-         1.98800, 3.55109, 0.354092,0.399132,0.0591637,0.00 &
-         0.0188158,0.00341563,3.91238e-05,6.08654e-08, 2.52
+    DATA FISM/    305.263, 176.664, 93.7853, 64.2060,  43.7263, 24.415, &
+         16.4750, 12.9340,24.5531,  7.09041, 37.1989,336.710, &
+         11.5175,  3.33318,2.55812, 3.60368,  1.51270, 3.032, &
+         2.32707, 4.82513,5.20694, 6.12267,  3.70282, 2.498, &
+         0.482684,0.273679,0.0777309,0.792697,0.275682,0.54, &
+         0.492563,1.92352, 0.601734,0.684815,1.40116,0.6644, &
+         1.00781, 0.925885,0.287596,0.606941,0.663962,0.472, &
+         1.33970, 5.87943, 0.308720,0.941772,0.0145345,0.40, &
+         1.98800, 3.55109, 0.354092,0.399132,0.0591637,0.00, &
+         0.0188158,0.00341563,3.91238e-05,6.08654e-08, 2.52/
     
     
     
