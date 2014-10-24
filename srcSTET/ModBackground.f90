@@ -216,10 +216,12 @@ contains
   !============================================================================
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
-    use ModSeGrid, only: nIono,nEnergy,nPoint,FieldLineGrid_IC
-    use ModSeProduction,only:RCOLUM,ESPEC,SOLZEN,SSFLUX
-    use EUA_ModMsis90, ONLY: GTD6,TSELEC
-    use ModNumConst, only: cDegToRad
+    use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC
+    use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX
+    use ModSeCross,     only: cross
+    use EUA_ModMsis90,  only: GTD6,TSELEC
+    use ModNumConst,    only: cDegToRad
+
     integer, intent(in) :: iLine
     real   , intent(in) :: F107, F107A,AP(7)
     
@@ -318,6 +320,9 @@ contains
 	  end do
        end do
     END IF
+
+    ! set the cross sections (perhaps this should only be called once?)
+    call cross
   end subroutine get_neutrals_and_pe_spectrum
   !============================================================================
   
