@@ -31,6 +31,7 @@ Module ModSeState
   real,allocatable :: SRC(:)
   integer,parameter :: NRing=6 ! ring current Maxwellian fits
 
+
   !public methods
   public :: update_se_state
   public :: se_update_state_test
@@ -297,8 +298,9 @@ contains
   END SUBROUTINE update_se_state
   
   !============================================================================
-  SUBROUTINE update_se_state_iono(iLine,IsOpen)
-    !*  Same as update state but for ionosphere, includes sources
+  SUBROUTINE update_se_state_iono(iLine,IsIono1,nNeutral,NeutralDens_IC,&
+       SIGS,SIGI,SIGA,ePhotoProdSpec_IC)
+    !*  Same as update_se_state but for ionosphere, includes sources
     
     USE ModSeGrid, only: nEnergy, EnergyGrid_I, DeltaE_I, EnergyMin, EnergyMax,&
          EqAngleGrid_IG,nThetaAlt_II,dThetaEnd_II,mu_III,&
@@ -314,7 +316,20 @@ contains
     IMPLICIT NONE
 !    INCLUDE 'numbers.h'
     integer, intent(in) :: iLine
-    logical, intent(in) :: IsOpen
+    logical, intent(in) :: IsIono1
+    
+    !neutral atmosphere inputs
+    integer, intent(in) :: nNeutral
+    real   , intent(in) :: NeutralDens_IC(nNeutral,nIono)
+
+    !incomming crossections
+    real   , intent(in) :: SIGS(nNeutral,nEnergy)
+    real   , intent(in) :: SIGI(nNeutral,nEnergy,nEnergy)
+    real   , intent(in) :: SIGA(nNeutral,nEnergy,nEnergy)
+    
+    ! incomming photo electron production spectrum
+    real   , intent(in) :: ePhotoProdSpec_IC(nEnergy,nIono)
+    
     REAL h,p,Fcheck, sigmaO,muO,velt,coef, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
          Fsum, delE,Flasti, Flastt,Qstar, Theta,s1,s2
@@ -329,6 +344,8 @@ contains
     !Altitude range variables
     integer :: nAltMin, nAltMax
     
+    ! array to hold temporarily the values being overwritten by BCs
+    real :: fhold(0:nAngle)
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
     !---------------------------------------------------------------------------
@@ -354,23 +371,38 @@ contains
           flag=0
           count=count+1
           IF (count.GT.countmax-2) WRITE (10,*) 'Count: ',count
-          !*  Upward Region 
-          do k=0,nThetaAlt_II(iLine,nIono)
-             phiup(iLine,k,0,j)=iphiup(iLine,k,nIono,j)
-          end do
-          
+
+          ! Upward Region
+
+          ! set BC when in iono2. Put BC in iphiup at top of iono1 and hold 
+          ! the current value to put it back after the calculation
+          if (.not.IsIono1)then
+             do k=0,nThetaAlt_II(iLine,nIono)
+                Fhold(k)=iphiup(iLine,k,nIono,j)
+             end do
+
+             ! fill BC from the the plasmasphere
+             do k=0,nThetaAlt_II(iLine,nIono)
+                iphiup(iLine,k,nIono,j)=phiup(i,nPlas,j)
+             end do
+
+             ! Add precip info here
+          endif
+             
           !set bounds for ionosphere loop depending if you are in iono 1 or 2
           if (IsIono1) then
              ! set upward bounds for iono1
              nAltMin = 1
              nAltMax = nIono
+             h=FieldLineGrid_IC(iLine,iAltMin+1)-FieldLineGrid_IC(iLine,iAltMin)
           else
              ! set upward bounds for iono2
              nAltMin = nPoint-nIono+1
-             nAltMax = nIono+nPlas
+             nAltMax = nPoint
+             h=FieldLineGrid_IC(iLine,iAltMin)-FieldLineGrid_IC(iLine,iAltMin-1)
           endif
 
-          h=FieldLineGrid_IC(iLine,iAltMin+1)-FieldLineGrid_IC(iLine,iAltMin)
+
           
           FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
 !             write(*,*) 'Start FieldLine up'
@@ -383,7 +415,7 @@ contains
                 iIono=i
                 iIonoHalf=i
              else
-                iIono=i-nIono
+                iIono=i-nPlas
                 iIonoHalf = nPoint-i+1
              end if
              
@@ -391,18 +423,29 @@ contains
              coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
              
              ! get sigma0 and electron production (primary+secondary)
-             CALL get_sigma0_and_eprod(iLine,iIonoHalf,i,j,sigO1,PESP1(j,ii),ZMAJ1(1,ii), &
-                  Qstar,specup(iLine,:,i),specdn(iLine,:,i),Qestar(i1,j),Qpstar(i1,j))
+             CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
+                  ePhotoProdSpec_IC(j,iIonoHalf), &
+                  NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
+                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(i1,j),Qpstar(i1,j))
+
              do k=1,nThetaAlt_II(iLine,i)-1
-                CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
+                call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
+                     NeutralDens_IC(:,iIonoHalf),j,iIono,k,cascade,lossum,1)
+                CALL ThetaVar1(nAngle,Theta,del1,del2,k,&
+                     EqAngleGrid_IG(iLine,0:nAngle))
                 IF (k.EQ.nThetaAlt_II(iLine,i)-1) del2=dThetaEnd_II(iLine,i)
                 muO=cos(Theta)
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phiup(iLine,k,iPlas-1,j)
-                Flastj=phiup(iLine,k,iPlas,j+1)
-                Flastt=lphiup(iLine,k,iPlas,j)
+                Flasti=iphiup(iLine, k,iIono-1,j)
+                Flastj=iphiup(iLine, k,iIono,j+1)
+                Flastt=liphiup(iLine,k,iIono,j)
+                
+                !When we are in the ilocal region kill the transport terms in 
+                ! coeficients by setting kk to 0
+                kk=1
+                if (iIonoHalf <= iLocal) kk=0
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
@@ -410,84 +453,109 @@ contains
                 !            CALL CheckWarn(sigma(k+1),warning,1,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,1,*9999)
              end do
-             IF (i.EQ.nTop) THEN
-                p=-2.*s1/dThetaEnd_II(iLine,i)
-             ELSE
-                p=-s1/SQRT(ABS(1./coef-1.))
-             END IF
-             Flastt=lphiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)
-             Fsum=phiup(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)+phidn(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)
-             Fcheck=phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)
-             Flastj=phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j+1)
+             
+             p=-s1/SQRT(ABS(1./coef-1.))
+
+             Flastt=liphiup(iLine,nThetaAlt_II(iLine,i),iIono,j)
+             Fsum=iphiup(iLine,nThetaAlt_II(iLine,i)-1,iIono,j)&
+                  +iphidn(iLine,nThetaAlt_II(iLine,i)-1,iIono,j)
+             Fcheck=iphiup(iLine,nThetaAlt_II(iLine,i),iIono,j)
+             Flastj=iphiup(iLine,nThetaAlt_II(iLine,i),iIono,j+1)
+             call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
+                  NeutralDens_IC(:,iIonoHalf),j,iIono,nThetaAlt_II(iLine,i),&
+                  cascade,lossum,1)
              newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_II(iLine,i)) &
                   +s2*(lbeta(i)* Flastj/delE+Qstar+cascade))/ &
                   (1/velt-p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,2,*9999)
              
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phiup(iLine,nThetaAlt_II(iLine,i),iPlas,j)=newphi
+             iphiup(iLine,nThetaAlt_II(iLine,i),iIono,j)=newphi
              do k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phiup(iLine,k,iPlas,j)+sigma(k)
-                Fcheck=phiup(iLine,k-1,iPlas,j)
+                newphi=alpha(k)*iphiup(iLine,k,iIono,j)+sigma(k)
+                Fcheck=iphiup(iLine,k-1,iIono,j)
                 !            CALL CheckWarn(newphi,warning,3,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phiup(iLine,k-1,iPlas,j)=newphi
+                iphiup(iLine,k-1,iIono,j)=newphi
              end do
-             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,iPlas,j),&
-                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
+             CALL midpnt_int(specup(iLine,j,i),iphiup(iLine,:,iIono,j),&
+                  mu_III(iLine,:,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,*) time,j,i,iPlas,nThetaAlt_II(iLine,i)/4,&
-                     flag,(phiup(iLine,k,iPlas,j),k=0,nThetaAlt_II(iLine,i))
-                WRITE (10,*) time,j,i,iPlas,nThetaAlt_II(iLine,i),flag,&
-                     (phiup(iLine,k,iPlas,j),k=nThetaAlt_II(iLine,i)/2+1, &
-                     nThetaAlt_II(iLine,i),2)
+                WRITE (10,*) time,j,i,iIono,nThetaAlt_II(iLine,i),&
+                     flag,(iphiup(iLine,k,iIono,j),k=0,nThetaAlt_II(iLine,i))
              END IF
              h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            
              
-! End Upward Region #2 loop
+             ! End Upward Region of ionosphere
           end DO FIELDLINE_UPWARD
-          !*  Downward Region #2: the plasmasphere
+          !put back the iphiup at top of iono1 (which was storing plasmasph bc)
+          do k=0,nThetaAlt_II(iLine,nIono)
+             iphiup(iLine,k,nIono,j)=Fhold(k)
+          end do
 
-          !check if field line is open and set bounds for up and down loop
-          if (IsOpen) then
-             ! open line so detach hemispheres
-             nAltMin = nIono+1
-             nAltMax = nTop
-             !set step
-             h = &
-                  FieldLineGrid_IC(iLine,nTop) &
-                  -FieldLineGrid_IC(iLine,nTop+1)
-             !fill bc from iono
-             do k=0,nThetaAlt_II(iLine,nTop)
-                phidn(iLine,k,nTop+1,j) = 0.0
-             end do
-          else
-             ! closed line so keep hemispheres attached
-             nAltMin = nIono+1
-             nAltMax = nIono+nPlas
-             !set step
-             h = &
-                  FieldLineGrid_IC(iLine,nIono+nPlas) &
-                  -FieldLineGrid_IC(iLine,nIono+nPlas+1)
-             !fill bc from iono
+          
+          !*  Downward Region of the ionosphere
+
+          ! set BC when in iono1. Put BC in iphidn at top of iono2 and hold 
+          ! the current value to put it back after the calculation
+          if (IsIono1)then
              do k=0,nThetaAlt_II(iLine,nIono)
-                phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
+                Fhold(k)=iphidn(iLine,k,nIono+1,j)
              end do
+
+             ! fill BC from the the plasmasphere
+             do k=0,nThetaAlt_II(iLine,nIono)
+                iphidn(iLine,k,nIono+1,j)=phidn(i,1,j)
+             end do
+
+             ! Add precip info here
+          endif
+
+          !set bounds for ionosphere loop depending if you are in iono 1 or 2
+          if (IsIono1) then
+             ! set upward bounds for iono1
+             nAltMin = 1
+             nAltMax = nIono
+             h=FieldLineGrid_IC(iLine,iAltMax)-FieldLineGrid_IC(iLine,iAltMax+1)
+          else
+             ! set upward bounds for iono2
+             nAltMin = nPoint-nIono+1
+             nAltMax = nPoint
+             h=FieldLineGrid_IC(iLine,iAltMax-1)-FieldLineGrid_IC(iLine,iAltMax)
           endif
           
+
           FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
 !             write(*,*) 'Start FieldLine Down'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
-             !KLUDGE kill pitchangle scattering
-             !sigO1=0.0
-             !END KLUDGE
-             iPlas=i-nIono
+
+             ! set iIono and iIonoHalf indices based on 1st or 2nd ionosphere
+             ! remember, iIono is index spanning both ionospheres, 
+             ! iIonoHalf is index spanning just one ionosphere
+             if(IsIono1) then
+                iIono=i
+                iIonoHalf=i
+             else
+                iIono=i-nPlas
+                iIonoHalf = nPoint-i+1
+             end if
+
+             !set the b-field ratio coeficient
              coef=BFieldEq_I(iLine)/Bfield_IC(iLine,i)
-             CALL IonoVar3(Qstar, cascade, lossum)
+
+             ! get sigma0 and electron production (primary+secondary)
+             CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
+                  ePhotoProdSpec_IC(j,iIonoHalf), &
+                  NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
+                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(i1,j),Qpstar(i1,j))
+
              DO k=1,nThetaAlt_II(iLine,i)-1
-                CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
+                call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
+                     NeutralDens_IC(:,iIonoHalf),j,iIono,k,cascade,lossum,2)
+                CALL ThetaVar1(nAngle,Theta,del1,del2,k, &
+                     EqAngleGrid_IG(iLine,0:nAngle))
                 Theta=cPi-Theta
                 del1=-del1
                 del2=-del2
@@ -496,9 +564,14 @@ contains
                 sigmaO=sigO1
                 s1=sigmaO
                 s2=1.
-                Flasti=phidn(iLine,k,iPlas+1,j)
-                Flastj=phidn(iLine,k,iPlas,j+1)
-                Flastt=lphidn(iLine,k,iPlas,j)
+                Flasti=iphidn(iLine,k,iIono+1,j)
+                Flastj=iphidn(iLine,k,iIono,j+1)
+                Flastt=liphidn(iLine,k,iIono,j)
+                
+                !When we are in the ilocal region kill the transport terms in 
+                ! coeficients by setting kk to 0
+                kk=1
+                if (iIonoHalf <= iLocal) kk=0
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      -mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
@@ -506,48 +579,58 @@ contains
                 !            CALL CheckWarn(sigma(k+1),warning,4,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,4,*9999)
              enddo
-             IF (i.EQ.nTop) THEN
-                p=2.*s1/dThetaEnd_II(iLine,i)
-             ELSE
-                p=s1/SQRT(ABS(1./coef-1.))
-             END IF
-             Flastt=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)
-             Fsum=phidn(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)+phiup(iLine,nThetaAlt_II(iLine,i)-1,iPlas,j)
-             Fcheck=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)
-             Flastj=phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j+1)
+
+             p=s1/SQRT(ABS(1./coef-1.))
+
+             Flastt=liphidn(iLine,nThetaAlt_II(iLine,i),iIono,j)
+             Fsum=iphidn(iLine,nThetaAlt_II(iLine,i)-1,iIono,j)&
+                  +iphiup(iLine,nThetaAlt_II(iLine,i)-1,iIono,j)
+             Fcheck=iphidn(iLine,nThetaAlt_II(iLine,i),iIono,j)
+             Flastj=iphidn(iLine,nThetaAlt_II(iLine,i),iIono,j+1)
+             call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
+                  NeutralDens_IC(:,iIonoHalf),j,iIono,nThetaAlt_II(iLine,i), &
+                  cascade,lossum,2)
              newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_II(iLine,i))+s2*(lbeta(i)* &
                   Flastj/delE+Qstar+cascade))&
                   /(1/velt+p/dThetaEnd_II(iLine,i)+s2*(beta(i)/delE+lossum))
              !            CALL CheckWarn(newphi,warning,5,*9999)
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
-             phidn(iLine,nThetaAlt_II(iLine,i),iPlas,j)=newphi
+             iphidn(iLine,nThetaAlt_II(iLine,i),iIono,j)=newphi
              DO k=nThetaAlt_II(iLine,i),1,-1
                 newphi=alpha(k)*phidn(iLine,k,iPlas,j)+sigma(k)
-                Fcheck=phidn(iLine,k-1,iPlas,j)
+                Fcheck=iphidn(iLine,k-1,iIono,j)
                 !            CALL CheckWarn(newphi,warning,6,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
-                phidn(iLine,k-1,iPlas,j)=newphi
+                iphidn(iLine,k-1,iIono,j)=newphi
              end DO
-             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,iPlas,j),&
-                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
+             CALL midpnt_int(specdn(iLine,j,i),iphidn(iLine,:,iIono,j),&
+                  mu_III(iLine,:,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
-                WRITE (10,*) time,j,i,iPlas,flag,&
-                     (phidn(iLine,k,iPlas,j),k=0,nThetaAlt_II(iLine,i)/2,2)
-                WRITE (10,*) time,j,i,iPlas,flag,&
-                     (phidn(iLine,k,iPlas,j),k=nThetaAlt_II(iLine,i)/2+1, &
-                     nThetaAlt_II(iLine,i),2)
+                WRITE (10,*) time,j,i,iIono,flag,&
+                     (iphidn(iLine,k,iIono,j),k=0,nThetaAlt_II(iLine,i))
              END IF
-             h=FieldLineGrid_IC(iLine,i-1)-FieldLineGrid_IC(iLine,i)            ! End Downward Region #2 loop
+             if (i==1) then
+                h=FieldLineGrid_IC(iLine,i)-FieldLineGrid_IC(iLine,i+1)        
+             else
+                h=FieldLineGrid_IC(iLine,i-1)-FieldLineGrid_IC(iLine,i)         
+             endif
+             ! End Downward Region of ionosphere
           end DO FIELDLINE_DOWN
+          !put back the iphidn at top of iono2 (which was storing plasmasph bc)
+          do k=0,nThetaAlt_II(iLine,nIono)
+             iphidn(iLine,k,nIono+1,j)=Fhold(k)
+          end do
+
        END DO ITERATION                  ! End of iteration loop
        CALL CheckFlag(flag,1,warning,-1,*9999)
        !  Save the calculated values for the next time and energy steps
-       do i=nIono+1,nPoint-nIono
-          lbeta(i)=beta(i)
-       end do
-       !      PRINT *, 'Energy convergence:',j,EnergyGrid_I(j),count
+       if (IsIono1) then
+          lbeta(1:nIono)=beta(1:nIono)
+       else
+          lbeta(nPoint-nIono+1:nPoint)=beta(nPoint-nIono+1:nPoint)
+       endif
     end DO ENERGY
     
 9999 IF (warning.GT.0) THEN
@@ -556,7 +639,7 @@ contains
             BFieldEq_I(iLine),FieldLineGrid_IC(iLine,i),h,Theta,muO,&
             mu_III(iLine,k,i),del1, dThetaEnd_II(iLine,i),beta(i),sigmaO,p,count,&
             Qstar
-       PRINT *, phiup(iLine,k,iPlas,j),phidn(iLine,k,iPlas,j)
+       PRINT *, iphiup(iLine,k,iIono,j),iphidn(iLine,k,iIono,j)
        STOP
     ELSE IF (warning.LT.0) THEN
        PRINT *, 'No convergence: ',count,Time,warning,j
@@ -635,7 +718,6 @@ contains
   !*  calculates beta, sigmaO, and Qstar for the ionosphere.
   !*  VARIABLE DESCRIPTIONS
   !*      EnIon   Energies for ionization states for each species; eV
-  !*      NINN    Number of ionization states for each species
   !*      SIGS    Elastic collision cross sections, species, energy; cm2
   !*      SIGI    Differential cross sections, state,species,sec,pri; cm2
   !*      ionsum  Sum of energy losses due to ionization; ???? [beta]
@@ -654,51 +736,143 @@ contains
   !*      phiup  Flux in the ionospheres (moving from first to second)
   !*      phidn  Flux in the ionospheres (moving from second to first)
   !*
-  SUBROUTINE get_sigma0_and_eprod(iLine,iIonoHalf,iAlt,iEnergyIn,sigO1,PE,dens,Qstar,phiup,phidn,Qe,Qp)
+  SUBROUTINE get_sigma0_and_eprod(iEnergyIn,nNeutral,&
+       sigO1,PE,NeutralDens_I,SIGS,SIGI,SIGA,Qstar,&
+       OmniDirFluxUp_I,OmniDirFluxUp_I,Qe,Qp)
     IMPLICIT NONE
     use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
          DeltaE_I,EnergyGrid_I
-    use ModSeBackground,ONLY: NeutralDens1_IIC,nNeutralSpecies = 3
-    use ModSeCross,     ONLY: SIGS, SIGI, SIGA 
     use ModNumConst,    ONLY: cPi
-    integer, intent(in) :: iLine,iIonoHalf,iAlt,iEnergyIn
-    real   , intent(inout) :: sigO1
-    real   , intent(in) :: PE,dens(nNeutralSpecies)
-    REAL sigO1,PE,Qp,pi,del(Elen),dens(NMAJ),Eplus, &
-         ener(Elen),phiup(Elen),elassum,Qstar, &
-         Qe,phidn(nEnergy),phi,Emin,sec(nEnergy)
-    INTEGER NINN(NMAJ),j,BINNUM,m,n,LL,jj,Jo
 
-    COMMON /CENERGY/ener,del,Emin,Jo
-    DATA NINN/3,7,6/
-    Eplus=12.            ! Minimum ionization threshold
+    integer, intent(in) :: iIonoHalf,iEnergyIn,nNeutral
+    real   , intent(inout) :: sigO1
+    real   , intent(in) :: PE,NeutralDens_I(nNeutral)
+    !incomming crossections
+    real   , intent(in) :: SIGS(nNeutral,nEnergy)
+    real   , intent(in) :: SIGI(nNeutral,nEnergy,nEnergy)
+    real   , intent(in) :: SIGA(nNeutral,nEnergy,nEnergy)
+    !outgoing electron production rate
+    real   , intent(out):: Qstar
     
+    real   , intent(in) :: OmniDirFluxUp_I(nEnergy),OmniDirFluxDn_I(nEnergy
+    !outgoing electron production rate from secondary production
+    real   , intent(out):: Qe
+    !incomming electron production rate from precip
+    real   , intent(in) :: Qp
+
+    real   :: NetFlux, SecProd(nEnergy)
+    REAL   :: Eplus, elassum
+    
+    ! Minimum ionization threshold
+    real,parameter :: Eplus = 12.0 
+    INTEGER j,BINNUM,m,n,LL,jj
+    !---------------------------------------------------------------------------
+        
     ! this part gives the sum elastic scattering cross sections
     elassum=0.
     Qe=0.
     do jj=1,nEnergy
        sec(jj)=0.
     end do
-    do n=1,NMAJ
-       elassum=elassum+dens(n)*SIGS(n,j)
+    do n=1,nNeutral
+       elassum=elassum+NeutralDens_I(n)*SIGS(n,j)
     end do
     sigO1=sigO1+.5*elassum
     
     ! this calculates the electron total production
-    DO  n=1,NMAJ
-       IF (2*EnergyGrid_I(iEnergyIn)+Eplus.LT.EnergyGrid_I(nEnergy)+.5*del(nEnergy)) THEN
+    DO  n=1,nNeutral
+       IF (2*EnergyGrid_I(iEnergyIn)+Eplus &
+            < EnergyGrid_I(nEnergy)+.5*DeltaE_I(nEnergy)) THEN
           LL=BINNUM(2*EnergyGrid_I(iEnergyIn)+Eplus)
           DO jj=LL,nEnergy
-             phi=specup(iLine,jj,iAlt)-specdn(iLine,jj,iAlt)
-             sec(jj)=sec(jj)+dens(n)*SIGI(n,iEnergyIn,jj)*phi
+             NetFlux=OmniDirFluxUp_I(jj)-OmniDirFluxDn_I(jj)
+             SecProd(jj)=SecProd(jj)+NeutralDens_I(n)*SIGI(n,iEnergyIn,jj)*NetFlux
           enddo
        END IF
     enddo
-    CALL midpnt_int(Qe,sec,DeltaE_I,1,nEnergy,nEnergy,2)
+    CALL midpnt_int(Qe,SecProd,DeltaE_I,1,nEnergy,nEnergy,2)
     Qstar=PE/(4*cPi*DeltaE_I(iEnergy))+Qe+Qp
     RETURN
   end SUBROUTINE get_sigma0_and_eprod
 
+  !=============================================================================
+  ! ------------------------------------------------------------------ ** 
+  ! This function finds the energy grid number of the input energy E.
+  !  VARIABLE DESCRIPTIONS
+  !      Elen    Array size for energy step variables, >= Jo
+  !      ener    Energy array; eV
+  !      Emin    Minumum energy; eV
+  !      del     Energy step array; eV 
+  !      Jo      Number of energy steps
+  !      N       Flag indicating whether the energy is in the range
+  !  
+  INTEGER FUNCTION BINNUM(E)
+    
+    use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I, EnergyMin
+    
+    real, intent(in) :: E
+    integer :: N, i
+    logical :: IsBinFound
+    !---------------------------------------------------------------------------
+    IsBinFound=.false.
+    i=1
+    DO WHILE ((.not.IsBinFound).AND.(i.LE.nEnergy))
+       IF (E.LE.EnergyGrid_I(i)+DeltaE_I(i)/2) IsBinFound=.true.
+       i=i+1
+    END DO
+    IF (IsBinFound) THEN
+       BINNUM=i-1
+    ELSE
+       BINNUM=nEnergy+1
+    END IF
+    IF (E.LE.EnergyMin) BINNUM=0
+    RETURN
+  END FUNCTION BINNUM
+
+  !=============================================================================
+  !  Subroutine get_cascade_and_lossum (was IonoVar2) finds cascade and lossum.
+  !     m       Specifies the use of iphiup or iphidn
+  SUBROUTINE get_cascade_and_lossum(iLine,nNeutral,SIGA,NeutralDens_I, &
+       iEnergyIn,iIono,iAngle,cascade,lossum,m)
+    IMPLICIT NONE
+    use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I, EnergyMin
+    
+    integer, intent(in) :: iLine, nNeutral
+    real   , intent(in) :: SIGA(nNeutral,nEnergy,nEnergy)
+    real   , intent(in) :: NeutralDens_I(nNeutral)
+    integer, intent(in) :: iEnergyIn,iIono,iAngle
+    real   , intent(out):: cascade,lossum
+    integer, intent(in) :: m
+    
+    real :: lossum, cascade, flux
+    integer :: jj,n,LL
+    !---------------------------------------------------------------------------
+    lossum=0.
+    cascade=0.
+    
+    ! New method (with Swartz fix and cross section splitting)           
+    do jj=1,iEnergyIn
+       do n=1,nNeutral
+          lossum=lossum+NeutralDens_I(n)*SIGA(n,jj,iEnergyIn)
+       end do
+    end do
+    IF (iEnergyIn.LT.nEnergy) THEN
+       do jj=iEnergyIn+1,nEnergy
+          LL=jj-iEnergyIn
+          ! IF (m.EQ.1) flux=AngIonJ(i,j,k,i,jj,iphiup(0,i1,jj))
+          ! IF (m.EQ.2) flux=AngIonJ(i,j,k,i,jj,iphidn(0,i1,jj))
+          IF (m.EQ.1) flux=iphiup(iLine,iAngle,iIono,jj)
+          IF (m.EQ.2) flux=iphidn(iLine,iAngle,iIono,jj)
+          do n=1,nNeutral
+             cascade=cascade+NeutralDens_I(n)*SIGA(n,LL,jj)*flux
+          end do
+       end do
+    END IF
+    
+    RETURN
+  end SUBROUTINE get_cascade_and_lossum
 
 
   !=============================================================================
