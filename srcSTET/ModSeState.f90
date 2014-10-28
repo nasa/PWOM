@@ -333,8 +333,12 @@ contains
     REAL h,p,Fcheck, sigmaO,muO,velt,coef, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
          Fsum, delE,Flasti, Flastt,Qstar, Theta,s1,s2
-    INTEGER i,j,k,iPlas,jj,Ist, &
+    INTEGER i,j,k,jj,Ist, &
          flag,count,warning,SPick,space,ii
+    !inidicies that store full ionosphere grid(2*nIono points) and half 
+    ! ionosphere grid (nIono points). These convert position along the field 
+    ! line into these sub grids.
+    integer :: iIono, iIonoHalf
 
     !set maximum iterations
     integer, parameter :: countmax=600
@@ -394,12 +398,12 @@ contains
              ! set upward bounds for iono1
              nAltMin = 1
              nAltMax = nIono
-             h=FieldLineGrid_IC(iLine,iAltMin+1)-FieldLineGrid_IC(iLine,iAltMin)
+             h=FieldLineGrid_IC(iLine,nAltMin+1)-FieldLineGrid_IC(iLine,nAltMin)
           else
              ! set upward bounds for iono2
              nAltMin = nPoint-nIono+1
              nAltMax = nPoint
-             h=FieldLineGrid_IC(iLine,iAltMin)-FieldLineGrid_IC(iLine,iAltMin-1)
+             h=FieldLineGrid_IC(iLine,nAltMin)-FieldLineGrid_IC(iLine,nAltMin-1)
           endif
 
 
@@ -426,7 +430,8 @@ contains
              CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
-                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(i1,j),Qpstar(i1,j))
+                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(iIono,j),&
+                  Qpstar(iIono,j))
 
              do k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -518,12 +523,12 @@ contains
              ! set upward bounds for iono1
              nAltMin = 1
              nAltMax = nIono
-             h=FieldLineGrid_IC(iLine,iAltMax)-FieldLineGrid_IC(iLine,iAltMax+1)
+             h=FieldLineGrid_IC(iLine,nAltMax)-FieldLineGrid_IC(iLine,nAltMax+1)
           else
              ! set upward bounds for iono2
              nAltMin = nPoint-nIono+1
              nAltMax = nPoint
-             h=FieldLineGrid_IC(iLine,iAltMax-1)-FieldLineGrid_IC(iLine,iAltMax)
+             h=FieldLineGrid_IC(iLine,nAltMax-1)-FieldLineGrid_IC(iLine,nAltMax)
           endif
           
 
@@ -549,7 +554,8 @@ contains
              CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
-                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(i1,j),Qpstar(i1,j))
+                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(iIono,j),&
+                  Qpstar(iIono,j))
 
              DO k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -597,7 +603,7 @@ contains
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              iphidn(iLine,nThetaAlt_II(iLine,i),iIono,j)=newphi
              DO k=nThetaAlt_II(iLine,i),1,-1
-                newphi=alpha(k)*phidn(iLine,k,iPlas,j)+sigma(k)
+                newphi=alpha(k)*iphidn(iLine,k,iIono,j)+sigma(k)
                 Fcheck=iphidn(iLine,k-1,iIono,j)
                 !            CALL CheckWarn(newphi,warning,6,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
@@ -738,13 +744,13 @@ contains
   !*
   SUBROUTINE get_sigma0_and_eprod(iEnergyIn,nNeutral,&
        sigO1,PE,NeutralDens_I,SIGS,SIGI,SIGA,Qstar,&
-       OmniDirFluxUp_I,OmniDirFluxUp_I,Qe,Qp)
-    IMPLICIT NONE
+       OmniDirFluxUp_I,OmniDirFluxDn_I,Qe,Qp)
     use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
          DeltaE_I,EnergyGrid_I
     use ModNumConst,    ONLY: cPi
 
-    integer, intent(in) :: iIonoHalf,iEnergyIn,nNeutral
+    IMPLICIT NONE
+    integer, intent(in) :: iEnergyIn,nNeutral
     real   , intent(inout) :: sigO1
     real   , intent(in) :: PE,NeutralDens_I(nNeutral)
     !incomming crossections
@@ -754,14 +760,14 @@ contains
     !outgoing electron production rate
     real   , intent(out):: Qstar
     
-    real   , intent(in) :: OmniDirFluxUp_I(nEnergy),OmniDirFluxDn_I(nEnergy
+    real   , intent(in) :: OmniDirFluxUp_I(nEnergy),OmniDirFluxDn_I(nEnergy)
     !outgoing electron production rate from secondary production
     real   , intent(out):: Qe
     !incomming electron production rate from precip
     real   , intent(in) :: Qp
 
     real   :: NetFlux, SecProd(nEnergy)
-    REAL   :: Eplus, elassum
+    REAL   :: elassum
     
     ! Minimum ionization threshold
     real,parameter :: Eplus = 12.0 
@@ -771,9 +777,8 @@ contains
     ! this part gives the sum elastic scattering cross sections
     elassum=0.
     Qe=0.
-    do jj=1,nEnergy
-       sec(jj)=0.
-    end do
+    SecProd(:)=0.
+
     do n=1,nNeutral
        elassum=elassum+NeutralDens_I(n)*SIGS(n,j)
     end do
@@ -791,7 +796,7 @@ contains
        END IF
     enddo
     CALL midpnt_int(Qe,SecProd,DeltaE_I,1,nEnergy,nEnergy,2)
-    Qstar=PE/(4*cPi*DeltaE_I(iEnergy))+Qe+Qp
+    Qstar=PE/(4*cPi*DeltaE_I(iEnergyIn))+Qe+Qp
     RETURN
   end SUBROUTINE get_sigma0_and_eprod
 
@@ -835,10 +840,11 @@ contains
   !     m       Specifies the use of iphiup or iphidn
   SUBROUTINE get_cascade_and_lossum(iLine,nNeutral,SIGA,NeutralDens_I, &
        iEnergyIn,iIono,iAngle,cascade,lossum,m)
-    IMPLICIT NONE
+
     use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
          DeltaE_I,EnergyGrid_I, EnergyMin
-    
+
+    IMPLICIT NONE    
     integer, intent(in) :: iLine, nNeutral
     real   , intent(in) :: SIGA(nNeutral,nEnergy,nEnergy)
     real   , intent(in) :: NeutralDens_I(nNeutral)
@@ -846,7 +852,7 @@ contains
     real   , intent(out):: cascade,lossum
     integer, intent(in) :: m
     
-    real :: lossum, cascade, flux
+    real :: flux
     integer :: jj,n,LL
     !---------------------------------------------------------------------------
     lossum=0.
