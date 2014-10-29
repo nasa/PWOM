@@ -234,7 +234,7 @@ contains
                 SIGG = QQN * AO(J,I) * (WE**OMEG(J,I) / WW(J,I)**2) &
                      * (1.0 - WE**BB(J,I)) ** ANU(J,I)
                 IF (SIGG .LT. 1.E-30) SIGG = 0.0
-                IE = INV (nEnerg,ETA,JY,ENER,Emin)
+                IE = INV (nEnergy,ETA,JY,ENER,Emin)
                 IEE = IE - 1
                 K = JY - IE
                 KK = JY - IEE
