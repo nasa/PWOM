@@ -22,7 +22,7 @@ Module ModSeState
   real, public,allocatable :: specup(:,:,:),specdn(:,:,:)
   
   real, public :: delt,epsilon
-
+  
   ! Ring current parameters for coulomb collisions (note that ring.dat would 
   ! need to be read in the future to use this feature.
   integer,parameter :: IRC=0 
@@ -31,7 +31,18 @@ Module ModSeState
   real,allocatable :: SRC(:)
   integer,parameter :: NRing=6 ! ring current Maxwellian fits
 
+  ! ilocal defines the number of points at the bottom of each ionosphere where 
+  ! transport is explicitly turned off. default is shown
+  integer :: ilocal = 12
 
+  ! Arrays for electron production in ionosphere. These are only used to store 
+  ! these values for output. They are already added into Qstar for the purposes 
+  ! of calculation.
+  real,allocatable :: Qestar_ICI(:,:,:) ! secondary production in ionosphere 
+  real,allocatable :: Qpstar_ICI(:,:,:) ! Beam-induced production 
+                                        ! (non-degredating beam)
+  
+  
   !public methods
   public :: update_se_state
   public :: se_update_state_test
@@ -387,7 +398,7 @@ contains
 
              ! fill BC from the the plasmasphere
              do k=0,nThetaAlt_II(iLine,nIono)
-                iphiup(iLine,k,nIono,j)=phiup(i,nPlas,j)
+                iphiup(iLine,k,nIono,j)=phiup(iLine,i,nPlas,j)
              end do
 
              ! Add precip info here
@@ -430,8 +441,8 @@ contains
              CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
-                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(iIono,j),&
-                  Qpstar(iIono,j))
+                  specup(iLine,:,i),specdn(iLine,:,i),&
+                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
 
              do k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -512,7 +523,7 @@ contains
 
              ! fill BC from the the plasmasphere
              do k=0,nThetaAlt_II(iLine,nIono)
-                iphidn(iLine,k,nIono+1,j)=phidn(i,1,j)
+                iphidn(iLine,k,nIono+1,j)=phidn(iLine,i,1,j)
              end do
 
              ! Add precip info here
@@ -554,8 +565,8 @@ contains
              CALL get_sigma0_and_eprod(j,nNeutral,sigO1,&
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
-                  specup(iLine,:,i),specdn(iLine,:,i),Qestar(iIono,j),&
-                  Qpstar(iIono,j))
+                  specup(iLine,:,i),specdn(iLine,:,i),&
+                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
 
              DO k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -746,7 +757,8 @@ contains
        sigO1,PE,NeutralDens_I,SIGS,SIGI,SIGA,Qstar,&
        OmniDirFluxUp_I,OmniDirFluxDn_I,Qe,Qp)
     use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
-         DeltaE_I,EnergyGrid_I
+         DeltaE_I,EnergyGrid_I,BINNUM
+    use ModMath,        ONLY: midpnt_int
     use ModNumConst,    ONLY: cPi
 
     IMPLICIT NONE
@@ -771,7 +783,7 @@ contains
     
     ! Minimum ionization threshold
     real,parameter :: Eplus = 12.0 
-    INTEGER j,BINNUM,m,n,LL,jj
+    INTEGER j,m,n,LL,jj
     !---------------------------------------------------------------------------
         
     ! this part gives the sum elastic scattering cross sections
@@ -800,40 +812,6 @@ contains
     RETURN
   end SUBROUTINE get_sigma0_and_eprod
 
-  !=============================================================================
-  ! ------------------------------------------------------------------ ** 
-  ! This function finds the energy grid number of the input energy E.
-  !  VARIABLE DESCRIPTIONS
-  !      Elen    Array size for energy step variables, >= Jo
-  !      ener    Energy array; eV
-  !      Emin    Minumum energy; eV
-  !      del     Energy step array; eV 
-  !      Jo      Number of energy steps
-  !      N       Flag indicating whether the energy is in the range
-  !  
-  INTEGER FUNCTION BINNUM(E)
-    
-    use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
-         DeltaE_I,EnergyGrid_I, EnergyMin
-    
-    real, intent(in) :: E
-    integer :: N, i
-    logical :: IsBinFound
-    !---------------------------------------------------------------------------
-    IsBinFound=.false.
-    i=1
-    DO WHILE ((.not.IsBinFound).AND.(i.LE.nEnergy))
-       IF (E.LE.EnergyGrid_I(i)+DeltaE_I(i)/2) IsBinFound=.true.
-       i=i+1
-    END DO
-    IF (IsBinFound) THEN
-       BINNUM=i-1
-    ELSE
-       BINNUM=nEnergy+1
-    END IF
-    IF (E.LE.EnergyMin) BINNUM=0
-    RETURN
-  END FUNCTION BINNUM
 
   !=============================================================================
   !  Subroutine get_cascade_and_lossum (was IonoVar2) finds cascade and lossum.
@@ -1180,6 +1158,9 @@ contains
     if(.not.allocated(liphidn))allocate(liphidn(nLine,0:nAngle,2*nIono,nEnergy))
 
     if(.not.allocated(SRC))    allocate(SRC(nPoint))
+
+    if(.not.allocated(Qestar_ICI))allocate(Qestar_ICI(nLine,2*nIono,nEnergy))
+    if(.not.allocated(Qpstar_ICI))allocate(Qpstar_ICI(nLine,2*nIono,nEnergy))
   end subroutine allocate_state_arrays
 
   !============================================================================

@@ -125,10 +125,11 @@ contains
 !         TS(NEI,NMAJ),   TA(NEI,NMAJ),   TB(NEI,NMAJ), &
 !         GAMS(NEI,NMAJ), GAMB(NEI,NMAJ)
     !
-    use ModSeGrid,only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I,Emin=>EnergyMin
+    use ModSeGrid,only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I, &
+         Emin=>EnergyMin, BINNUM
 !    COMMON /CENERGY/ENER(Elen), DEL(Elen), Emin, Jo
     !
-    INTEGER BINNUM
+
     DIMENSION NNN(NMAJ), NINN(NMAJ), NUM(NMAJ), &
          EC(31,NMAJ), CC(31,NMAJ)
     !

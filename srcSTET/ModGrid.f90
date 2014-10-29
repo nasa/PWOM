@@ -72,7 +72,7 @@ Module ModSeGrid
   public :: init_se_grid
   public :: se_grid_test
   public :: create_se_test_grid
-
+  public :: BINNUM
 
 
   real :: rPlanetCM
@@ -376,6 +376,42 @@ contains
     end select
  
   end subroutine calc_energy_grid
+
+  !=============================================================================
+  ! ------------------------------------------------------------------ ** 
+  ! This function finds the energy grid number of the input energy E.
+  !  VARIABLE DESCRIPTIONS
+  !      Elen    Array size for energy step variables, >= Jo
+  !      ener    Energy array; eV
+  !      Emin    Minumum energy; eV
+  !      del     Energy step array; eV 
+  !      Jo      Number of energy steps
+  !      N       Flag indicating whether the energy is in the range
+  !  
+  INTEGER FUNCTION BINNUM(E)
+    
+!    use ModSeGrid,      ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+!         DeltaE_I,EnergyGrid_I, EnergyMin
+    
+    real, intent(in) :: E
+    integer :: N, i
+    logical :: IsBinFound
+    !---------------------------------------------------------------------------
+    IsBinFound=.false.
+    i=1
+    DO WHILE ((.not.IsBinFound).AND.(i.LE.nEnergy))
+       IF (E.LE.EnergyGrid_I(i)+DeltaE_I(i)/2) IsBinFound=.true.
+       i=i+1
+    END DO
+    IF (IsBinFound) THEN
+       BINNUM=i-1
+    ELSE
+       BINNUM=nEnergy+1
+    END IF
+    IF (E.LE.EnergyMin) BINNUM=0
+    RETURN
+  END FUNCTION BINNUM
+
   !=============================================================================
   subroutine calc_potential(iLine)
     use ModMath, only: midpnt_int
