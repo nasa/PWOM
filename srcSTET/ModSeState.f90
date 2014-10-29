@@ -46,6 +46,7 @@ Module ModSeState
   !public methods
   public :: update_se_state
   public :: se_update_state_test
+  public :: se_update_state_iono_test
 contains
   SUBROUTINE update_se_state(iLine,IsOpen)
     !*  This subroutine used to be the main program, until other operators
@@ -783,7 +784,7 @@ contains
     
     ! Minimum ionization threshold
     real,parameter :: Eplus = 12.0 
-    INTEGER j,m,n,LL,jj
+    INTEGER m,n,LL,jj
     !---------------------------------------------------------------------------
         
     ! this part gives the sum elastic scattering cross sections
@@ -792,7 +793,7 @@ contains
     SecProd(:)=0.
 
     do n=1,nNeutral
-       elassum=elassum+NeutralDens_I(n)*SIGS(n,j)
+       elassum=elassum+NeutralDens_I(n)*SIGS(n,iEnergyIn)
     end do
     sigO1=sigO1+.5*elassum
     
@@ -1240,4 +1241,103 @@ contains
     end do TIME_LOOP
     
   end subroutine se_update_state_test
+
+  !============================================================================
+  ! UNIT test for update_se_state_iono. Tests update in case with no 
+  ! plasmasphere included. Ionospheres are kept decoupled
+  subroutine se_update_state_iono_test
+    use ModSeBackground
+    use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
+    use ModSeCross,only: SIGS,SIGI,SIGA
+    use ModSePlot, only: plot_state
+    
+    integer :: iLine=1, flag=1
+    logical :: DoSavePreviousAndReset = .true.
+    integer :: nStep
+    logical :: IsIono1
+    real    :: Ap(7), F107=80, F107A=80, t=0
+    !--------------------------------------------------------------------------
+
+    ! First set up the grid that we will update the state in (this is the same 
+    ! as the unit test for the grid).
+    write(*,*) 'creating grid'
+    call create_se_test_grid
+
+    ! Allocate the state arrays
+    write(*,*) 'allocating state arrays'
+    call allocate_state_arrays
+    
+    ! Allocate the background right
+    write(*,*) 'allocating background arrays'
+    call allocate_background_arrays
+    
+    !align dipole and rotation
+    DoAlignDipoleRot = .true.
+    
+    ! set location of field line
+    mLat_I(iLine)=60.0 
+    mLon_I(iLine)=0.0
+
+    !set glat and glon coords
+    call set_footpoint_locations(iLine)
+
+    ! Get the neutral atmosphere and photo e production spectrum
+    AP(:)=4.0
+    call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
+
+    ! Fill the background arrays
+    write(*,*) 'filling background arrays'
+    call fill_thermal_plasma_empirical(iLine,F107,F107A,t)
+    
+    ! Define the initial state in the ionosphere
+    iphiup(iLine,:,:,:)=0.0
+    iphidn(iLine,:,:,:)=0.0
+    
+    liphiup(iLine,:,:,:)=0.0
+    liphidn(iLine,:,:,:)=0.0
+    
+    phiup(iLine,:,:,:)=0.0
+    phidn(iLine,:,:,:)=0.0
+    
+    iphiup(iLine,:,:,:)=0.0
+    iphidn(iLine,:,:,:)=0.0
+ 
+    
+    ! Set the timestep and convergence criteria
+    delt=1.0e5
+    epsilon = 0.4
+
+    write(*,*) 'Starting Time loop'
+    nStep = 0
+
+    ! plot initial state
+    call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+
+    !do test for iono1
+    IsIono1 = .true.
+    TIME_LOOP: do while (flag == 1)
+       ! Initialize the plasmasphere
+       write(*,*) 'Initializing plasmasphere'
+       call initiono(1,DoSavePreviousAndReset)
+       
+       ! update the SE state
+       write(*,*) 'update se state'
+       call update_se_state_iono(iLine,IsIono1,nNeutralSpecies,&
+            NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+            ePhotoProdSpec1_IIC(iLine,:,:))
+       
+       ! check convergence
+       write(*,*) 'check for convergence'
+       call check_time(1,flag)
+       
+       ! increment step
+       nStep=nStep+1
+
+       ! plot output
+       call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+       
+
+    end do TIME_LOOP
+    
+  end subroutine se_update_state_iono_test
 end Module ModSeState

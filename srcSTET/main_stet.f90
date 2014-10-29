@@ -1,7 +1,7 @@
 program main_stet
   use ModSeGrid
   use ModSeMpi
-  use ModSeState,only:se_update_state_test
+  use ModSeState,only:se_update_state_test,se_update_state_iono_test
   use ModSeBackground, only:background_test
 
   use ModMPI
@@ -35,8 +35,8 @@ program main_stet
   write(*,*) 'starting se_grid_test'
 !  call se_grid_test
 !  call se_update_state_test
-  call background_test
-
+!  call background_test
+  call se_update_state_iono_test
 end program main_stet
 
 
