@@ -13,17 +13,17 @@ Module ModSeBackground
   integer      :: Idate=97046 !day in the form of YYDDD
 
   ! when the dipole and rotation axis are aligned
-  logical      :: DoAlignDipoleRot = .false.
+  logical, public      :: DoAlignDipoleRot = .false.
 
   ! variables for thinning the topside ionosophere 
-  real :: facn, fact
+  real :: facn=-1, fact=0
 
   ! exponent for extending solution above IRI or PWOM solution 
-  real :: ZEP
+  real :: ZEP=1
 
   ! Neutral Atmosphere arrays and variables
-  integer, parameter :: nNeutralSpecies = 3
-  real, allocatable  :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
+  integer, parameter,public :: nNeutralSpecies = 3
+  real, allocatable,public  :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
   real, allocatable  :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
   integer,parameter  :: O_=1, O2_=2, N2_=3
 
@@ -31,10 +31,12 @@ Module ModSeBackground
   logical :: DoCalcPeIono1=.true., DoCalcPeIono2=.true.
 
   ! Arrays that hold the photo electron production spectrum in iono 1 or 2
-  real, allocatable :: ePhotoProdSpec1_IIC(:,:,:),ePhotoProdSpec2_IIC(:,:,:)
+  real, allocatable,public :: ePhotoProdSpec1_IIC(:,:,:),ePhotoProdSpec2_IIC(:,:,:)
 
   public :: allocate_background_arrays
   public :: fill_thermal_plasma_empirical
+  public :: set_footpoint_locations
+  public :: get_neutrals_and_pe_spectrum
   public :: background_test
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
