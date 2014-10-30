@@ -4,7 +4,7 @@ Module ModSePlot
   private !except
   
   public :: plot_state
-
+  public :: plot_omni_iono
 contains
   !============================================================================
   ! save state plot for verification
@@ -158,6 +158,125 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_state
+  
+  !============================================================================
+  ! plot omnidirectional flux in the ionosphere
+  subroutine plot_omni_iono(iLine,nStep,time,specup,specdn,IsIono1)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC, nIono, nEnergy, nLine, &
+         nPoint,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    
+    integer, intent(in) :: iLine, nStep
+    real,    intent(in) :: time
+    real,    intent(in) :: specup(nLine,nEnergy,nPoint),&
+         specdn(nLine,nEnergy,nPoint)
+    logical, intent(in) :: IsIono1
+    
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+    real, parameter     :: rEarthCM = 6375.0e5
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
+    !variable parameters
+    integer, parameter :: Flux_=1, FluxUp_=2, FluxDn_=3
+    
+    character(len=100),parameter :: NamePlotVar='E[eV] Alt[km] Omni[cm-3eV-1s-1] OmniUp[cm-3eV-1s-1] OmniDn[cm-3eV-1s-1] g r'
+    character(len=100) :: NamePlot1='OmniIono1.out',NamePlot2='OmniIono.out'
+    character(len=100) :: NamePlot
+    
+    character(len=*),parameter :: NameHeader='SE output iono'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iAngle,iAngleDn,iIono,iEnergy, iPoint
+
+    logical :: IsFirstCall1=.true.,IsFirstCall2=.true.
+    !--------------------------------------------------------------------------
+    
+    allocate(Coord_DII(nDim,nEnergy,nIono),PlotState_IIV(nEnergy,nIono,nVar))
+    
+    !    do iLine=1,nLine
+    PlotState_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    !Set values
+    if (IsIono1) then
+       do iEnergy=1,nEnergy
+          do iIono=1,nIono
+             !relate iPoint and iIono
+             iPoint = iIono
+             
+             Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
+             Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iPoint)/1e5
+             ! set plot state
+             PlotState_IIV(iEnergy,iIono,Flux_)  = &
+                  specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint)
+             PlotState_IIV(iEnergy,iIono,FluxUp_)  = &
+                  specup(iLine,iEnergy,iPoint)
+             PlotState_IIV(iEnergy,iIono,FluxDn_)  = &
+                  specdn(iLine,iEnergy,iPoint)
+          enddo
+       enddo
+       
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'OmniIono1_',iLine,'.out'
+  
+       !Plot grid for given line
+       if(IsFirstCall1) then
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall2 = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       endif
+  
+    else
+       do iEnergy=1,nEnergy
+          do iIono=1,nIono
+             !relate iPoint and iIono
+             iPoint = nPoint-iIono - 1
+             Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
+             Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iPoint)/1e5
+             !set plot state
+             PlotState_IIV(iEnergy,iIono,Flux_)  = &
+                  specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint)
+             PlotState_IIV(iEnergy,iIono,FluxUp_)  = &
+                  specup(iLine,iEnergy,iPoint)
+             PlotState_IIV(iEnergy,iIono,FluxDn_)  = &
+                  specdn(iLine,iEnergy,iPoint)
+          enddo
+       enddo
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'OmniIono2_',iLine,'.out'
+       
+       !Plot grid for given line
+       if(IsFirstCall2) then
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall2 = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       endif
+  
+    endif
+    
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_omni_iono
+     
   
   !============================================================================
   ! 1D output plots of integrated quantities along the field (for now just pot)
