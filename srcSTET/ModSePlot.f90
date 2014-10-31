@@ -227,7 +227,7 @@ contains
                NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
                nDimIn=nDim,CoordIn_DII=Coord_DII,                &
                VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-          IsFirstCall2 = .false.
+          IsFirstCall1 = .false.
        else
           call save_plot_file(NamePlot, TypePositionIn='append', &
                TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
