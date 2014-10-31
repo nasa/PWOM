@@ -186,17 +186,17 @@ contains
           !set alt zone 2 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
                FieldLineGrid_IC(iLine,nPoint-nIono1-nIono2-1)&
-               +(iAlt-nIono4-nIono3-nPlas-nIono)*DrIono3
+               +(iAlt-nIono4-nIono3-nPlas-nIono+1)*DrIono2
        elseif(iAlt <= nPoint)then
           !set alt zone 1 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
-               FieldLineGrid_IC(iLine,nPoint-nIono1-nIono2-1)&
-               +(iAlt-nIono4-nIono3-nIono2-nPlas-nIono+1)*DrIono3
+               FieldLineGrid_IC(iLine,nPoint-nIono1-1)&
+               +(iAlt-nIono4-nIono3-nIono2-nPlas-nIono+1)*DrIono1
        endif
        
 !       write(*,*) 'iAlt,FieldLineGrid_IC(iLine,iAlt)',iAlt,FieldLineGrid_IC(iLine,iAlt)/1e5
     end do
-    
+
     ! Set magnetic field in ionosphere to value at top of ionosphere
     Bfield_IC(iLine,1:nIono)= Biono
     Bfield_IC(iLine,nPoint-nIono:nPoint)= Biono
