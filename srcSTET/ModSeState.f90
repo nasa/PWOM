@@ -399,7 +399,7 @@ contains
 
              ! fill BC from the the plasmasphere
              do k=0,nThetaAlt_II(iLine,nIono)
-                iphiup(iLine,k,nIono,j)=phiup(iLine,i,nPlas,j)
+                iphiup(iLine,k,nIono,j)=phiup(iLine,k,nPlas,j)
              end do
 
              ! Add precip info here
@@ -419,7 +419,7 @@ contains
           endif
 
 
-          
+
           FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
 !             write(*,*) 'Start FieldLine up'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
@@ -444,7 +444,8 @@ contains
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
                   Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
-
+             
+                       
              do k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
                      NeutralDens_IC(:,iIonoHalf),j,iIono,k,cascade,lossum,1)
@@ -463,14 +464,16 @@ contains
                 ! coeficients by setting kk to 0
                 kk=1
                 if (iIonoHalf <= iLocal) kk=0
+
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
                      cascade,lossum)
                 !            CALL CheckWarn(sigma(k+1),warning,1,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,1,*9999)
+                
              end do
-             
+
              p=-s1/SQRT(ABS(1./coef-1.))
 
              Flastt=liphiup(iLine,nThetaAlt_II(iLine,i),iIono,j)
@@ -493,6 +496,8 @@ contains
                 Fcheck=iphiup(iLine,k-1,iIono,j)
                 !            CALL CheckWarn(newphi,warning,3,*9999)
                 CALL CheckConv(newphi,Fcheck,epsilon,flag)
+                
+                
                 iphiup(iLine,k-1,iIono,j)=newphi
              end do
              CALL midpnt_int(specup(iLine,j,i),iphiup(iLine,:,iIono,j),&
@@ -500,18 +505,25 @@ contains
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
+                WRITE (10,*) 'Upward region'
                 WRITE (10,*) time,j,i,iIono,nThetaAlt_II(iLine,i),&
                      flag,(iphiup(iLine,k,iIono,j),k=0,nThetaAlt_II(iLine,i))
              END IF
-             h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            
              
+             if (i < nPoint) then
+                h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)
+             else
+                h=FieldLineGrid_IC(iLine,i)-FieldLineGrid_IC(iLine,i-1)
+             endif
              ! End Upward Region of ionosphere
           end DO FIELDLINE_UPWARD
+          
           !put back the iphiup at top of iono1 (which was storing plasmasph bc)
-          do k=0,nThetaAlt_II(iLine,nIono)
-             iphiup(iLine,k,nIono,j)=Fhold(k)
-          end do
-
+          if(.not.IsIono1)then
+             do k=0,nThetaAlt_II(iLine,nIono)
+                iphiup(iLine,k,nIono,j)=Fhold(k)
+             end do
+          endif
           
           !*  Downward Region of the ionosphere
 
@@ -524,7 +536,7 @@ contains
 
              ! fill BC from the the plasmasphere
              do k=0,nThetaAlt_II(iLine,nIono)
-                iphidn(iLine,k,nIono+1,j)=phidn(iLine,i,1,j)
+                iphidn(iLine,k,nIono+1,j)=phidn(iLine,k,1,j)
              end do
 
              ! Add precip info here
@@ -543,7 +555,6 @@ contains
              h=FieldLineGrid_IC(iLine,nAltMax-1)-FieldLineGrid_IC(iLine,nAltMax)
           endif
           
-
           FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
 !             write(*,*) 'Start FieldLine Down'
              CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
@@ -626,6 +637,7 @@ contains
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
+                WRITE (10,*) 'Downward region'
                 WRITE (10,*) time,j,i,iIono,flag,&
                      (iphidn(iLine,k,iIono,j),k=0,nThetaAlt_II(iLine,i))
              END IF
@@ -637,10 +649,11 @@ contains
              ! End Downward Region of ionosphere
           end DO FIELDLINE_DOWN
           !put back the iphidn at top of iono2 (which was storing plasmasph bc)
-          do k=0,nThetaAlt_II(iLine,nIono)
-             iphidn(iLine,k,nIono+1,j)=Fhold(k)
-          end do
-
+          if (IsIono1)then
+             do k=0,nThetaAlt_II(iLine,nIono)
+                iphidn(iLine,k,nIono+1,j)=Fhold(k)
+             end do
+          endif
        END DO ITERATION                  ! End of iteration loop
        CALL CheckFlag(flag,1,warning,-1,*9999)
        !  Save the calculated values for the next time and energy steps
@@ -1145,9 +1158,9 @@ contains
     if(.not.allocated(phidn)) allocate(phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1))
 
     if(.not.allocated(iphiup)) &
-         allocate(iphiup(nLine,0:nAngle,0:2*nIono,nEnergy+1))
+         allocate(iphiup(nLine,0:nAngle,0:2*nIono+1,nEnergy+1))
     if(.not.allocated(iphidn)) &
-         allocate(iphidn(nLine,0:nAngle,0:2*nIono,nEnergy+1))
+         allocate(iphidn(nLine,0:nAngle,0:2*nIono+1,nEnergy+1))
 
     if(.not.allocated(specup)) allocate(specup(nLine,nEnergy,nPoint))
     if(.not.allocated(specdn)) allocate(specdn(nLine,nEnergy,nPoint))
@@ -1249,7 +1262,7 @@ contains
     use ModSeBackground
     use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
     use ModSeCross,only: SIGS,SIGI,SIGA
-    use ModSePlot, only: plot_state
+    use ModSePlot, only: plot_state,plot_omni_iono
     
     integer :: iLine=1, flag=1
     logical :: DoSavePreviousAndReset = .true.
@@ -1320,12 +1333,18 @@ contains
        write(*,*) 'Initializing plasmasphere'
        call initiono(1,DoSavePreviousAndReset)
        
-       ! update the SE state
-       write(*,*) 'update se state'
+       ! update the SE state for iono1
+       write(*,*) 'update se state for iono1'
        call update_se_state_iono(iLine,IsIono1,nNeutralSpecies,&
             NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
             ePhotoProdSpec1_IIC(iLine,:,:))
-       
+
+       ! update the SE state for iono2
+       write(*,*) 'update se state for iono2'
+       call update_se_state_iono(iLine,.not.IsIono1,nNeutralSpecies,&
+            NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+            ePhotoProdSpec2_IIC(iLine,:,:))
+
        ! check convergence
        write(*,*) 'check for convergence'
        call check_time(1,flag)
@@ -1336,6 +1355,8 @@ contains
        ! plot output
        call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
        
+       call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
+       call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
 
     end do TIME_LOOP
     
