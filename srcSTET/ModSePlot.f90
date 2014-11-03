@@ -18,8 +18,8 @@ contains
 
     integer, intent(in) :: iLine, nStep
     real,    intent(in) :: time
-    real,    intent(in) :: iphiup(nLine,0:nAngle,0:2*nIono,nEnergy+1),&
-                           iphidn(nLine,0:nAngle,0:2*nIono,nEnergy+1), &
+    real,    intent(in) :: iphiup(nLine,0:nAngle,0:2*nIono+1,nEnergy+1),&
+                           iphidn(nLine,0:nAngle,0:2*nIono+1,nEnergy+1), &
                            phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1), &
                            phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1)
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
@@ -240,7 +240,7 @@ contains
        do iEnergy=1,nEnergy
           do iIono=1,nIono
              !relate iPoint and iIono
-             iPoint = nPoint-iIono - 1
+             iPoint = nPoint-iIono + 1
              Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
              Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iPoint)/1e5
              !set plot state
