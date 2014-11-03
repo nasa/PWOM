@@ -48,7 +48,7 @@ Module ModSeGrid
   integer, public :: nAngle=135 ! number of points in equatorial angle
   integer, public :: nPoint=200 ! total number of points on grid
   integer, public :: nIono =34  ! number of points in each ionosphere
-  integer, public :: nPlas =140  ! number of points in plasmasphere
+  integer, public :: nPlas =132  ! number of points in plasmasphere
   integer, public :: nPlasHalf   ! number of points from BasePlas to equator
   integer, public :: nTop   ! number of points to top (in open) 
                          !   or equatorial (in closed)
