@@ -1,7 +1,7 @@
 program main_stet
   use ModSeGrid
   use ModSeMpi
-  use ModSeState,only:se_update_state_test,se_update_state_iono_test
+  use ModSeState,only:se_update_state_test,se_update_state_iono_test,se_update_state_iono_test_transport
   use ModSeBackground, only:background_test
 
   use ModMPI
@@ -37,6 +37,7 @@ program main_stet
 !  call se_update_state_test
 !  call background_test
   call se_update_state_iono_test
+!  call se_update_state_iono_test_transport
 end program main_stet
 
 
