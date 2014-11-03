@@ -47,8 +47,9 @@ Module ModSeState
   public :: update_se_state
   public :: se_update_state_test
   public :: se_update_state_iono_test
+  public :: se_update_state_iono_test_transport
 contains
-  SUBROUTINE update_se_state(iLine,IsOpen)
+  SUBROUTINE update_se_state(iLine,eThermalDensity_C,eThermalTemp_C,IsOpen)
     !*  This subroutine used to be the main program, until other operators
     !*  added (3/23/95). Now it is one of several operators called by the
     !*  driver program, 'stet1.f' (Super_Thermal_electron_Transport_Model).
@@ -58,8 +59,6 @@ contains
          FieldLineGrid_IC,nTop,Bfield_IC, BFieldEq_I, &
          nIono, nPlas, nPoint,nAngle
     
-    USE ModSeBackground, only: eThermalDensity_IC,eThermalTemp_IC
-
     use ModMath, only: midpnt_int
     
     use ModNumConst,    ONLY: cPi
@@ -67,6 +66,8 @@ contains
     IMPLICIT NONE
 !    INCLUDE 'numbers.h'
     integer, intent(in) :: iLine
+    real   , intent(in) :: eThermalDensity_C(nPoint)
+    real   , intent(in) :: eThermalTemp_C(nPoint)
     logical, intent(in) :: IsOpen
     REAL h,p,Fcheck, sigmaO,muO,velt,coef, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
@@ -126,7 +127,7 @@ contains
           
           FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
 !             write(*,*) 'Start FieldLine up'
-             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),EnergyGrid_I(j))
 
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
@@ -220,7 +221,7 @@ contains
           
           FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
 !             write(*,*) 'Start FieldLine Down'
-             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),EnergyGrid_I(j))
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
@@ -310,7 +311,8 @@ contains
   END SUBROUTINE update_se_state
   
   !============================================================================
-  SUBROUTINE update_se_state_iono(iLine,IsIono1,nNeutral,NeutralDens_IC,&
+  SUBROUTINE update_se_state_iono(iLine,IsIono1,eThermalDensity_C,&
+       eThermalTemp_C,nNeutral,NeutralDens_IC,&
        SIGS,SIGI,SIGA,ePhotoProdSpec_IC)
     !*  Same as update_se_state but for ionosphere, includes sources
     
@@ -319,8 +321,6 @@ contains
          FieldLineGrid_IC,nTop,Bfield_IC, BFieldEq_I, &
          nIono, nPlas, nPoint,nAngle
     
-    USE ModSeBackground, only: eThermalDensity_IC,eThermalTemp_IC
-
     use ModMath, only: midpnt_int
     
     use ModNumConst,    ONLY: cPi
@@ -330,6 +330,10 @@ contains
     integer, intent(in) :: iLine
     logical, intent(in) :: IsIono1
     
+    !thermal density and temperature
+    real   , intent(in) :: eThermalDensity_C(nPoint)
+    real   , intent(in) :: eThermalTemp_C(nPoint)
+
     !neutral atmosphere inputs
     integer, intent(in) :: nNeutral
     real   , intent(in) :: NeutralDens_IC(nNeutral,nIono)
@@ -365,7 +369,7 @@ contains
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
     !---------------------------------------------------------------------------
-    
+
     !initialize lbeta to 0
     lbeta(:)=0.0
     
@@ -419,10 +423,9 @@ contains
           endif
 
 
-
           FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
 !             write(*,*) 'Start FieldLine up'
-             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),EnergyGrid_I(j))
 
              ! set iIono and iIonoHalf indices based on 1st or 2nd ionosphere
              ! remember, iIono is index spanning both ionospheres, 
@@ -491,6 +494,7 @@ contains
              
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              iphiup(iLine,nThetaAlt_II(iLine,i),iIono,j)=newphi
+             
              do k=nThetaAlt_II(iLine,i),1,-1
                 newphi=alpha(k)*iphiup(iLine,k,iIono,j)+sigma(k)
                 Fcheck=iphiup(iLine,k-1,iIono,j)
@@ -557,7 +561,7 @@ contains
           
           FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
 !             write(*,*) 'Start FieldLine Down'
-             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_IC(iLine,i),eThermalDensity_IC(iLine,i),EnergyGrid_I(j))
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),EnergyGrid_I(j))
 
              ! set iIono and iIonoHalf indices based on 1st or 2nd ionosphere
              ! remember, iIono is index spanning both ionospheres, 
@@ -1180,7 +1184,6 @@ contains
   !============================================================================
   ! UNIT test for SE update states
   subroutine se_update_state_test
-    use ModSeBackground
     use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
     use ModSePlot, only: plot_state
     
@@ -1188,7 +1191,16 @@ contains
     logical :: DoSavePreviousAndReset = .true.
     integer :: nStep
     logical :: IsOpen
+
+    ! thermal background  
+    real, allocatable :: eThermalDensity_C(:),eThermalTemp_C(:)
+
     !--------------------------------------------------------------------------
+    ! Allocate the background right
+    if(.not.allocated(eThermalDensity_C)) &
+         allocate(eThermalDensity_C(nPoint))
+    if(.not.allocated(eThermalTemp_C)) &
+         allocate(eThermalTemp_C(nPoint))
 
     ! First set up the grid that we will update the state in (this is the same 
     ! as the unit test for the grid).
@@ -1199,14 +1211,10 @@ contains
     write(*,*) 'allocating state arrays'
     call allocate_state_arrays
     
-    ! Allocate the background right
-    write(*,*) 'allocating background arrays'
-    call allocate_background_arrays
-    
     ! Fill the background arrays
 !    eThermalDensity_IC(:,:) = 0.00001
-    eThermalDensity_IC(:,:) = 1.0e2
-    eThermalTemp_IC(:,:) = 1.0
+    eThermalDensity_C(:) = 1.0e2
+    eThermalTemp_C(:) = 1.0
     
     ! Define the initial state in the ionosphere
     do iLine=1,nLine
@@ -1238,7 +1246,8 @@ contains
        
        ! update the SE state
        write(*,*) 'update se state'
-       call update_se_state(1, IsOpen)
+       call update_se_state(1, eThermalDensity_C,&
+       eThermalTemp_C,IsOpen)
        
        ! check convergence
        write(*,*) 'check for convergence'
@@ -1335,13 +1344,15 @@ contains
        
        ! update the SE state for iono1
        write(*,*) 'update se state for iono1'
-       call update_se_state_iono(iLine,IsIono1,nNeutralSpecies,&
+       call update_se_state_iono(iLine,IsIono1,eThermalDensity_IC(iLine,:),&
+            eThermalTemp_IC(iLine,:),nNeutralSpecies,&
             NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
             ePhotoProdSpec1_IIC(iLine,:,:))
 
        ! update the SE state for iono2
        write(*,*) 'update se state for iono2'
-       call update_se_state_iono(iLine,.not.IsIono1,nNeutralSpecies,&
+       call update_se_state_iono(iLine,.not.IsIono1,eThermalDensity_IC(iLine,:),&
+            eThermalTemp_IC(iLine,:),nNeutralSpecies,&
             NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
             ePhotoProdSpec2_IIC(iLine,:,:))
 
@@ -1361,4 +1372,164 @@ contains
     end do TIME_LOOP
     
   end subroutine se_update_state_iono_test
+
+  !============================================================================
+  ! UNIT test for update_se_state_iono. Tests update in case with no 
+  ! plasmasphere included and no sources, just a plasmasphere BC. 
+  ! Ionospheres are kept decoupled
+  subroutine se_update_state_iono_test_transport
+    use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas,nEnergy
+    use ModSePlot, only: plot_state,plot_omni_iono
+    
+    integer :: iLine=1, flag=1
+    logical :: DoSavePreviousAndReset = .true.
+    integer :: nStep
+    logical :: IsIono1
+    real    :: Ap(7), F107=80, F107A=80, t=0
+
+    ! The values below are normally taken from a module but are delclared here 
+    ! since we are doing an simple idealized test and do not want to use those
+    ! modules in this unit test.
+    
+    integer, parameter :: nNeutralSpecies = 3
+    
+    ! sig arrays
+    real, allocatable :: SIGS(:,:),SIGI(:,:,:),SIGA(:,:,:)
+
+    ! Neutrals
+    real, allocatable :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
+    
+    ! Arrays that hold the photo electron production spectrum in iono 1 or 2
+    real, allocatable :: ePhotoProdSpec1_IIC(:,:,:),ePhotoProdSpec2_IIC(:,:,:)
+    
+    ! thermal background  
+    real, allocatable :: eThermalDensity_C(:),eThermalTemp_C(:)
+
+    integer :: iIono
+    !--------------------------------------------------------------------------
+
+    ! First set up the grid that we will update the state in (this is the same 
+    ! as the unit test for the grid).
+    write(*,*) 'creating grid'
+    call create_se_test_grid
+   
+    !allocate background and production arrays
+    if(.not.allocated(NeutralDens1_IIC)) &
+         allocate(NeutralDens1_IIC(nLine,nNeutralSpecies,nIono))
+    if(.not.allocated(NeutralDens2_IIC)) &
+         allocate(NeutralDens2_IIC(nLine,nNeutralSpecies,nIono))
+
+    if(.not.allocated(ePhotoProdSpec1_IIC)) &
+         allocate(ePhotoProdSpec1_IIC(nLine,nEnergy,nIono))
+
+    if(.not.allocated(ePhotoProdSpec2_IIC)) &
+         allocate(ePhotoProdSpec2_IIC(nLine,nEnergy,nIono))
+
+    if(.not.allocated(eThermalDensity_C)) &
+         allocate(eThermalDensity_C(nPoint))
+    if(.not.allocated(eThermalTemp_C)) &
+         allocate(eThermalTemp_C(nPoint))
+    
+    !allocate sig arrays if not already done
+    if (.not.allocated(SIGS)) allocate(SIGS(nNeutralSpecies,nEnergy)) 
+    if (.not.allocated(SIGI)) allocate(SIGI(nNeutralSpecies,nEnergy,nEnergy)) 
+    if (.not.allocated(SIGA)) allocate(SIGA(nNeutralSpecies,nEnergy,nEnergy)) 
+
+
+    ! Allocate the state arrays
+    write(*,*) 'allocating state arrays'
+    call allocate_state_arrays
+    
+    !Set collision cross section to zero
+    SIGS(:,:)   = 0.0
+    SIGI(:,:,:) = 0.0
+    SIGA(:,:,:) = 0.0 
+    
+    ! Set the photoelectron production to zero
+    ePhotoProdSpec1_IIC = 0.0
+    ePhotoProdSpec2_IIC(:,:,:) = 0.0
+    
+    ! Set the neutral density to zero
+    NeutralDens1_IIC(:,:,:)=0.0
+    NeutralDens2_IIC(:,:,:)=0.0
+
+    ! Fill the background arrays
+    write(*,*) 'filling background arrays'
+    
+    ! Define the initial state in the ionosphere
+    iphiup(iLine,:,:,:)=0.0
+    iphidn(iLine,:,:,:)=0.0
+    
+    liphiup(iLine,:,:,:)=0.0
+    liphidn(iLine,:,:,:)=0.0
+    
+    phiup(iLine,:,:,:)=1.0e5
+    phidn(iLine,:,:,:)=1.0e5
+
+    lphiup(iLine,:,:,:)=1.0e5
+    lphidn(iLine,:,:,:)=1.0e5
+    
+    ! Fill the background arrays
+    eThermalDensity_C(:) = 0.00001
+    eThermalTemp_C(:) = 1.0
+    
+    
+    ! Set the timestep and convergence criteria
+    delt=1.0e5
+    epsilon = 0.1
+
+    write(*,*) 'Starting Time loop'
+    nStep = 0
+
+    ! plot initial state
+    call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+
+    !do test for iono1
+    IsIono1 = .true.
+    TIME_LOOP: do while (flag == 1)
+       ! Initialize the plasmasphere
+       write(*,*) 'Initializing plasmasphere'
+       call initiono(1,DoSavePreviousAndReset)
+       
+       ! update the SE state for iono1
+       write(*,*) 'update se state for iono1'
+       write(*,*) 'max(ePhotoProdSpec1_IIC)',maxval(ePhotoProdSpec1_IIC)
+
+!       call update_se_state_iono(iLine,IsIono1,eThermalDensity_C,&
+!            eThermalTemp_C,nNeutralSpecies,&
+!            NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+!            ePhotoProdSpec1_IIC(iLine,:,:))
+
+       ! update the SE state for iono2
+!       write(*,*) 'update se state for iono2'
+       call update_se_state_iono(iLine,.not.IsIono1,eThermalDensity_C,&
+            eThermalTemp_C,nNeutralSpecies,&
+            NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+            ePhotoProdSpec2_IIC(iLine,:,:))
+
+       ! check convergence
+       write(*,*) 'check for convergence'
+       call check_time(1,flag)
+       
+       ! increment step
+       nStep=nStep+1
+       
+!       !debug stuff
+!       do iIono=1,2*nIono
+!          write(*,*) 'iIono,iphiup(iLine,0:5,iIono,5)',iIono,iphiup(iLine,0:5,iIono,1)
+!       enddo
+
+!       do iIono=1,nPlas
+!          write(*,*) 'iPlas,phiup(iLine,0:5,iPlas,5)',iIono,phiup(iLine,0:5,iIono,1)
+!       enddo
+
+       ! plot output
+       call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+       
+ !      call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
+       call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
+
+    end do TIME_LOOP
+    
+  end subroutine se_update_state_iono_test_transport
 end Module ModSeState
