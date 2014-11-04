@@ -37,7 +37,8 @@ Module ModSeBackground
   public :: fill_thermal_plasma_empirical
   public :: set_footpoint_locations
   public :: get_neutrals_and_pe_spectrum
-  public :: background_test
+  public :: plot_background
+  public :: plot_ephoto_prod
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
   !=============================================================================
@@ -467,57 +468,6 @@ contains
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_ephoto_prod
   
-  !============================================================================
-  ! UNIT test for SE update states
-  subroutine background_test
-    use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
-    
-    integer :: iLine=1, flag=1, nStep=0
-    real    :: time=0
-    logical :: DoSavePreviousAndReset = .true.
-    
-    real :: Ap(7), F107=80, F107A=80, t=0
-    !--------------------------------------------------------------------------
-
-    ! First set up the grid that we will update the state in (this is the same 
-    ! as the unit test for the grid).
-    write(*,*) 'creating grid'
-    call create_se_test_grid
-
-    ! Allocate the background right
-    write(*,*) 'allocating background arrays'
-    call allocate_background_arrays
-    
-    !set zep and thining parameters
-    ZEP = 1
-    facn =-1
-    fact = 0
-    
-    !align dipole and rotation
-    DoAlignDipoleRot = .true.
-    
-    ! set location of field line
-    mLat_I(iLine)=60.0 
-    mLon_I(iLine)=0.0
-    
-    !set glat and glon coords
-    call set_footpoint_locations(iLine)
-    
-    ! Fill the background arrays
-    write(*,*) 'filling background arrays'
-    call fill_thermal_plasma_empirical(iLine,F107,F107A,t)
-    
-    ! Get the neutral atmosphere and photo e production spectrum
-    AP(:)=4.0
-    call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
-
-    ! plot initial state
-    call plot_background(iLine,nStep,time)
-    
-    ! plot ephoto production
-    call plot_ephoto_prod(iLine,nStep,time)
-
-  end subroutine background_test
   !=============================================================================
   subroutine allocate_background_arrays
     use ModSeGrid,     ONLY: nLine, nPoint, nIono, nEnergy
