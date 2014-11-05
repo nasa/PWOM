@@ -123,7 +123,8 @@ end program unit_test_update_iono
 
        ! update the SE state for iono2
        write(*,*) 'update se state for iono2'
-       call update_se_state_iono(iLine,.not.IsIono1,eThermalDensity_IC(iLine,:),&
+       call update_se_state_iono(iLine,.not.IsIono1,&
+            eThermalDensity_IC(iLine,:),&
             eThermalTemp_IC(iLine,:),nNeutralSpecies,&
             NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
             ePhotoProdSpec2_IIC(iLine,:,:))
