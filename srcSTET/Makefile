@@ -19,7 +19,8 @@ MODULES = \
 	ModSeProduction.o\
 	ModSeCross.o\
 	ModBackground.o\
-	ModSeState.o
+	ModSeState.o\
+	stet_run.o
 
 
 

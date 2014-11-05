@@ -1,9 +1,6 @@
 program main_stet
   use ModSeGrid
   use ModSeMpi
-  use ModSeState,only:se_update_state_test,se_update_state_iono_test,se_update_state_iono_test_transport
-  use ModSeBackground, only:background_test
-
   use ModMPI
   use CON_planet, ONLY: init_planet_const, set_planet_defaults
 
@@ -36,7 +33,7 @@ program main_stet
 !  call se_grid_test
 !  call se_update_state_test
 !  call background_test
-  call se_update_state_iono_test
+  call stet_run
 !  call se_update_state_iono_test_transport
 end program main_stet
 
