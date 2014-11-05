@@ -469,7 +469,6 @@ contains
                 ! coeficients by setting kk to 0
                 kk=1
                 if (iIonoHalf <= iLocal) kk=0
-
                 CALL NumCalcVar(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_III(iLine,k,i),coef,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
@@ -737,6 +736,7 @@ contains
     IF ((d.LT.0).OR.(d-d.NE.0)) THEN
        PRINT *,'NEG D ',p,q,a,b,c,d,sigma,sig,alpha,alp
        PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar,cascade
+       call con_stop('')
     ELSE IF ((sigma.LT.0).OR.(sigma-sigma.NE.0)) THEN
        PRINT *,'NEG SIGMA ',p,q,a,b,c,d,sigma,sig,alpha,alp
        PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
@@ -1181,6 +1181,11 @@ contains
 
     if(.not.allocated(Qestar_ICI))allocate(Qestar_ICI(nLine,2*nIono,nEnergy))
     if(.not.allocated(Qpstar_ICI))allocate(Qpstar_ICI(nLine,2*nIono,nEnergy))
+
+    ! Initiallize Qpstar to 0 as we do not include this will get updated 
+    ! if a separate primary beam is included
+    Qpstar_ICI(:,:,:)=0
+    
   end subroutine allocate_state_arrays
 
 end Module ModSeState
