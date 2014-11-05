@@ -11,7 +11,7 @@ subroutine stet_run
        initiono,check_time,delt,epsilon,update_se_state_iono,update_se_state,&
        liphiup,liphidn,lphiup,lphidn,specup, specdn, initplas
   use ModSeCross,only: SIGS,SIGI,SIGA    
-  use ModSePlot, only: plot_state,plot_omni_iono  
+  use ModSePlot, only: plot_state,plot_omni_iono, plot_omni_line  
   integer :: iLine=1, flag=1, nStep=0
   real    :: time=0
   logical :: DoSavePreviousAndReset = .true.
@@ -128,6 +128,7 @@ subroutine stet_run
   call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
   call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
   
+  call plot_omni_line(iLine,nStep,time,specup,specdn)
 
 
 end subroutine stet_run
