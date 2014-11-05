@@ -242,7 +242,9 @@ contains
              !relate iPoint and iIono
              iPoint = nPoint-iIono + 1
              Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
-             Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iPoint)/1e5
+             Coord_DII(S_,iEnergy,iIono) = &
+                  (FieldLineGrid_IC(iLine,nPoint) &
+                  - FieldLineGrid_IC(iLine,iPoint))/1e5
              !set plot state
              PlotState_IIV(iEnergy,iIono,Flux_)  = &
                   specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint)
