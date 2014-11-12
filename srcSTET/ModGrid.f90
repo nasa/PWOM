@@ -65,7 +65,7 @@ Module ModSeGrid
   
   ! Potential 
   real, public, allocatable :: Efield_IC(:,:) ! in volts/m
-  real, public, allocatable :: DeltaPot_IC(:,:) !in eV
+  real, public, allocatable :: DeltaPot_IC(:,:) !delta potential energy in eV
 
   ! public methods
   public :: allocate_grid_arrays
@@ -418,29 +418,25 @@ contains
     use ModConst,only: cElectronCharge
     integer, intent(in) :: iLine
     integer :: iAlt
-    real    :: Pot,TotalPot
+    real    :: Pot !the electric potential difference from the equator
     !--------------------------------------------------------------------------
     
-    !Get total potential drop from ionosphere to equator (assuming same Efield
-    ! on both halves of field line
-    call midpnt_int(TotalPot,Efield_IC(iLine,:),&
-         FieldLineGrid_IC(iLine,:),1,nTop,nPoint,1)    
-    
-    TotalPot = -cElectronCharge*TotalPot
 
-    !fill the DeltaPot_IC array
+    !fill the DeltaPot_IC array. The reference point (zero potential) is at the 
+    ! equator (nTop). since E|| = -dPhi/ds, DeltaPhi = int(- E||) from s_eq to s.
+    ! so DeltaPhi = int(E||) from s to seq
     do iAlt=1,nTop
        call midpnt_int(Pot,Efield_IC(iLine,:),&
             FieldLineGrid_IC(iLine,:),iAlt,nTop,nPoint,1)
-       
-       DeltaPot_IC(iLine,iAlt) = TotalPot+cElectronCharge*Pot
+       ! from the potential change
+       DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot
     end do
     
     do iAlt=nTop+1,nPoint
        call midpnt_int(Pot,Efield_IC(iLine,:),&
             FieldLineGrid_IC(iLine,:),nTop,iAlt,nPoint,1)
 
-       DeltaPot_IC(iLine,iAlt) = TotalPot+cElectronCharge* Pot
+       DeltaPot_IC(iLine,iAlt) = cElectronCharge* Pot
     end do
 
     
