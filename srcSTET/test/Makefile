@@ -33,6 +33,30 @@ distclean: clean
 		test_process_var_name.log
 
 #######################################################################
+OBJ_GRID_POT = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSePlot.o 
+
+
+
+unit_test_grid_potential_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSePlot.o)
+	@make unit_test_grid_potential.o 
+	${LINK.f90} -o unit_test_grid_potential.exe ${OBJ_GRID_POT} \
+		unit_test_grid_potential.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_grid_potential: 
+	@echo unit_test_grid_potential starting
+	@make unit_test_grid_potential_exe 
+	@echo ./unit_test_grid_potential_exe
+	-@(./unit_test_grid_potential_exe )
+
+#######################################################################
+
+#######################################################################
 OBJ_UPDATE_PLAS = \
 	../ModMath.o\
 	../ModGrid.o \

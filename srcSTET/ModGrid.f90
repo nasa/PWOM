@@ -36,7 +36,10 @@ Module ModSeGrid
   
   real, public,allocatable    :: mu_III(:,:,:)   !Cosine of local PA at each alt
 
-
+  integer, public,allocatable :: nMu0RefAlt_II !altitude of reference altitude 
+                                               ! for 1st invarient for each line
+                                               ! and energy
+  
   !B Grid
   real, public, allocatable :: Bfield_IC(:,:) ! Bfield in G at each alt step and
                                               ! for each line
@@ -62,19 +65,23 @@ Module ModSeGrid
   integer,public :: nEnergy
   real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
-  
+  real, allocatable,public  :: KineticEnergy_IIC(:,:,:)
+
   ! Potential 
   real, public, allocatable :: Efield_IC(:,:) ! in volts/m
   real, public, allocatable :: DeltaPot_IC(:,:) !delta potential energy in eV
-
+  real,parameter :: KineticEnergyMin = 0.25 ! eV, the min kinetic energy allowed
+  integer,public,allocatable:: MinEnergy_IC(:,:) ! minimum index in region of 
+                                                 ! existence for energy
   ! public methods
   public :: allocate_grid_arrays
   public :: init_se_grid
   public :: se_grid_test
   public :: create_se_test_grid
   public :: BINNUM
-
-
+  public :: set_energy_bounds
+  public :: calc_potential
+  public :: locate_reference_alt_for_mu0
   real :: rPlanetCM
 contains
   !============================================================================
@@ -415,32 +422,91 @@ contains
   !=============================================================================
   subroutine calc_potential(iLine)
     use ModMath, only: midpnt_int
-    use ModConst,only: cElectronCharge
+    use ModConst,only: cElectronCharge ! in Coulombs 
     integer, intent(in) :: iLine
     integer :: iAlt
-    real    :: Pot !the electric potential difference from the equator
+    real    :: Pot !the electric potential difference from the equator [Volts]
+    real,parameter :: cCmToM = 1.0e-2, cJoulesToeV=6.24150934e18
     !--------------------------------------------------------------------------
     
 
     !fill the DeltaPot_IC array. The reference point (zero potential) is at the 
-    ! equator (nTop). since E|| = -dPhi/ds, DeltaPhi = int(- E||) from s_eq to s.
-    ! so DeltaPhi = int(E||) from s to seq
-    do iAlt=1,nTop
-       call midpnt_int(Pot,Efield_IC(iLine,:),&
-            FieldLineGrid_IC(iLine,:),iAlt,nTop,nPoint,1)
+    ! top of the ionosphere. Ignore E|| effects in iono. note that you 
+    ! want the total energy array to be positive so the reference point for 
+    ! the potential energy should be at minimum  potential energy location. 
+    ! since E|| =-dPhi/ds, DeltaPhi = int(- E||) from s_iono to s.
+    DeltaPot_IC(iLine,:)=0.0
+    do iAlt=nIono+1,nTop
+       call midpnt_int(Pot,-1.0*Efield_IC(iLine,:),&
+            FieldLineGrid_IC(iLine,:)*cCmToM,nIono,iAlt,nPoint,1)
        ! from the potential change
-       DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot
+       DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot*cJoulesToeV
     end do
     
     do iAlt=nTop+1,nPoint
        call midpnt_int(Pot,Efield_IC(iLine,:),&
-            FieldLineGrid_IC(iLine,:),nTop,iAlt,nPoint,1)
+            FieldLineGrid_IC(iLine,:)*cCmToM,iAlt,nPoint-nIono,nPoint,1)
 
-       DeltaPot_IC(iLine,iAlt) = cElectronCharge* Pot
+       ! note opposite sign since the integration limits are reversed
+       DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot*cJoulesToeV
     end do
 
+    !
     
   end subroutine calc_potential
+
+  !=============================================================================
+  subroutine set_energy_bounds(iLine)
+    integer, intent(in) :: iLine
+    integer, allocatable :: tmp_array(:)
+    integer :: iPoint
+    ! --------------------------------------------------------------------------
+    
+    !allocate temporary array to help determine bounds
+    if (.not.allocated(tmp_array)) allocate(tmp_array(nEnergy))
+
+    !For each altitude we need to restrict the range of the total energy 
+    ! array we consider when a potential is included, whenever 
+    ! |Potential Energy|>TotalEnergy-minKinetic Energy 
+    ! there is not enough KE to overcome the potential so it will not be in 
+    ! our region of exisitence
+    
+    do iPoint=1,nPoint
+       Tmp_array = 0
+       where(EnergyGrid_I(:) < abs(DeltaPot_IC(iLine,iPoint))+KineticEnergyMin)
+          Tmp_array = 1 
+       end where
+       MinEnergy_IC(iLine,iPoint) = max(sum(Tmp_array)+1,1)
+    end do
+    
+    !deallocate array to save memory
+    deallocate (tmp_array)
+  end subroutine set_energy_bounds
+  !=============================================================================
+  ! This subroutine finds the reference altitude for the first invariant 
+  ! for each energy by minimizing (Total Energy - Potential Energy)/B(s)
+  subroutine locate_reference_alt_for_mu0(iLine)
+    integer, intent(in) :: iLine
+    integer :: iEnergy, iPoint
+    real,allocatable :: eta(:)
+    !---------------------------------------------------------------------------
+    if (.not.allocated(eta)) allocate(eta(nPoint))
+    
+    ! for each energy find eta as a function of s and the find location of 
+    ! min eta, called s_0
+    do iEnergy = 1,nEnergy
+       do iPoint = 1, nPoint
+          eta(iPoint) = (EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iPoint))&
+               /Bfield_IC(iLine,iPoint)
+       enddo
+       !set min as reference altitude
+       nMu0RefAlt_II(iLine,iEnergy) = minloc(eta)
+    enddo
+
+    !deallocate to save memory
+    deallocate(eta)
+  end subroutine locate_reference_alt_for_mu0
+
   !=============================================================================
   subroutine allocate_grid_arrays
     
@@ -461,7 +527,9 @@ contains
     if(.not.allocated(mu_III))          allocate(mu_III(nLine,0:nAngle,nPoint))
     if(.not.allocated(Efield_IC))       allocate(Efield_IC(nLine,nPoint))
     if(.not.allocated(DeltaPot_IC))     allocate(DeltaPot_IC(nLine,nPoint))
-
+    if(.not.allocated(KineticEnergy_IIC))allocate(KineticEnergy_IIC(nLine,nEnergy,nPoint))
+    if(.not.allocated(MinEnergy_IC))    allocate(MinEnergy_IC(nLine,nPoint))
+    if (.not.allocated(nMu0RefAlt_II))  allocate(nMu0RefAlt_II(nLine,nEnergy)
  
   end subroutine allocate_grid_arrays
 

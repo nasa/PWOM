@@ -6,6 +6,7 @@ Module ModSePlot
   public :: plot_state
   public :: plot_omni_iono
   public :: plot_omni_line
+  public :: plot_along_field
 contains
   !============================================================================
   ! save state plot for verification
@@ -362,14 +363,15 @@ contains
   !============================================================================
   ! 1D output plots of integrated quantities along the field (for now just pot)
   subroutine plot_along_field
-    use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint
+    use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
+                             MinEnergy_IC, EnergyGrid_I
 
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=1, Pot_=1
-    character(len=100),parameter :: NamePlotVar='S Pot g r'
+    integer, parameter :: nDim =1, nVar=2, Pot_=1,MinE_=2
+    character(len=100),parameter :: NamePlotVar='S Pot MinE g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='Pot output'
     character(len=5) :: TypePlot='ascii'
@@ -386,6 +388,7 @@ contains
        do iPoint=1,nPoint
           Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
           PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
+          PlotState_IV(iPoint,MinE_) = EnergyGrid_I(MinEnergy_IC(iLine,iPoint))
        enddo
        
        ! set name for plotfile
