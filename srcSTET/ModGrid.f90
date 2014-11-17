@@ -5,6 +5,8 @@ Module ModSeGrid
 
   !field line grid
   real, public, allocatable    :: FieldLineGrid_IC(:,:) 
+  
+  integer, public,allocatable  :: MaxAlt_IC(:,:) !max alt for given energy
 
   ! Grid spacings in each zone in the ionosphere
   real, public                 :: DrIono1,DrIono2,DrIono3,DrIono4
@@ -31,20 +33,28 @@ Module ModSeGrid
                                                   !  on each line
   integer, public,allocatable :: nThetaAlt_II(:,:)! number of PA points at 
                                                   !  each alt
+  integer, public,allocatable :: nThetaAlt_IIC(:,:,:)! same as nThetaAlt_II but 
+                                                  ! energy dependent for case 
+                                                  ! with potential
+
   real, public,allocatable    :: dThetaEnd_II(:,:)   ! PA spacing at edge 
                                                      !of PA range 
+  real, public,allocatable    :: dThetaEnd_III(:,:,:) !same as dThetaEnd but 
+                                                      !Energy dependent for 
+                                                      !case with potential
   
   real, public,allocatable    :: mu_III(:,:,:)   !Cosine of local PA at each alt
 
-  integer, public,allocatable :: nMu0RefAlt_II !altitude of reference altitude 
-                                               ! for 1st invarient for each line
-                                               ! and energy
+  !altitude of reference altitude for 1st invarient for each line and energy
+  integer, public,allocatable :: nMu0RefAlt_II(:,:) 
   
   !B Grid
   real, public, allocatable :: Bfield_IC(:,:) ! Bfield in G at each alt step and
                                               ! for each line
   real, public, allocatable :: BFieldIono_I(:)! B at ionosphere for each line
   real, public,allocatable  :: BFieldEq_I(:)  ! B at equator for each line
+  real, public,allocatable  :: BField0_II(:,:)  ! B at mu0 ref for each line and 
+                                              ! total energy
 
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
 
@@ -70,6 +80,10 @@ Module ModSeGrid
   ! Potential 
   real, public, allocatable :: Efield_IC(:,:) ! in volts/m
   real, public, allocatable :: DeltaPot_IC(:,:) !delta potential energy in eV
+  real, public, allocatable :: DeltaPot0_II(:,:) !delta potential energy between
+                                                 ! mu0 ref and pot ref altitutes
+                                                 ! for each line and total 
+                                                 ! energy
   real,parameter :: KineticEnergyMin = 0.25 ! eV, the min kinetic energy allowed
   integer,public,allocatable:: MinEnergy_IC(:,:) ! minimum index in region of 
                                                  ! existence for energy
@@ -80,8 +94,11 @@ Module ModSeGrid
   public :: create_se_test_grid
   public :: BINNUM
   public :: set_energy_bounds
+  public :: set_alt_bounds
   public :: calc_potential
   public :: locate_reference_alt_for_mu0
+  public :: find_angle_boundary
+  public :: plot_grid_pot
   real :: rPlanetCM
 contains
   !============================================================================
@@ -441,17 +458,11 @@ contains
             FieldLineGrid_IC(iLine,:)*cCmToM,nIono,iAlt,nPoint,1)
        ! from the potential change
        DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot*cJoulesToeV
+
+       ! assume that other hemisphere has identical potential structure
+       DeltaPot_IC(iLine,nPoint-iAlt) = DeltaPot_IC(iLine,iAlt) 
     end do
     
-    do iAlt=nTop+1,nPoint
-       call midpnt_int(Pot,Efield_IC(iLine,:),&
-            FieldLineGrid_IC(iLine,:)*cCmToM,iAlt,nPoint-nIono,nPoint,1)
-
-       ! note opposite sign since the integration limits are reversed
-       DeltaPot_IC(iLine,iAlt) = -cElectronCharge*Pot*cJoulesToeV
-    end do
-
-    !
     
   end subroutine calc_potential
 
@@ -483,30 +494,145 @@ contains
     deallocate (tmp_array)
   end subroutine set_energy_bounds
   !=============================================================================
+  subroutine set_alt_bounds(iLine)
+    integer, intent(in) :: iLine
+    integer, allocatable :: tmp_array(:)
+    integer :: iEnergy
+    ! --------------------------------------------------------------------------
+    
+    !allocate temporary array to help determine bounds
+    if (.not.allocated(tmp_array)) allocate(tmp_array(nTop))
+
+    !For each total energy we need to restrict the range of the altitude  
+    ! array we consider when a potential is included, whenever 
+    ! |Potential Energy|>TotalEnergy-minKinetic Energy 
+    ! there is not enough KE present so it will not be in 
+    ! our region of exisitence
+    
+    do iEnergy=1,nEnergy
+       Tmp_array = 0
+       where(EnergyGrid_I(iEnergy) > abs(DeltaPot_IC(iLine,1:nTop))&
+            +KineticEnergyMin)
+          Tmp_array = 1 
+       end where
+       MaxAlt_IC(iLine,iEnergy) = max(sum(Tmp_array),1)
+       
+!       write(*,*) 'iEnergy,MaxAlt_IC(iLine,iEnergy)',iEnergy,MaxAlt_IC(iLine,iEnergy)
+    end do
+!    call con_stop('')
+    
+    !deallocate array to save memory
+    deallocate (tmp_array)
+  end subroutine set_alt_bounds
+ 
+ !=============================================================================
   ! This subroutine finds the reference altitude for the first invariant 
-  ! for each energy by minimizing (Total Energy - Potential Energy)/B(s)
+  ! for each energy by minimizing [(Total Energy - Potential Energy)/B(s)]^-1
   subroutine locate_reference_alt_for_mu0(iLine)
     integer, intent(in) :: iLine
-    integer :: iEnergy, iPoint
-    real,allocatable :: eta(:)
+    integer :: iEnergy, iPoint, nMu0Alt
+    logical :: IsFoundRefAlt
+    real    :: eta
     !---------------------------------------------------------------------------
-    if (.not.allocated(eta)) allocate(eta(nPoint))
     
-    ! for each energy find eta as a function of s and the find location of 
-    ! min eta, called s_0
-    do iEnergy = 1,nEnergy
-       do iPoint = 1, nPoint
-          eta(iPoint) = (EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iPoint))&
-               /Bfield_IC(iLine,iPoint)
-       enddo
-       !set min as reference altitude
-       nMu0RefAlt_II(iLine,iEnergy) = minloc(eta)
-    enddo
+    
+    ! for each energy find the reference altitude by fixing the reflection 
+    ! altitude as the reference altitude and seeing the pi/2 local pitch angle 
+    ! at each at altitude can map into that reference. If not, then lower the 
+    ! reference altitude by one and try again. 
+    ENERGY_LOOP: do iEnergy = 1,nEnergy
+       !Initial guess for the reference altitude is the reflection altitude
+       nMu0Alt = MaxAlt_IC(iLine,iEnergy)
 
-    !deallocate to save memory
-    deallocate(eta)
+       !test the initial guess and move down to next altitude if it doesnt work
+       IsFoundRefAlt = .false.
+       FIND_REF_ALT: do while (.not.IsFoundRefAlt)
+          !set the minimum B
+          BField0_II(iLine,iEnergy) = Bfield_IC(iLine,nMu0Alt)
+          
+          !set potential difference to mu0 reference altitude
+          DeltaPot0_II(iLine,iEnergy) = DeltaPot_IC(iLine,nMu0Alt)
+          
+          !for each altitude, the pi/2 local PA maps to the reference PA using
+          ! the following relation: mu0=sqrt(1-eta) where eta is defined by
+          ! eta = (1-PotEnergy(s))/(1-PotEnergy0) * B0/B(s)
+          ALT_LOOP: do iPoint = 1, MaxAlt_IC(iLine,iEnergy)
+             !start by calculating eta for each altitude
+             eta = ((EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iPoint))&
+                  /((EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,nMu0Alt))))&
+                  * (Bfield_IC(iLine,nMu0Alt)/Bfield_IC(iLine,iPoint))
+             
+             ! if eta exceeds 1 than pi/2 local PA cannot map to mu0 grid so 
+             ! then this choice of reference altitude does not work
+             if (eta > 1.0) then
+                ! set the new reference altitude to one less than before and 
+                !  cycle the while loop
+                nMu0Alt=nMu0Alt-1
+                CYCLE FIND_REF_ALT
+             endif
+          enddo ALT_LOOP
+          
+          ! If eta<1 for all altitude (which it must be to reach this point)
+          !  then the mu0 reference altitude is found and the stop condition
+          !  can be set. 
+          
+          nMu0RefAlt_II(iLine,iEnergy) = nMu0Alt
+          IsFoundRefAlt =.true.
+       end do FIND_REF_ALT
+
+       write(*,*) 'iEnergy,nMu0RefAlt_II(iLine,iEnergy),MaxAlt_IC(iLine,iEnergy)',&
+            iEnergy,nMu0RefAlt_II(iLine,iEnergy),MaxAlt_IC(iLine,iEnergy)
+
+    enddo ENERGY_LOOP
+    
   end subroutine locate_reference_alt_for_mu0
 
+  !=============================================================================
+  subroutine find_angle_boundary(iLine)
+    integer, intent(in) :: iLine
+    integer :: iPoint,iEnergy
+    real    :: eta, LocalThetaMax
+    integer, allocatable :: tmp_array(:)
+    !--------------------------------------------------------------------------
+    
+    if (.not.allocated(tmp_array)) allocate(tmp_array(0:MaxTheta))
+    
+    ! In the presence of an electric potential, find the number of points in 
+    !  PA to consider at each altitude
+    do iEnergy =1,nEnergy
+       do iPoint=1,MaxAlt_IC(iLine,iEnergy)
+          eta = (Bfield0_II(iLine,iEnergy)/Bfield_IC(iLine,iPoint)) &
+               *(EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iPoint))   &
+               /(EnergyGrid_I(iEnergy)-DeltaPot0_II(iLine,iEnergy))
+
+          ! Find the pitch angle at the reference altitude that corresponds to 
+          !  local PA Pi/2. 
+          LocalThetaMax = acos(sqrt(1.0-min(1.0,eta)))
+          
+          ! From LocalThetaMax and EqAngleGrid find nThetaAlt
+          tmp_array = 0
+          where(EqAngleGrid_IG(iLine,:) <= LocalThetaMax)
+             tmp_array = 1 
+          end where
+          nThetaAlt_IIC(iLine,iEnergy,iPoint) = max(sum(Tmp_array)-1,0)
+          
+          ! Set dThetaEnd, the delta theta at the end of the PA grid
+          dThetaEnd_III(iLine,iEnergy,iPoint)=&
+               EqAngleGrid_IG(iLine,nThetaAlt_IIC(iLine,iEnergy,iPoint)) &
+               - EqAngleGrid_IG(iLine,nThetaAlt_IIC(iLine,iEnergy,iPoint)-1)
+          
+          ! fill in conjugate hemisphere assuming symmetry
+          nThetaAlt_IIC(iLine,iEnergy,nPoint-iPoint) = &
+               nThetaAlt_IIC(iLine,iEnergy,iPoint)
+          
+          dThetaEnd_III(iLine,iEnergy,nPoint-iPoint) = &
+               dThetaEnd_III(iLine,iEnergy,iPoint)
+     
+       enddo
+    enddo
+    
+    deallocate(tmp_array)
+  end subroutine find_angle_boundary
   !=============================================================================
   subroutine allocate_grid_arrays
     
@@ -525,12 +651,21 @@ contains
     if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy+1))
     if(.not.allocated(EnergyGrid_I))    allocate(EnergyGrid_I(nEnergy))
     if(.not.allocated(mu_III))          allocate(mu_III(nLine,0:nAngle,nPoint))
+
+    ! variables needed for case with potential. to increase efficiency these 
+    ! may be allocated separately in the future 
+
     if(.not.allocated(Efield_IC))       allocate(Efield_IC(nLine,nPoint))
     if(.not.allocated(DeltaPot_IC))     allocate(DeltaPot_IC(nLine,nPoint))
     if(.not.allocated(KineticEnergy_IIC))allocate(KineticEnergy_IIC(nLine,nEnergy,nPoint))
     if(.not.allocated(MinEnergy_IC))    allocate(MinEnergy_IC(nLine,nPoint))
-    if (.not.allocated(nMu0RefAlt_II))  allocate(nMu0RefAlt_II(nLine,nEnergy)
- 
+    if (.not.allocated(nMu0RefAlt_II))  allocate(nMu0RefAlt_II(nLine,nEnergy))
+    if (.not.allocated(DeltaPot0_II))   allocate(DeltaPot0_II(nLine,nEnergy))
+    if (.not.allocated(Bfield0_II))     allocate(Bfield0_II(nLine,nEnergy))
+    if (.not.allocated(MaxAlt_IC))      allocate(MaxAlt_IC(nLine,nEnergy))
+    if (.not.allocated(nThetaAlt_IIC))  allocate(nThetaAlt_IIC(nLine,nEnergy,nPoint))
+    if (.not.allocated(dThetaEnd_III))  allocate(dThetaEnd_III(nLine,nEnergy,nPoint))
+    
   end subroutine allocate_grid_arrays
 
   !============================================================================
@@ -577,6 +712,81 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_grid
+
+
+  !============================================================================
+  ! Plot region of existance for a particular total energy in the case  
+  ! when an electric potential is included
+  subroutine plot_grid_pot(iLine,nStep,iEnergy,time)
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+
+    integer, intent(in) :: iLine, nStep, iEnergy
+    real,    intent(in) :: time
+
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+    real, parameter     :: rEarthCM = 6375.0e5
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=2, S_=1, PA_=2,B_=1
+
+    !set the corresponding energy channels for E1-E5
+    character(len=100),parameter :: NamePlotVar='S PA B PA g r'
+    character(len=100) :: NamePlot
+    character(len=*),parameter :: NameHeader='Region of existance'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iAngle,iAngleDn,iPoint,iIono,iPlas
+    !--------------------------------------------------------------------------
+    allocate(Coord_DII(nDim,nPoint,2*nAngle),PlotState_IIV(nPoint,2*nAngle,nVar))
+
+!    do iLine=1,nLine
+       PlotState_IIV = 0.0
+       Coord_DII     = 0.0
+       
+       !Set Coordinates along field line and PA
+       do iPoint=1,nPoint
+          do iAngle=1,2*nAngle
+             !set coord based on up or down region
+             if(iAngle<nAngle) then
+                Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
+                     /rEarthCM
+                Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
+             else
+                iAngleDn = 2*nAngle-iAngle
+                Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
+                     /rEarthCM
+                Coord_DII(PA_,iPoint,iAngle)= &
+                     cPi-EqAngleGrid_IG(iLine,iAngleDn)
+             endif
+             
+             !set plotstate based on up or down region  
+             if (iAngle <= nThetaAlt_IIC(iLine,iEnergy,iPoint))then
+                PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
+                PlotState_IIV(iPoint,iAngle,PA_) = EqAngleGrid_IG(iLine,iAngle)
+             elseif(iAngle >= 2*nAngle-nThetaAlt_IIC(iLine,iEnergy,iPoint)) then
+                iAngleDn = 2*nAngle-iAngle
+                PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
+                PlotState_IIV(iPoint,iAngle,PA_) = &
+                     cPi-EqAngleGrid_IG(iLine,iAngleDn)
+             else
+                PlotState_IIV(iPoint,iAngle,:)=0.0
+             endif
+          enddo
+       enddo
+       
+      ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a,i4.4,a)") 'RegionOfExist_Enum_',iEnergy,'_line_',iLine,'.out'
+ 
+       !Plot grid for given line
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+ !   end do
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_grid_pot
 
 
   !============================================================================
