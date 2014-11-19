@@ -46,8 +46,8 @@ Module ModSeState
   !public methods
   public :: allocate_state_arrays
   public :: check_time
-  public :: initplas, initiono
-  public :: update_se_state
+  public :: initplas, initplas_pot,initiono
+  public :: update_se_state,update_se_state_pot
   public :: update_se_state_iono
 
 contains
@@ -688,6 +688,344 @@ contains
   END SUBROUTINE update_se_state_iono
   
   !=============================================================================
+  ! same as the update_se_state except now we include the effect of a 
+  ! potential. This is the plasmasphere solution
+  SUBROUTINE update_se_state_pot(iLine,eThermalDensity_C,eThermalTemp_C,IsOpen)
+    
+    USE ModSeGrid, only: nEnergy, EnergyGrid_I, DeltaE_I, EnergyMin, EnergyMax,&
+         EqAngleGrid_IG,nThetaAlt_IIC,dThetaEnd_III,mu_III,&
+         FieldLineGrid_IC,nTop,Bfield_IC, MaxAlt_IC,nMu0RefAlt_II,&
+         BField0_II, DeltaPot_IC, DeltaPot0_II, KineticEnergy_IIC,&
+         nIono, nPlas, nPoint,nAngle
+    
+    use ModMath, only: midpnt_int
+    
+    use ModNumConst,    ONLY: cPi
+
+    IMPLICIT NONE
+!    INCLUDE 'numbers.h'
+    integer, intent(in) :: iLine
+    real   , intent(in) :: eThermalDensity_C(nPoint)
+    real   , intent(in) :: eThermalTemp_C(nPoint)
+    logical, intent(in) :: IsOpen
+    REAL h,p,Fcheck, sigmaO,muO,velt,eta, lbeta(nPoint),alpha(nAngle), &
+         sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
+         Fsum, delE,Flasti, Flastt,Qstar, Theta,s1,s2
+    INTEGER i,j,k,iPlas,jj,Ist, &
+         flag,count,warning,SPick,space,ii
+
+    !set maximum iterations
+    integer, parameter :: countmax=600
+
+    real :: cascade, lossum
+    
+    !Altitude range variables
+    integer :: nAltMin, nAltMax
+    
+    real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
+
+    !---------------------------------------------------------------------------
+    
+    !initialize lbeta to 0
+    lbeta(:)=0.0
+    
+    !      initialize warning to 0
+    warning =0
+    alpha(1)=1.
+    sigma(1)=0.
+    kk=1.
+    !  Start the energy loop
+    !      PRINT *, 'MainPlas, t=',t
+    ENERGY: DO j=nEnergy,1,-1
+       delE=.5*(DeltaE_I(j+1)+DeltaE_I(j))
+       IF (j.EQ.nEnergy) delE=DeltaE_I(j)
+       flag=1
+       count=0
+       !  Start the iteration loop
+       ITERATION: DO WHILE ((flag.EQ.1).AND.(count.LT.countmax))
+          flag=0
+          count=count+1
+          IF (count.GT.countmax-2) WRITE (10,*) 'Count: ',count
+          !*  Upward Region #2: the plasmasphere
+          do k=0,nThetaAlt_IIC(iLine,j,nIono)
+             phiup(iLine,k,0,j)=iphiup(iLine,k,nIono,j)
+          end do
+          h=FieldLineGrid_IC(iLine,nIono+1)-FieldLineGrid_IC(iLine,nIono)
+          
+          !check if field line is open and set bounds for up and down loop
+          if (IsOpen) then
+             ! open line so detach hemispheres
+             nAltMin = nIono+1
+             nAltMax = MaxAlt_IC(iLine,j)
+          else
+             ! closed line so keep hemispheres attached. Note that should 
+             ! they get detached for energies less than the potential we will
+             ! cycle over those altitude steps
+             nAltMin = nIono+1
+             nAltMax = nIono+nPlas
+          endif
+          
+          FIELDLINE_UPWARD: DO i=nAltMin,nAltMax
+             !write(*,*) 'start upward',i,j
+             
+             !when MaxAlt_IC is not equal to nTop, then the hemispheres are 
+             ! detached for these energies between MaxAlt_IC(iLine,j)+1 and 
+             ! nPoint-MaxAlt_IC. note that we need to lower the side on the 
+             ! second hemisphere by one so we can take the BC from the phidn
+             ! so we have reflection
+             if ((MaxAlt_IC(iLine,j) /= nTop) .and. (i > MaxAlt_IC(iLine,j)) &
+                  .and. (i <= nPoint-MaxAlt_IC(iLine,j)+1)) then
+                !set the reflection bc for hemisphere 2
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   phiup(iLine,k,nPoint-MaxAlt_IC(iLine,j),j)=&
+                        phidn(iLine,k,nPoint-MaxAlt_IC(iLine,j),j)
+                end do
+                cycle FIELDLINE_UPWARD
+             endif
+             
+             !velt is now altitude dependent
+             velt=cEVtoCMperS*SQRT(KineticEnergy_IIC(iLine,j,i))*delt
+
+!             write(*,*) 'Start FieldLine up'
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),KineticEnergy_IIC(iLine,j,i))
+             
+             !KLUDGE kill pitchangle scattering
+             !sigO1=0.0
+             !END KLUDGE
+             iPlas=i-nIono
+             eta = (Bfield0_II(iLine,j)/Bfield_IC(iLine,i)) &
+                  *(EnergyGrid_I(j)-DeltaPot_IC(iLine,i))   &
+                  /(EnergyGrid_I(j)-DeltaPot0_II(iLine,j))
+
+             CALL IonoVar3(Qstar, cascade, lossum)
+             do k=1,nThetaAlt_IIC(iLine,j,i)-1
+                CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
+                IF (k.EQ.nThetaAlt_IIC(iLine,j,i)-1) del2=dThetaEnd_III(iLine,j,i)
+                muO=cos(Theta)
+                sigmaO=sigO1
+                s1=sigmaO
+                s2=1.
+                Flasti=phiup(iLine,k,iPlas-1,j)
+                Flastj=phiup(iLine,k,iPlas,j+1)
+                Flastt=lphiup(iLine,k,iPlas,j)
+                CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
+                     mu_III(iLine,k,i),eta,muO,del1,del2,beta(i),lbeta(i), &
+                     Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
+                     cascade,lossum,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
+                     KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
+                !            CALL CheckWarn(sigma(k+1),warning,1,*9999)
+                !            CALL CheckWarn(alpha(k+1),warning,1,*9999)
+             end do
+
+             ! Note that the reference altitude can occur in two places when 
+             ! a potential is included
+             IF (i==nMu0RefAlt_II(iLine,j) .or. &
+                  i == nPoint-nMu0RefAlt_II(iLine,j)) THEN
+                p=-2.*s1/dThetaEnd_III(iLine,j,i)
+             ELSE
+                p=pend_pot(kk,s1,eta,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
+                     KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
+             END IF
+             
+             Flastt=lphiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
+             Fsum=phiup(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)+phidn(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)
+             Fcheck=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
+             Flastj=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j+1)
+             
+             newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_III(iLine,j,i)) &
+                  +s2*(lbeta(i)* Flastj/delE+Qstar+cascade))/ &
+                  (1/velt-p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+lossum))
+             !            CALL CheckWarn(newphi,warning,2,*9999)
+             
+             CALL CheckConv(newphi,Fcheck,epsilon,flag)
+             phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)=newphi
+             do k=nThetaAlt_IIC(iLine,j,i),1,-1
+                newphi=alpha(k)*phiup(iLine,k,iPlas,j)+sigma(k)
+                Fcheck=phiup(iLine,k-1,iPlas,j)
+                !            CALL CheckWarn(newphi,warning,3,*9999)
+                CALL CheckConv(newphi,Fcheck,epsilon,flag)
+                phiup(iLine,k-1,iPlas,j)=newphi
+             end do
+             CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,iPlas,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
+             specup(iLine,j,i)=-.5*specup(iLine,j,i)
+             !  Write to a file (if the solution isn't converging)
+             IF (count.GT.countmax-2) THEN
+                WRITE (10,*) time,j,i,iPlas,nThetaAlt_IIC(iLine,j,i)/4,&
+                     flag,(phiup(iLine,k,iPlas,j),k=0,nThetaAlt_IIC(iLine,j,i))
+                WRITE (10,*) time,j,i,iPlas,nThetaAlt_IIC(iLine,j,i),flag,&
+                     (phiup(iLine,k,iPlas,j),k=nThetaAlt_IIC(iLine,j,i)/2+1, &
+                     nThetaAlt_IIC(iLine,j,i),2)
+             END IF
+             h=FieldLineGrid_IC(iLine,i+1)-FieldLineGrid_IC(iLine,i)            
+             
+! End Upward Region #2 loop
+          end DO FIELDLINE_UPWARD
+          !*  Downward Region #2: the plasmasphere
+
+          !check if field line is open and set bounds for up and down loop
+          if (IsOpen) then
+             ! open line so detach hemispheres
+             nAltMin = nIono+1
+             nAltMax = MaxAlt_IC(iLine,j)
+             !set step
+             h = &
+                  FieldLineGrid_IC(iLine,nAltMax) &
+                  -FieldLineGrid_IC(iLine,nAltMax+1)
+             !fill bc from iono
+             do k=0,nThetaAlt_IIC(iLine,j,nTop)
+                phidn(iLine,k,nTop+1,j) = 0.0
+             end do
+          else
+             ! closed line so keep hemispheres attached. Note that should 
+             ! they get detached for energies less than the potential we will
+             ! cycle over those altitude steps
+             nAltMin = nIono+1
+             nAltMax = nIono+nPlas
+             !set step
+             h = &
+                  FieldLineGrid_IC(iLine,nIono+nPlas) &
+                  -FieldLineGrid_IC(iLine,nIono+nPlas+1)
+             !fill bc from iono
+             do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
+             end do
+          endif
+          
+          FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
+            ! write(*,*) 'start downward',i,j,MaxAlt_IC(iLine,j),nPoint-MaxAlt_IC(iLine,j)
+             !when MaxAlt_IC is not equal to nTop, then the hemispheres are 
+             ! detached for these energies between MaxAlt_IC(iLine,j)+1 and 
+             ! nPoint-MaxAlt_IC. note that we need to lower the side on the 
+             ! first hemisphere by one so we can take the BC from the phiup
+             ! so we have reflection
+             if ((MaxAlt_IC(iLine,j) /= nTop) .and. (i > MaxAlt_IC(iLine,j)-1) &
+                  .and. (i <= nPoint-MaxAlt_IC(iLine,j))) then
+                !set the reflection bc for hemisphere 2
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   phidn(iLine,k,MaxAlt_IC(iLine,j),j)=&
+                        phiup(iLine,k,MaxAlt_IC(iLine,j),j)
+                   if(i==99) write(*,*)phidn(iLine,k,MaxAlt_IC(iLine,j),j)
+                end do
+                cycle FIELDLINE_DOWN
+             endif
+
+             !velt is now altitude dependent
+             velt=cEVtoCMperS*SQRT(KineticEnergy_IIC(iLine,j,i))*delt
+             
+!             write(*,*) 'Start FieldLine Down'
+             CALL CoulVar(i,beta(i),sigO1,eThermalTemp_C(i),eThermalDensity_C(i),KineticEnergy_IIC(iLine,j,i))
+             !KLUDGE kill pitchangle scattering
+             !sigO1=0.0
+             !END KLUDGE
+             iPlas=i-nIono
+             eta = (Bfield0_II(iLine,j)/Bfield_IC(iLine,i)) &
+                  *(EnergyGrid_I(j)-DeltaPot_IC(iLine,i))   &
+                  /(EnergyGrid_I(j)-DeltaPot0_II(iLine,j))
+             CALL IonoVar3(Qstar, cascade, lossum)
+             DO k=1,nThetaAlt_IIC(iLine,j,i)-1
+                CALL ThetaVar1(nAngle,Theta,del1,del2,k,EqAngleGrid_IG(iLine,0:nAngle))
+                Theta=cPi-Theta
+                del1=-del1
+                del2=-del2
+                IF (k.EQ.nThetaAlt_IIC(iLine,j,i)-1) &
+                     del2=-dThetaEnd_III(iLine,j,i)
+                muO=cos(Theta)
+                sigmaO=sigO1
+                s1=sigmaO
+                s2=1.
+                Flasti=phidn(iLine,k,iPlas+1,j)
+                Flastj=phidn(iLine,k,iPlas,j+1)
+                Flastt=lphidn(iLine,k,iPlas,j)
+                if (j==5 .and. i==95 .and. k==41) &
+                     write(*,*)'eta,Flasti,Flastj,Flastt',eta,Flasti,Flastj,Flastt 
+                if (j==5 .and. i==94 .and. k==41) &
+                     write(*,*)'eta,Flasti,Flastj,Flastt',eta,Flasti,Flastj,Flastt 
+                if (j==5 .and. i==94 .and. k==41) &
+                     write(*,*)'nThetaAlt_IIC(iLine,j,i),nThetaAlt_IIC(iLine,j,i+1)',&
+                     nThetaAlt_IIC(iLine,j,i),nThetaAlt_IIC(iLine,j,i+1) 
+                CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
+                     -mu_III(iLine,k,i),eta,muO,del1,del2,beta(i),lbeta(i), &
+                     Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
+                     cascade,lossum,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
+                     KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
+                !            CALL CheckWarn(sigma(k+1),warning,4,*9999)
+                !            CALL CheckWarn(alpha(k+1),warning,4,*9999)
+             enddo
+             IF (i==nMu0RefAlt_II(iLine,j) .or. &
+                  i == nPoint-nMu0RefAlt_II(iLine,j)) THEN
+                p=2.*s1/dThetaEnd_III(iLine,j,i)
+             ELSE
+                p=-pend_pot(kk,s1,eta,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
+                     KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
+             END IF
+             Flastt=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
+             Fsum=phidn(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)+phiup(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)
+             Fcheck=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
+             Flastj=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j+1)
+             newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_III(iLine,j,i))+s2*(lbeta(i)* &
+                  Flastj/delE+Qstar+cascade))&
+                  /(1/velt+p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+lossum))
+             !            CALL CheckWarn(newphi,warning,5,*9999)
+             CALL CheckConv(newphi,Fcheck,epsilon,flag)
+             phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)=newphi
+             
+             !KLUDGE debug
+             if (j==5 .and. i==95 .and. k==41) write(*,*),'newphi',newphi
+             if (j==5 .and. i==95 .and. k==41) write(*,*),'Flastt',Flastt
+             if (j==5 .and. i==95 .and. k==41) write(*,*),'Flastj',Flastj
+             if (j==5 .and. i==95 .and. k==41) write(*,*),'Fsum',Fsum
+             if (j==5 .and. i==95 .and. k==41) write(*,*),'p',p
+
+             DO k=nThetaAlt_IIC(iLine,j,i),1,-1
+                newphi=alpha(k)*phidn(iLine,k,iPlas,j)+sigma(k)
+                Fcheck=phidn(iLine,k-1,iPlas,j)
+                !            CALL CheckWarn(newphi,warning,6,*9999)
+                CALL CheckConv(newphi,Fcheck,epsilon,flag)
+                phidn(iLine,k-1,iPlas,j)=newphi
+             end DO
+             CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,iPlas,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
+             specdn(iLine,j,i)=.5*specdn(iLine,j,i)
+             !  Write to a file (if the solution isn't converging)
+             IF (count.GT.countmax-2) THEN
+                WRITE (10,*) time,j,i,iPlas,flag,&
+                     (phidn(iLine,k,iPlas,j),k=0,nThetaAlt_IIC(iLine,j,i)/2,2)
+                WRITE (10,*) time,j,i,iPlas,flag,&
+                     (phidn(iLine,k,iPlas,j),k=nThetaAlt_IIC(iLine,j,i)/2+1, &
+                     nThetaAlt_IIC(iLine,j,i),2)
+             END IF
+             h=FieldLineGrid_IC(iLine,i-1)-FieldLineGrid_IC(iLine,i)            ! End Downward Region #2 loop
+          end DO FIELDLINE_DOWN
+       END DO ITERATION                  ! End of iteration loop
+                       
+       CALL CheckFlag(flag,1,warning,-1,*9999)
+       !  Save the calculated values for the next time and energy steps
+       do i=nIono+1,nPoint-nIono
+          lbeta(i)=beta(i)
+       end do
+       !      PRINT *, 'Energy convergence:',j,EnergyGrid_I(j),count
+    end DO ENERGY
+    
+9999 IF (warning.GT.0) THEN
+       PRINT *, 'Negative Densities Occurred:',newphi,warning
+       PRINT *, time,j,i,k,Bfield_IC(iLine,i),Bfield0_II(iLine,j),&
+            FieldLineGrid_IC(iLine,i),h,Theta,muO,&
+            mu_III(iLine,k,i),del1, dThetaEnd_III(iLine,j,i),beta(i),sigmaO,p,count,&
+            Qstar
+       PRINT *, phiup(iLine,k,iPlas,j),phidn(iLine,k,iPlas,j)
+       STOP
+    ELSE IF (warning.LT.0) THEN
+       PRINT *, 'No convergence: ',count,Time,warning,j
+       STOP
+    END IF
+    !  Format for the nonconvergent output
+!!!27  FORMAT (100E10.3,4I4,1P,100E10.3)
+    
+    RETURN
+  END SUBROUTINE update_se_state_pot
+  
+  !============================================================================
 
   !=============================================================================
   !* ------------------------------------------------------------------ **
@@ -748,8 +1086,94 @@ contains
 10  FORMAT (10(1PG11.4,1X))
     RETURN
   END SUBROUTINE NumCalcVar
-  !=============================================================================
 
+  !=============================================================================
+  !* ------------------------------------------------------------------ **
+!  Subroutine NumCalcVar_pot finds alpha(k) and sigma(k) in the case of 
+!   field aligned potential.
+!*  VARIABLE DESCRIPTIONS
+!*      alpha   Flux attenuator for this pitch angle
+!*      alp      Flux attenuator for the previous pitch angle
+!*      sigma   Flux offset for this angle: [flux]
+!*      sig      Flux offset for the previous angle; [flux]
+!*      del1    Pitch angle step between this and the previous step; rad
+!*      del2    Pitch angle step between this and the next step; rad
+!*      muO     Cosine of the equatorial pitch angle
+!*      mu      Cosine of the actual pitch angle
+!*      BB      Magnetic field strength for this step; G
+!*      BFieldEq_I(iLine)      Magnetic field strength at the equator; G
+!*      beta    Energy loss parameters; ????
+!*      lbeta   Previous energy step's beta; ????
+!*      Fj      Flux for previous E for same space, time, and angle step
+!*      Fi      Flux for previous space for same angle, time, and E step
+!*      Ft      Flux for previous time for same E, space, and angle step
+!*      vt      Velocity of an electron at this energy * delt; cm
+!*      h       Size of this step; cm
+!*      dE      Energy step size; eV
+!*      Qstar   Electron production rate(primary plus secondary;
+!*                cm-3 s-1 rad-1 ????
+!*      p
+!*      q
+!*      a,b,c,d
+!*
+  SUBROUTINE NumCalcVar_pot(alpha,alp,sigma,sig,mu,eta,muO,del1, &
+       del2,beta,lbeta,Fi,Fj,Ft,vt,h,dE,Qstar,kk,s1,s2,cascade,lossum,&
+       TotalE,DeltaPot0, KE, ne)
+    REAL alpha,alp,sigma,sig,mu,eta,muO,del1,del2,beta,lbeta,s1,s2, &
+         Fi,Fj,Ft,vt,h,dE,a,b,c,d,p,q,Qstar,lossum,cascade,kk, pstar
+    real, intent(in) ::TotalE,DeltaPot0, KE, ne
+    real, parameter  :: Acoef = 2.6e-12 !ev^2cm^2
+    !--------------------------------------------------------------------------
+    !write(*,*) 'muO, BB, BFieldEq_I(iLine)',muO, BB, BFieldEq_I(iLine)
+    p=kk*s1*(muO**4+eta-1)/((muO**3)*(1-muO**2)**.5)
+    ! pstar was zero when there is no potential
+    pstar = Acoef*ne/2.0/(KE**2)*(sqrt(1.0-muO**2)/muO)&
+         *((KE/(TotalE-DeltaPot0))-1.0)
+    q=kk*s1*ABS((eta-1+muO**2)/muO**2)
+
+    a=(2*q+(pstar-p)*del2)/(del1*(del1+del2))
+    b=(2*q-(pstar-p)*del1)/(del2*(del1+del2))
+    c=(2*q+(del1-del2)*(p-pstar))/(del1*del2)+s2*(kk*mu/h+beta/dE+lossum)+1/vt
+    d=s2*(lbeta*Fj/dE+kk*mu*Fi/h+Qstar+cascade)+Ft/vt
+
+    IF (b.LT.0.) b=0.
+    alpha=b/(c-a*alp)
+    sigma=(a*sig+d)/(c-a*alp)
+    IF ((d.LT.0).OR.(d-d.NE.0)) THEN
+       PRINT *,'NEG D ',p,q,a,b,c,d,sigma,sig,alpha,alp
+       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar,cascade
+       call con_stop('')
+    ELSE IF ((sigma.LT.0).OR.(sigma-sigma.NE.0)) THEN
+       PRINT *,'NEG SIGMA ',p,q,a,b,c,d,sigma,sig,alpha,alp
+       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
+    ELSE IF ((alpha.LT.0).OR.(alpha-alpha.NE.0)) THEN
+       PRINT *,'NEG ALPHA ',p,q,a,b,c,d,sigma,sig,alpha,alp
+       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
+    END IF
+    !      PRINT 10, BB,BFieldEq_I(iLine)/BB,muO,del1,del2,p,q,a,b,alpha
+10  FORMAT (10(1PG11.4,1X))
+    RETURN
+  END SUBROUTINE NumCalcVar_pot
+  !=============================================================================
+  ! find p at local pi/2 when not at reference point (case for potential)
+  real function pend_pot(kk,s1,eta,TotalE,DeltaPot0, KE, ne)
+    real, intent(in) ::kk,s1,eta,TotalE,DeltaPot0, KE, ne
+    real :: muO, p, pstar
+    real, parameter  :: Acoef = 2.6e-12 !ev^2cm^2
+    !--------------------------------------------------------------------------
+    ! set mu0 = sqrt(1-eta) which is the case for local pi/2
+    muO = sqrt(1.0-eta)
+    
+    !get p and pstar at this location
+    p=kk*s1*(muO**4+eta-1)/((muO**3)*(1-muO**2)**.5)
+    
+    pstar = Acoef*ne/2.0/(KE**2)*(sqrt(1.0-muO**2)/muO)&
+         *((KE/(TotalE-DeltaPot0))-1.0)
+
+    ! now set pend as defined on page 150 of Mike Leimohn's thesis
+    pend_pot = p-pstar
+  end function pend_pot
+  !=============================================================================
   !* ------------------------------------------------------------------ **
   !  Subroutine get_sigmaO_and_eprod (was IonoVar1) 
   !*  calculates beta, sigmaO, and Qstar for the ionosphere.
@@ -1031,6 +1455,57 @@ contains
 
     RETURN
   END SUBROUTINE InitPlas
+  !=============================================================================
+  !* ------------------------------------------------------------------ **
+  !*  Pass fluxes to "last time step fluxes" and set flux arrays to zero.
+  SUBROUTINE InitPlas_pot(iLine,DoSavePreviousAndReset)
+    USE ModSeGrid, only: nEnergy, nPlas,nIono,nThetaAlt_IIC
+    IMPLICIT NONE
+
+    integer, intent(in) :: iLine
+    logical, intent(in) :: DoSavePreviousAndReset
+    real :: c
+    INTEGER iPlas,j,iAngle,iAlt
+
+    ! Set upper energy boundary condition on the flux. 
+    ! Set fluxes at nEnergy+1 to fluxes at nEnergy times a constant <= 1 
+    do iPlas=1,nPlas
+       iAlt=iPlas+nIono
+       do iAngle=0,nThetaAlt_IIC(iLine,nEnergy,iAlt)
+          
+          ! set bc for fluxes up
+          c=0.
+          IF (phiup(iLine,iAngle,iPlas,nEnergy-1).GT.0.) &
+               c=min(1., .75*phiup(iLine,iAngle,iPlas,nEnergy)&
+               /phiup(iLine,iAngle,iPlas,nEnergy-1))
+         
+          phiup(iLine,iAngle,iPlas,nEnergy+1)=&
+               phiup(iLine,iAngle,iPlas,nEnergy)*c
+
+          ! set bc for fluxes down
+          c=0.
+          IF (phidn(iLine,iAngle,iPlas,nEnergy-1).GT.0.) &
+               c=min(1., .75*phidn(iLine,iAngle,iPlas,nEnergy)&
+               /phidn(iLine,iAngle,iPlas,nEnergy-1))
+         
+          phidn(iLine,iAngle,iPlas,nEnergy+1)=&
+               phidn(iLine,iAngle,iPlas,nEnergy)*c
+       end do
+    end do
+    
+    ! Only update nEnergy+1 values?
+    if (.not.DoSavePreviousAndReset) RETURN
+
+!*  Move current time fluxes to previous time fluxes
+    lphiup(iLine,:,1:nPlas,1:nEnergy) = phiup(iLine,:,1:nPlas,1:nEnergy)
+    lphidn(iLine,:,1:nPlas,1:nEnergy) = phidn(iLine,:,1:nPlas,1:nEnergy)
+
+!*  Reset current time fluxes
+    phiup(iLine,:,:,:)=0.0
+    phidn(iLine,:,:,:)=0.0
+
+    RETURN
+  END SUBROUTINE InitPlas_pot
   !=============================================================================
   !* ------------------------------------------------------------------ **
   !*  Pass fluxes to "last time step fluxes" and set flux arrays to zero.

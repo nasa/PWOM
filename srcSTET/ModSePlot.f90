@@ -101,7 +101,7 @@ contains
                    PlotState_IIV(iPoint,iAngle,E5_) = &
                         iphiup(iLine,iAngle,iIono,EE5_)
                 endif
-             elseif(iAngle >= 2*nAngle-nThetaAlt_II(iLine,iPoint)) then
+             elseif(iAngle > 2*nAngle-nThetaAlt_II(iLine,iPoint)) then
                 iAngleDn = 2*nAngle-iAngle
                 PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
                 PlotState_IIV(iPoint,iAngle,PA_) = &
@@ -370,8 +370,8 @@ contains
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=2, Pot_=1,MinE_=2
-    character(len=100),parameter :: NamePlotVar='S Pot MinE g r'
+    integer, parameter :: nDim =1, nVar=1, Pot_=1
+    character(len=100),parameter :: NamePlotVar='S Pot g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='Pot output'
     character(len=5) :: TypePlot='ascii'
@@ -388,7 +388,6 @@ contains
        do iPoint=1,nPoint
           Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
           PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
-          PlotState_IV(iPoint,MinE_) = EnergyGrid_I(MinEnergy_IC(iLine,iPoint))
        enddo
        
        ! set name for plotfile

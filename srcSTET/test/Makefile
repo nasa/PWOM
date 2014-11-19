@@ -79,6 +79,30 @@ unit_test_update_plasmasphere:
 	-@(./unit_test_update_plasmasphere_exe )
 
 #######################################################################
+#######################################################################
+OBJ_UPDATE_PLAS_POT = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSePlot.o \
+	../ModSeState.o 
+
+
+unit_test_update_plasmasphere_pot_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSePlot.o ModSeState.o)
+	@make unit_test_update_plasmasphere_pot.o 
+	${LINK.f90} -o unit_test_update_plasmasphere_pot.exe \
+		${OBJ_UPDATE_PLAS_POT} unit_test_update_plasmasphere_pot.o \
+		-L${LIBDIR}  -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE \
+		-lTIMING ${Lflag1}
+
+unit_test_update_plasmasphere_pot: 
+	@echo unit_test_update_plasmasphere_pot starting
+	@make unit_test_update_plasmasphere_pot_exe 
+	@echo ./unit_test_update_plasmasphere_pot_exe
+	-@(./unit_test_update_plasmasphere_pot_exe )
+
+#######################################################################
 
 #######################################################################
 OBJ_UPDATE_IONO = \

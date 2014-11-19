@@ -40,9 +40,7 @@ end program unit_test_grid_potential
 !============================================================================
 ! UNIT test for SE update states
 subroutine grid_potential_test
-  use ModSeGrid, only:create_se_test_grid,calc_potential,set_energy_bounds,&
-       locate_reference_alt_for_mu0, nMu0RefAlt_II,find_angle_boundary,&
-       set_alt_bounds,plot_grid_pot,MaxAlt_IC,&
+  use ModSeGrid, only:create_se_test_grid,set_grid_pot,plot_grid_pot,&
        nLine,nPoint,nIono,nPoint,nTop,Efield_IC,FieldLineGrid_IC
   use ModSePlot, only: plot_along_field
 
@@ -66,25 +64,13 @@ subroutine grid_potential_test
   Efield_IC(iLine,nTop+1:nPoint-nIono)=-5.0&
        /((FieldLineGrid_IC(iLine,nTop)-FieldLineGrid_IC(iLine,nIono))*cCmToM)
 
-  ! calculate the potential energy
-  call calc_potential(iLine)
-  
-  ! set the bounds on the altitude
-  call set_alt_bounds(iLine)
+  ! set the region of exisitence for the defined Efield
+  call set_grid_pot(iLine)
 
-  ! set the bounds on the energy calculation as a function of altitude
-  call set_energy_bounds(iLine)
-     
   ! plot the potential, and min total energy considered
   call plot_along_field
 
-  !get mu0 reference altitude
-  call locate_reference_alt_for_mu0(iLine)
-  write(*,*) nMu0RefAlt_II(iLine,:)
-
-  call find_angle_boundary(iLine)
-  write(*,*) 'MaxAlt_IC(1,1)',MaxAlt_IC(1,1)
-
+  !write output for several total energies
   call plot_grid_pot(iLine,0,90,0.0)
   call plot_grid_pot(iLine,0,80,0.0)
   call plot_grid_pot(iLine,0,70,0.0)

@@ -53,7 +53,7 @@ Module ModSeGrid
                                               ! for each line
   real, public, allocatable :: BFieldIono_I(:)! B at ionosphere for each line
   real, public,allocatable  :: BFieldEq_I(:)  ! B at equator for each line
-  real, public,allocatable  :: BField0_II(:,:)  ! B at mu0 ref for each line and 
+  real, public,allocatable  :: BField0_II(:,:) ! B at mu0 ref for each line and 
                                               ! total energy
 
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
@@ -87,18 +87,17 @@ Module ModSeGrid
   real,parameter :: KineticEnergyMin = 0.25 ! eV, the min kinetic energy allowed
   integer,public,allocatable:: MinEnergy_IC(:,:) ! minimum index in region of 
                                                  ! existence for energy
+
+  logical,public :: DoIncludePotential=.false.  ! should we include potential 
+                                                ! in calculation.
   ! public methods
   public :: allocate_grid_arrays
   public :: init_se_grid
   public :: se_grid_test
   public :: create_se_test_grid
   public :: BINNUM
-  public :: set_energy_bounds
-  public :: set_alt_bounds
-  public :: calc_potential
-  public :: locate_reference_alt_for_mu0
-  public :: find_angle_boundary
   public :: plot_grid_pot
+  public :: set_grid_pot
   real :: rPlanetCM
 contains
   !============================================================================
@@ -125,7 +124,7 @@ contains
 !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
        PhiBasePlas=&
             ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
-       write(*,*) 'PhiBasePlas*180./cPi',PhiBasePlas*180./cPi
+       
        SphiO=SIN(PhiBasePlas)
        QO=SQRT(1+3*SphiO**2)
        MLAT1=PhiBasePlas*180./cPi
@@ -141,6 +140,7 @@ contains
        call calc_mu(iLine,Beq)
        write(*,*) 'calc energy grid', iLine
        call calc_energy_grid
+
     enddo
   end subroutine init_se_grid
 
@@ -580,9 +580,6 @@ contains
           IsFoundRefAlt =.true.
        end do FIND_REF_ALT
 
-       write(*,*) 'iEnergy,nMu0RefAlt_II(iLine,iEnergy),MaxAlt_IC(iLine,iEnergy)',&
-            iEnergy,nMu0RefAlt_II(iLine,iEnergy),MaxAlt_IC(iLine,iEnergy)
-
     enddo ENERGY_LOOP
     
   end subroutine locate_reference_alt_for_mu0
@@ -611,7 +608,8 @@ contains
           
           ! From LocalThetaMax and EqAngleGrid find nThetaAlt
           tmp_array = 0
-          where(EqAngleGrid_IG(iLine,:) <= LocalThetaMax)
+          ! note a small tolerance added inequality test
+          where(EqAngleGrid_IG(iLine,:) <= LocalThetaMax+.0000001)
              tmp_array = 1 
           end where
           nThetaAlt_IIC(iLine,iEnergy,iPoint) = max(sum(Tmp_array)-1,0)
@@ -629,11 +627,61 @@ contains
                dThetaEnd_III(iLine,iEnergy,iPoint)
      
        enddo
+       !fill in last point in conjugate hemisphere
+       nThetaAlt_IIC(iLine,iEnergy,nPoint) = &
+            nThetaAlt_IIC(iLine,iEnergy,1)
+       dThetaEnd_III(iLine,iEnergy,nPoint) = &
+            dThetaEnd_III(iLine,iEnergy,1)
     enddo
     
     deallocate(tmp_array)
   end subroutine find_angle_boundary
   !=============================================================================
+  ! Fill the kinetic energy array
+  subroutine calc_kinetic_energy(iLine)
+    integer, intent(in) :: iLine
+    integer :: iPoint,iEnergy
+    !---------------------------------------------------------------------------
+    
+    !find the kinetic energy by subtracting the potential energy from the 
+    ! total energy
+    do iEnergy =1,nEnergy
+       do iPoint=1,MaxAlt_IC(iLine,iEnergy)
+          KineticEnergy_IIC(iLine,iEnergy,iPoint) = &
+               EnergyGrid_I(iEnergy) - DeltaPot_IC(iLine,iPoint)
+       enddo
+       do iPoint=nPoint-MaxAlt_IC(iLine,iEnergy),nPoint
+          KineticEnergy_IIC(iLine,iEnergy,iPoint) = &
+               EnergyGrid_I(iEnergy) - DeltaPot_IC(iLine,iPoint)
+       enddo
+    enddo
+  end subroutine calc_kinetic_energy
+  !=============================================================================
+  subroutine set_grid_pot(iLine)
+    integer, intent(in) :: iLine
+    !when including a potential set up energy dependent grid for calculation
+    ! in new variables
+    
+    DoIncludePotential=.true.
+    
+    ! calculate the potential energy
+    call calc_potential(iLine)
+    
+    ! set the bounds on the altitude
+    call set_alt_bounds(iLine)
+    
+    ! get mu0 reference altitude
+    call locate_reference_alt_for_mu0(iLine)
+    
+    ! set the pitchangle range for each energy and altitude 
+    call find_angle_boundary(iLine)
+
+    ! find the kinetic energy for each altitude and PA
+    call calc_kinetic_energy(iLine)
+
+  end subroutine set_grid_pot
+  !=============================================================================
+
   subroutine allocate_grid_arrays
     
     ! Allocate PA related grid
@@ -763,7 +811,7 @@ contains
              if (iAngle <= nThetaAlt_IIC(iLine,iEnergy,iPoint))then
                 PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
                 PlotState_IIV(iPoint,iAngle,PA_) = EqAngleGrid_IG(iLine,iAngle)
-             elseif(iAngle >= 2*nAngle-nThetaAlt_IIC(iLine,iEnergy,iPoint)) then
+             elseif(iAngle > 2*nAngle-nThetaAlt_IIC(iLine,iEnergy,iPoint)) then
                 iAngleDn = 2*nAngle-iAngle
                 PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
                 PlotState_IIV(iPoint,iAngle,PA_) = &
@@ -823,7 +871,7 @@ contains
 
     write(*,*) 'calling init_se_grid'
     call init_se_grid
-    write(*,*) 'EnergyGrid_I',EnergyGrid_I
+    
   end subroutine create_se_test_grid
   !============================================================================
   ! UNIT test for SE grid
