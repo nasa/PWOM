@@ -4,6 +4,7 @@ Module ModSePlot
   private !except
   
   public :: plot_state
+  public :: plot_state_pot
   public :: plot_omni_iono
   public :: plot_omni_line
   public :: plot_along_field
@@ -160,6 +161,121 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_state
+  !============================================================================
+  ! save state plot for verification in case with potential. Only plot 
+  ! at a particular energy, iEnergyIn, since now grid is energy dependent
+  subroutine plot_state_pot(iLine,iEnergyIn,nStep,time,iphiup,iphidn,phiup,phidn)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,EqAngleGrid_IG,Bfield_IC,&
+                             nIono,nPlas, nAngle, nEnergy, nLine, nPoint,&
+                             nThetaAlt_IIC,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+
+    integer, intent(in) :: iLine, iEnergyIn,nStep
+    real,    intent(in) :: time
+    real,    intent(in) :: iphiup(nLine,0:nAngle,0:2*nIono+1,nEnergy+1),&
+                           iphidn(nLine,0:nAngle,0:2*nIono+1,nEnergy+1), &
+                           phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1), &
+                           phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1)
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+    real, parameter     :: rEarthCM = 6375.0e5
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=3, S_=1, PA_=2,B_=1
+    integer, parameter :: E1_=3
+    character(len=100),parameter :: NamePlotVar='S PA B PA Phi g r'
+    character(len=100) :: NamePlot
+    character(len=*),parameter :: NameHeader='SE output'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iAngle,iAngleDn,iPoint,iIono,iPlas
+        logical :: IsFirstCall=.true.
+    !--------------------------------------------------------------------------
+    allocate(Coord_DII(nDim,nPoint,2*nAngle),PlotState_IIV(nPoint,2*nAngle,nVar))
+
+!    do iLine=1,nLine
+       PlotState_IIV = 0.0
+       Coord_DII     = 0.0
+       
+       !Set Coordinates along field line and PA
+       do iPoint=1,nPoint
+          do iAngle=1,2*nAngle
+             !set coord based on up or down region
+             if(iAngle<nAngle) then
+                Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
+                     /rEarthCM
+                Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
+             else
+                iAngleDn = 2*nAngle-iAngle
+                Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
+                     /rEarthCM
+                Coord_DII(PA_,iPoint,iAngle)= &
+                     cPi-EqAngleGrid_IG(iLine,iAngleDn)
+             endif
+             
+             !set plotstate based on up or down region  
+             if (iAngle <= nThetaAlt_IIC(iLine,iEnergyIn,iPoint))then
+                PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
+                PlotState_IIV(iPoint,iAngle,PA_) = EqAngleGrid_IG(iLine,iAngle)
+                !choose phiup or iphiup by spatial region
+                if (iPoint <= nIono)then
+                   iIono=iPoint
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        iphiup(iLine,iAngle,iIono,iEnergyIn)
+                 elseif(iPoint >nIono .and. iPoint <=nPoint-nIono) then
+                   iPlas=iPoint-nIono
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        phiup(iLine,iAngle,iPlas,iEnergyIn)
+                else
+                   iIono=iPoint-nPlas
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        iphiup(iLine,iAngle,iIono,iEnergyIn)
+                endif
+             elseif(iAngle > 2*nAngle-nThetaAlt_IIC(iLine,iEnergyIn,iPoint)) then
+                iAngleDn = 2*nAngle-iAngle
+                PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
+                PlotState_IIV(iPoint,iAngle,PA_) = &
+                     cPi-EqAngleGrid_IG(iLine,iAngleDn)
+                !choose phidn or iphidn by spatial region
+                if (iPoint <= nIono)then
+                   iIono=iPoint
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        iphidn(iLine,iAngleDn,iIono,iEnergyIn)
+                elseif(iPoint >nIono .and. iPoint <=nPoint-nIono) then
+                   iPlas=iPoint-nIono
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        phidn(iLine,iAngleDn,iPlas,iEnergyIn)
+                else
+                   iIono=iPoint-nPlas
+                   PlotState_IIV(iPoint,iAngle,E1_) = &
+                        iphidn(iLine,iAngleDn,iIono,iEnergyIn)
+                endif
+             else
+                PlotState_IIV(iPoint,iAngle,:)=0.0
+             endif
+          enddo
+       enddo
+  
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'State_',floor(EnergyGrid_I(iEnergyIn)+.001),'.out'
+       
+       if(IsFirstCall) then
+          !Plot grid for given line
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_state_pot
   
   !============================================================================
   ! plot omnidirectional flux in the ionosphere
