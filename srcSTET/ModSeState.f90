@@ -693,7 +693,7 @@ contains
   SUBROUTINE update_se_state_pot(iLine,eThermalDensity_C,eThermalTemp_C,IsOpen)
     
     USE ModSeGrid, only: nEnergy, EnergyGrid_I, DeltaE_I, EnergyMin, EnergyMax,&
-         EqAngleGrid_IG,nThetaAlt_IIC,dThetaEnd_III,mu_III,&
+         EqAngleGrid_IG,nThetaAlt_IIC,dThetaEnd_III,mu_IIIC,&
          FieldLineGrid_IC,nTop,Bfield_IC, MaxAlt_IC,nMu0RefAlt_II,&
          BField0_II, DeltaPot_IC, DeltaPot0_II, KineticEnergy_IIC,&
          nIono, nPlas, nPoint,nAngle
@@ -721,7 +721,11 @@ contains
     
     !Altitude range variables
     integer :: nAltMin, nAltMax
-    
+  
+    ! ML variables
+    real :: mui, muj ! mu at i-1/2 and i+1/2
+    logical, parameter :: UseMLfix=.false.
+
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
     !---------------------------------------------------------------------------
@@ -747,9 +751,11 @@ contains
           count=count+1
           IF (count.GT.countmax-2) WRITE (10,*) 'Count: ',count
           !*  Upward Region #2: the plasmasphere
+          
           do k=0,nThetaAlt_IIC(iLine,j,nIono)
              phiup(iLine,k,0,j)=iphiup(iLine,k,nIono,j)
           end do
+
           h=FieldLineGrid_IC(iLine,nIono+1)-FieldLineGrid_IC(iLine,nIono)
           
           !check if field line is open and set bounds for up and down loop
@@ -774,12 +780,15 @@ contains
              ! second hemisphere by one so we can take the BC from the phidn
              ! so we have reflection
              if ((MaxAlt_IC(iLine,j) /= nTop) .and. (i > MaxAlt_IC(iLine,j)) &
-                  .and. (i <= nPoint-MaxAlt_IC(iLine,j)+1)) then
+                  .and. (i <= nPoint-MaxAlt_IC(iLine,j))) then
                 !set the reflection bc for hemisphere 2
-                do k=0,nThetaAlt_IIC(iLine,j,nIono)
-                   phiup(iLine,k,nPoint-MaxAlt_IC(iLine,j),j)=&
-                        phidn(iLine,k,nPoint-MaxAlt_IC(iLine,j),j)
+                do k=0,nThetaAlt_IIC(iLine,j,nPoint-MaxAlt_IC(iLine,j))
+                   phiup(iLine,k,nPoint-MaxAlt_IC(iLine,j)-nIono,j)=&
+                        phidn(iLine,k,nPoint-MaxAlt_IC(iLine,j)-nIono,j)
+                   if(i==nPoint-MaxAlt_IC(iLine,j)) &
+                        write(*,*)'j,k,phiup bnd',j,k,phidn(iLine,k,nPoint-MaxAlt_IC(iLine,j)-nIono,j)
                 end do
+                if(i==nPoint-MaxAlt_IC(iLine,j)) write(*,*)'KE',KineticEnergy_IIC(iLine,j,i)
                 cycle FIELDLINE_UPWARD
              endif
              
@@ -806,15 +815,27 @@ contains
                 s1=sigmaO
                 s2=1.
                 Flasti=phiup(iLine,k,iPlas-1,j)
+                
+                !if (UseMLfix) then
+                if(k>nThetaAlt_IIC(iLine,j,i-1)) Flasti=phidn(iLine,k,iPlas,j)
+                !endif
+                
                 Flastj=phiup(iLine,k,iPlas,j+1)
                 Flastt=lphiup(iLine,k,iPlas,j)
+
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
-                     mu_III(iLine,k,i),eta,muO,del1,del2,beta(i),lbeta(i), &
+                     mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
                      cascade,lossum,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
                      KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
                 !            CALL CheckWarn(sigma(k+1),warning,1,*9999)
                 !            CALL CheckWarn(alpha(k+1),warning,1,*9999)
+                
+                if (j==1 .and. i==nIono+1) then
+                   write(*,*)'k,Flasti,alpha(k),sigma(k),mu_IIIC(iLine,k,j,i)',&
+                        k,Flasti,alpha(k),sigma(k),mu_IIIC(iLine,k,j,i)
+                end if
+                
              end do
 
              ! Note that the reference altitude can occur in two places when 
@@ -832,11 +853,30 @@ contains
              Fcheck=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
              Flastj=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j+1)
              
+             if (UseMLfix) then
+                Flasti=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas-1,j)
+                mui=0.5*(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i) &
+                     +mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i-1))
+                muj=0.5*(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i) &
+                     +mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i+1))
+                if(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i+1)==0) muj=mui
+                if(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i-1)==0) then
+                   Flasti=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas+1,j)
+                   mui=muj
+                endif
+                newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_III(iLine,j,i)) &
+                     +s2*(lbeta(i)* Flastj/delE+mui*Flasti/h+Qstar+cascade))/ &
+                     (1/velt-p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+muj/h+lossum))       
+                !newphi=max(newphi,0.0)         
+             else
              newphi=(Flastt/velt-p*Fsum/(2.*dThetaEnd_III(iLine,j,i)) &
                   +s2*(lbeta(i)* Flastj/delE+Qstar+cascade))/ &
                   (1/velt-p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+lossum))
+             newphi=max(newphi,0.0)             
+          endif
              !            CALL CheckWarn(newphi,warning,2,*9999)
              
+
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)=newphi
              do k=nThetaAlt_IIC(iLine,j,i),1,-1
@@ -847,7 +887,7 @@ contains
                 phiup(iLine,k-1,iPlas,j)=newphi
              end do
              CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,iPlas,j),&
-                  mu_III(iLine,0,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
+                  mu_IIIC(iLine,0,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
@@ -887,29 +927,36 @@ contains
                   FieldLineGrid_IC(iLine,nIono+nPlas) &
                   -FieldLineGrid_IC(iLine,nIono+nPlas+1)
              !fill bc from iono
+             if (j==1) write(*,*)'ntheta',nThetaAlt_IIC(iLine,j,nIono)
              do k=0,nThetaAlt_IIC(iLine,j,nIono)
                 phidn(iLine,k,nPlas+1,j)=iphidn(iLine,k,nIono+1,j)
              end do
           endif
           
           FIELDLINE_DOWN: DO i=nAltMax,nAltMin,-1
-            ! write(*,*) 'start downward',i,j,MaxAlt_IC(iLine,j),nPoint-MaxAlt_IC(iLine,j)
+             !write(*,*) 'start downward',i,j,MaxAlt_IC(iLine,j),nPoint-MaxAlt_IC(iLine,j)
+
              !when MaxAlt_IC is not equal to nTop, then the hemispheres are 
              ! detached for these energies between MaxAlt_IC(iLine,j)+1 and 
              ! nPoint-MaxAlt_IC. note that we need to lower the side on the 
              ! first hemisphere by one so we can take the BC from the phiup
              ! so we have reflection
-             if ((MaxAlt_IC(iLine,j) /= nTop) .and. (i > MaxAlt_IC(iLine,j)-1) &
-                  .and. (i <= nPoint-MaxAlt_IC(iLine,j))) then
+             if ((MaxAlt_IC(iLine,j) /= nTop) .and. (i >= MaxAlt_IC(iLine,j)) &
+                  .and. (i < nPoint-MaxAlt_IC(iLine,j))) then
                 !set the reflection bc for hemisphere 2
-                do k=0,nThetaAlt_IIC(iLine,j,nIono)
-                   phidn(iLine,k,MaxAlt_IC(iLine,j),j)=&
-                        phiup(iLine,k,MaxAlt_IC(iLine,j),j)
-                   if(i==99) write(*,*)phidn(iLine,k,MaxAlt_IC(iLine,j),j)
+                write(*,*) 'nTheta',nThetaAlt_IIC(iLine,j,MaxAlt_IC(iLine,j))
+                do k=0,nThetaAlt_IIC(iLine,j,MaxAlt_IC(iLine,j))
+                   phidn(iLine,k,MaxAlt_IC(iLine,j)-nIono,j)=&
+                        phiup(iLine,k,MaxAlt_IC(iLine,j)-nIono,j)
+                   if(i==MaxAlt_IC(iLine,j)) &
+                        write(*,*)'j,k,phidn bnd',j,k,phidn(iLine,k,MaxAlt_IC(iLine,j),j)
                 end do
+                if(i==MaxAlt_IC(iLine,j)) write(*,*)'KE',KineticEnergy_IIC(iLine,j,i)
                 cycle FIELDLINE_DOWN
              endif
-
+             
+             iPlas=i-nIono
+             
              !velt is now altitude dependent
              velt=cEVtoCMperS*SQRT(KineticEnergy_IIC(iLine,j,i))*delt
              
@@ -918,7 +965,7 @@ contains
              !KLUDGE kill pitchangle scattering
              !sigO1=0.0
              !END KLUDGE
-             iPlas=i-nIono
+
              eta = (Bfield0_II(iLine,j)/Bfield_IC(iLine,i)) &
                   *(EnergyGrid_I(j)-DeltaPot_IC(iLine,i))   &
                   /(EnergyGrid_I(j)-DeltaPot0_II(iLine,j))
@@ -935,6 +982,14 @@ contains
                 s1=sigmaO
                 s2=1.
                 Flasti=phidn(iLine,k,iPlas+1,j)
+                
+                !if(UseMLfix) then
+                   if(k>nThetaAlt_IIC(iLine,j,i+1)) then
+                      !write(*,*) 'HA!'
+                      Flasti=phiup(iLine,k,iPlas,j)
+                   endif
+                !endif
+                
                 Flastj=phidn(iLine,k,iPlas,j+1)
                 Flastt=lphidn(iLine,k,iPlas,j)
                 if (j==5 .and. i==95 .and. k==41) &
@@ -945,7 +1000,7 @@ contains
                      write(*,*)'nThetaAlt_IIC(iLine,j,i),nThetaAlt_IIC(iLine,j,i+1)',&
                      nThetaAlt_IIC(iLine,j,i),nThetaAlt_IIC(iLine,j,i+1) 
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
-                     -mu_III(iLine,k,i),eta,muO,del1,del2,beta(i),lbeta(i), &
+                     -mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
                      cascade,lossum,EnergyGrid_I(j),DeltaPot0_II(iLine,j), &
                      KineticEnergy_IIC(iLine,j,i),eThermalDensity_C(i))
@@ -963,10 +1018,34 @@ contains
              Fsum=phidn(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)+phiup(iLine,nThetaAlt_IIC(iLine,j,i)-1,iPlas,j)
              Fcheck=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)
              Flastj=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j+1)
-             newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_III(iLine,j,i))+s2*(lbeta(i)* &
-                  Flastj/delE+Qstar+cascade))&
-                  /(1/velt+p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+lossum))
+!             newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_III(iLine,j,i))+s2*(lbeta(i)* &
+!                  Flastj/delE+Qstar+cascade))&
+!                  /(1/velt+p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE+lossum))
+             if(UseMLfix) then
+                Flasti=phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas+1,j)
+                mui=0.5*(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i) &
+                     +mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i+1))
+                muj=0.5*(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i) &
+                     +mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i-1))
+                if(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i-1)==0) muj=mui
+                if(mu_IIIC(iLine,nThetaAlt_IIC(iLine,j,i),j,i+1)==0) then
+                   Flasti=phiup(iLine,nThetaAlt_IIC(iLine,j,i),iPlas-1,j)
+                   mui=muj
+                endif
+                newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_III(iLine,j,i)) &
+                     +s2*(lbeta(i)* Flastj/delE-mui*Flasti/h+Qstar+cascade))/ &
+                     (1/velt+p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE-muj/h+lossum))         
+                !newphi=max(newphi,0.0)         
+             else
+                newphi=(Flastt/velt+p*Fsum/(2.*dThetaEnd_III(iLine,j,i)) &
+                     +s2*(lbeta(i)*Flastj/delE+Qstar+cascade))&
+                     /(1/velt+p/dThetaEnd_III(iLine,j,i)+s2*(beta(i)/delE &
+                     +lossum))
+                newphi=max(newphi,0.0)         
+             end if
+
              !            CALL CheckWarn(newphi,warning,5,*9999)
+         
              CALL CheckConv(newphi,Fcheck,epsilon,flag)
              phidn(iLine,nThetaAlt_IIC(iLine,j,i),iPlas,j)=newphi
              
@@ -985,7 +1064,7 @@ contains
                 phidn(iLine,k-1,iPlas,j)=newphi
              end DO
              CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,iPlas,j),&
-                  mu_III(iLine,0,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
+                  mu_IIIC(iLine,0,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
@@ -999,6 +1078,7 @@ contains
           end DO FIELDLINE_DOWN
        END DO ITERATION                  ! End of iteration loop
                        
+       if (j==1) write(*,*)'phiup2',phiup(iLine,1:8,1,j)
        CALL CheckFlag(flag,1,warning,-1,*9999)
        !  Save the calculated values for the next time and energy steps
        do i=nIono+1,nPoint-nIono
@@ -1011,7 +1091,7 @@ contains
        PRINT *, 'Negative Densities Occurred:',newphi,warning
        PRINT *, time,j,i,k,Bfield_IC(iLine,i),Bfield0_II(iLine,j),&
             FieldLineGrid_IC(iLine,i),h,Theta,muO,&
-            mu_III(iLine,k,i),del1, dThetaEnd_III(iLine,j,i),beta(i),sigmaO,p,count,&
+            mu_IIIC(iLine,k,j,i),del1, dThetaEnd_III(iLine,j,i),beta(i),sigmaO,p,count,&
             Qstar
        PRINT *, phiup(iLine,k,iPlas,j),phidn(iLine,k,iPlas,j)
        STOP
@@ -1325,6 +1405,13 @@ contains
     
     DATA A/2.6E-12/, MC/1837./
     !write(*,*) 'KE, TE',KE, TE
+    
+    !kludge set the sigO1 and beta as in Mike's thesis
+    !beta  = A*ZE/KE
+    !sigO1 = 0.5*A*sigO1/(KE*KE)
+    !return
+    !endkludge
+    
     X=SQRT(KE/TE)
     beta=ZE/TE*G(X)                  ! ion infl. --> zero
     sigO1=ZE*(1.+erf(X)-G(X))            ! ion infl. = ZE (thus the 1.
