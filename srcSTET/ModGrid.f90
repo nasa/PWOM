@@ -44,7 +44,9 @@ Module ModSeGrid
                                                       !case with potential
   
   real, public,allocatable    :: mu_III(:,:,:)   !Cosine of local PA at each alt
-
+  real, public,allocatable    :: mu_IIIC(:,:,:,:)!Cosine of local PA at each alt
+                                                 ! in case of potential 
+                                                 ! (Energy dependent)
   !altitude of reference altitude for 1st invarient for each line and energy
   integer, public,allocatable :: nMu0RefAlt_II(:,:) 
   
@@ -321,6 +323,39 @@ contains
        end do ANGLE
     end do ALONG_LINE
   end subroutine calc_mu
+  !============================================================================
+  ! subroutine to calculate the array, mu_III, that holds cos(local PA) in the 
+  ! case of the field aligned potential. Note that reference altitudes must be 
+  ! set first
+  subroutine calc_mu_pot(iLine)
+    integer, intent(in) :: iLine
+
+    real    :: eta
+    integer :: iAngle, iAlt, iEnergy
+    !---------------------------------------------------------------------------
+    !now pitchangle is energy dependent
+    ENERGY: do iEnergy=1,nEnergy
+       ALONG_LINE: do iAlt= 1, nPoint
+          eta = min(1.0,(Bfield0_II(iLine,iEnergy)/Bfield_IC(iLine,iAlt)) &
+               *(EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iAlt))   &
+               /(EnergyGrid_I(iEnergy)-DeltaPot0_II(iLine,iEnergy)))
+
+          ! set mu at 0 and 90 local PA
+          mu_IIIC(iLine,0,iEnergy,iAlt) = 1.0
+          mu_IIIC(iLine,nThetaAlt_IIC(iLine,iEnergy,iAlt),iEnergy,iAlt) = 0.0
+
+          ! set mu at angles between 0 and 90 
+          ANGLE: do iAngle=1,nThetaAlt_IIC(iLine,iEnergy,iAlt)-1
+             ! calculation of mu from mu not in case of potential. formula from 
+             ! Liemohn et al., 1997
+             mu_IIIC(iLine,iAngle,iEnergy,iAlt) = &
+                  sqrt(1.0-1.0/eta*(1.0-&
+                  (cos(EqAngleGrid_IG(iLine,iAngle)))**2.0))
+          end do ANGLE
+       end do ALONG_LINE
+    end do ENERGY
+  end subroutine calc_mu_pot
+  !============================================================================
   !============================================================================
   ! Subroutine SpaceVar calculates h and Bfield for a given spatial step.
   !  VARIABLE DESCRIPTIONS
@@ -608,7 +643,7 @@ contains
           
           ! From LocalThetaMax and EqAngleGrid find nThetaAlt
           tmp_array = 0
-          ! note a small tolerance added inequality test
+          ! note a small tolerance added to the inequality test
           where(EqAngleGrid_IG(iLine,:) <= LocalThetaMax+.0000001)
              tmp_array = 1 
           end where
@@ -678,7 +713,9 @@ contains
 
     ! find the kinetic energy for each altitude and PA
     call calc_kinetic_energy(iLine)
-
+    
+    ! set local mu from mu0 grid
+    call calc_mu_pot(iLine)
   end subroutine set_grid_pot
   !=============================================================================
 
@@ -713,7 +750,7 @@ contains
     if (.not.allocated(MaxAlt_IC))      allocate(MaxAlt_IC(nLine,nEnergy))
     if (.not.allocated(nThetaAlt_IIC))  allocate(nThetaAlt_IIC(nLine,nEnergy,nPoint))
     if (.not.allocated(dThetaEnd_III))  allocate(dThetaEnd_III(nLine,nEnergy,nPoint))
-    
+    if (.not.allocated(mu_IIIC))        allocate(mu_IIIC(nLine,0:nAngle,nEnergy,nPoint))
   end subroutine allocate_grid_arrays
 
   !============================================================================
@@ -854,6 +891,7 @@ contains
     ! set the energy parameters for the energy grid
     TypeGridE = 'ConstDE'
     nEnergy=100
+!    nEnergy=94
     EnergyMax=100.5
     DeltaE = 1.0
 
@@ -866,6 +904,7 @@ contains
     nTheta_II(1,2)=20
     nTheta_II(1,3)=90
     nTheta_II(1,4)=20
+
 
     nAngle = sum(nTheta_II(1,:))
 
