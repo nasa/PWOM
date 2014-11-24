@@ -41,7 +41,7 @@ end program unit_test_update_plasmasphere_pot
 ! UNIT test for SE update states
 subroutine se_update_state_test
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
-       nPlas,nTop,Efield_IC,FieldLineGrid_IC,nThetaAlt_IIC,nThetaAlt_II
+       nPlas,nTop,Efield_IC,FieldLineGrid_IC,nThetaAlt_IIC,nThetaAlt_II,nEnergy
   use ModSePlot, only: plot_state,plot_state_pot
   use ModSeState,only: allocate_state_arrays, iphiup,iphidn,phiup,phidn,&
                        initplas_pot,check_time,delt,epsilon, &
@@ -49,7 +49,7 @@ subroutine se_update_state_test
                        liphiup,liphidn
   integer :: iLine=1, flag=1
   logical :: DoSavePreviousAndReset = .true.
-  integer :: nStep, iPoint
+  integer :: nStep, iPoint, iEnergy
   logical :: IsOpen
   
   ! thermal background  
@@ -89,25 +89,33 @@ subroutine se_update_state_test
   call allocate_state_arrays
   
   ! Fill the background arrays
-  eThermalDensity_C(:) = 0.00001
-  !eThermalDensity_C(:) = 1.0e2
+  !eThermalDensity_C(:) = 0.00001
+  eThermalDensity_C(:) = 1.0e2
   eThermalTemp_C(:) = 1.0
   
-  ! Define the initial state in the ionosphere
+  !set initial states
   do iLine=1,nLine
-     iphiup(iLine,:,:,:)=1.0e5
-     iphidn(iLine,:,:,:)=1.0e5
+     ! Define the initial state in the ionosphere
      
-     liphiup(iLine,:,:,:)=1.0e5
-     liphidn(iLine,:,:,:)=1.0e5
+     iphiup(iLine,:,:,:)=0
+     iphidn(iLine,:,:,:)=0
      
+     liphiup(iLine,:,:,:)=0.0
+     liphidn(iLine,:,:,:)=0.0
+     !just fill flux in upward loss cone in ionosphere
+     do iEnergy=1,nEnergy
+        iphiup (iLine,0:nThetaAlt_IIC(iLine,iEnergy,nIono),1:nIono,iEnergy)=1.0e5
+        liphiup(iLine,0:nThetaAlt_IIC(iLine,iEnergy,nIono),1:nIono,iEnergy)=1.0e5
+     end do
+
+     !Initial plasmasphere set to small number
      phiup(iLine,:,:,:)=0.0001
      phidn(iLine,:,:,:)=0.0001
   end do
   
   ! Set the timestep and convergence criteria
   delt=1.0e5
-  epsilon = 0.4
+  epsilon = 0.1
   
   write(*,*) 'Starting Time loop'
   nStep = 0
@@ -139,6 +147,11 @@ subroutine se_update_state_test
      call plot_state_pot(1,90,nStep,time,iphiup,iphidn,phiup,phidn)
 
      call plot_state_pot(1,1,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(1,2,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(1,3,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(1,4,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(1,5,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(1,6,nStep,time,iphiup,iphidn,phiup,phidn)
      
   end do TIME_LOOP
   
