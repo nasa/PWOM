@@ -1,17 +1,22 @@
 !============================================================================
 ! run STET to get a new steady state or to advance some amount of time
 subroutine stet_run
-  use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
+  use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
+       nPlas,Efield_IC,DoIncludePotential
   use ModSeBackground,only: allocate_background_arrays,mLat_I,mLon_I, &
        set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
        plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum, &
        eThermalDensity_IC,eThermalTemp_IC,nNeutralSpecies,&
        NeutralDens1_IIC,ePhotoProdSpec1_IIC,NeutralDens2_IIC,ePhotoProdSpec2_IIC
-  use ModSeState,only: allocate_state_arrays, iphiup,iphidn,phiup,phidn,&
-       initiono,check_time,delt,epsilon,update_se_state_iono,update_se_state,&
-       liphiup,liphidn,lphiup,lphidn,specup, specdn, initplas
+  use ModSeState,only: allocate_state_arrays, check_time,&
+       update_se_state_iono,update_se_state_iono_pot,update_se_state, &
+       update_se_state_pot,initplas, initplas_pot, initiono,initiono_pot,&
+       iphiup,iphidn,phiup,phidn,liphiup,liphidn,lphiup,lphidn,&
+       specup, specdn, epsilo,delt
   use ModSeCross,only: SIGS,SIGI,SIGA    
-  use ModSePlot, only: plot_state,plot_omni_iono, plot_omni_line  
+  use ModSePlot  
+  implicit none
+
   integer :: iLine=1, flag=1, nStep=0
   real    :: time=0
   logical :: DoSavePreviousAndReset = .true.
@@ -28,6 +33,11 @@ subroutine stet_run
   ! For now this is the same as the unit test grid.
   write(*,*) 'creating grid'
   call create_se_test_grid
+  
+  ! when including a potential a new grid is needed
+  if (DoIncludePotential) then
+     call set_grid_pot(iLine)
+  endif
   
   !\
   ! Set the background arrays, sources, and locations

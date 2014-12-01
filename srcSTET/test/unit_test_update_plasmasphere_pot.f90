@@ -42,19 +42,20 @@ end program unit_test_update_plasmasphere_pot
 subroutine se_update_state_test
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
        nPlas,nTop,Efield_IC,FieldLineGrid_IC,nThetaAlt_IIC,nThetaAlt_II,nEnergy
-  use ModSePlot, only: plot_state,plot_state_pot
+  use ModSePlot, only: plot_state,plot_state_pot,plot_omni_pot
   use ModSeState,only: allocate_state_arrays, iphiup,iphidn,phiup,phidn,&
-                       initplas_pot,check_time,delt,epsilon, &
+                       specup,specdn,initplas_pot,check_time_pot,delt,epsilon, &
                        update_se_state_pot, &
                        liphiup,liphidn
   integer :: iLine=1, flag=1
   logical :: DoSavePreviousAndReset = .true.
   integer :: nStep, iPoint, iEnergy
   logical :: IsOpen
+  real    :: time
   
   ! thermal background  
   real, allocatable :: eThermalDensity_C(:),eThermalTemp_C(:)
-    real,parameter :: cCmToM = 1.0e-2
+  real,parameter :: cCmToM = 1.0e-2
   !--------------------------------------------------------------------------
   ! Allocate the background right
   if(.not.allocated(eThermalDensity_C)) &
@@ -69,7 +70,7 @@ subroutine se_update_state_test
   
   ! input electric field (assume constant in plasmapshere and zero in iono)
   ! choose values to have a 5 V drop from top of iono to equator
-!  Efield_IC(iLine,:)=0.0
+  Efield_IC(iLine,:)=0.0
   Efield_IC(iLine,nIono+1:nTop-1)=5.0&
        /((FieldLineGrid_IC(iLine,nTop)-FieldLineGrid_IC(iLine,nIono))*cCmToM)
   Efield_IC(iLine,nTop+1:nPoint-nIono)=-5.0&
@@ -119,9 +120,9 @@ subroutine se_update_state_test
   
   write(*,*) 'Starting Time loop'
   nStep = 0
-  
+  time=0
   ! plot initial state
-  call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+  !call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
   
   IsOpen = .false.
   TIME_LOOP: do while (flag == 1)
@@ -136,7 +137,7 @@ subroutine se_update_state_test
      
      ! check convergence
      write(*,*) 'check for convergence'
-     call check_time(1,flag)
+     call check_time_pot(1,flag)
      
      ! increment step
      nStep=nStep+1
@@ -153,6 +154,8 @@ subroutine se_update_state_test
      call plot_state_pot(1,5,nStep,time,iphiup,iphidn,phiup,phidn)
      call plot_state_pot(1,6,nStep,time,iphiup,iphidn,phiup,phidn)
      
+
+     call plot_omni_pot(1,nStep,time,specup,specdn)
   end do TIME_LOOP
   
 end subroutine se_update_state_test

@@ -134,6 +134,63 @@ unit_test_update_iono:
 #######################################################################
 
 #######################################################################
+OBJ_UPDATE_IONO_POT = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSePlot.o \
+	../ModSeCross.o \
+	../ModSeProduction.o\
+	../geomag.o\
+	../iri90.o\
+	../ModBackground.o \
+	../ModSeState.o 
+
+
+unit_test_update_iono_pot_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSePlot.o ModSeCross.o ModSeProduction.o geomag.o iri90.o ModBackground.o ModSeState.o)
+	@make unit_test_update_iono_pot.o 
+	${LINK.f90} -o unit_test_update_iono_pot.exe ${OBJ_UPDATE_IONO_POT} \
+		unit_test_update_iono_pot.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_update_iono_pot: 
+	@echo unit_test_update_iono_pot starting
+	@make unit_test_update_iono_pot_exe 
+	@echo ./unit_test_update_iono_pot_exe
+	-@(./unit_test_update_iono_pot_exe )
+
+#######################################################################
+#######################################################################
+OBJ_UPDATE_IONO_PLAS_POT = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSePlot.o \
+	../ModSeCross.o \
+	../ModSeProduction.o\
+	../geomag.o\
+	../iri90.o\
+	../ModBackground.o \
+	../ModSeState.o 
+
+
+unit_test_update_iono_plas_pot_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSePlot.o ModSeCross.o ModSeProduction.o geomag.o iri90.o ModBackground.o ModSeState.o)
+	@make unit_test_update_iono_plas_pot.o 
+	${LINK.f90} -o unit_test_update_iono_plas_pot.exe ${OBJ_UPDATE_IONO_PLAS_POT} \
+		unit_test_update_iono_plas_pot.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_update_iono_plas_pot: 
+	@echo unit_test_update_iono_plas_pot starting
+	@make unit_test_update_iono_plas_pot_exe 
+	@echo ./unit_test_update_iono_plas_pot_exe
+	-@(./unit_test_update_iono_plas_pot_exe )
+
+#######################################################################
+
+#######################################################################
 OBJ_UPDATE_IONO_NOSOURCES = \
 	../ModMath.o\
 	../ModGrid.o \
@@ -154,6 +211,29 @@ unit_test_update_iono_nosources:
 	@make unit_test_update_iono_nosources_exe 
 	@echo ./unit_test_update_iono_nosources_exe
 	-@(./unit_test_update_iono_nosources_exe )
+
+#######################################################################
+#######################################################################
+OBJ_UPDATE_IONO_NOSOURCES_POT = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSePlot.o \
+	../ModSeState.o 
+
+
+unit_test_update_iono_nosources_pot_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSePlot.o ModSeState.o)
+	@make unit_test_update_iono_nosources_pot.o 
+	${LINK.f90} -o unit_test_update_iono_nosources_pot.exe ${OBJ_UPDATE_IONO_NOSOURCES_POT} \
+		unit_test_update_iono_nosources_pot.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_update_iono_nosources_pot: 
+	@echo unit_test_update_iono_nosources_pot starting
+	@make unit_test_update_iono_nosources_pot_exe 
+	@echo ./unit_test_update_iono_nosources_pot_exe
+	-@(./unit_test_update_iono_nosources_pot_exe )
 
 #######################################################################
 #######################################################################

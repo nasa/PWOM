@@ -614,9 +614,10 @@ contains
           nMu0RefAlt_II(iLine,iEnergy) = nMu0Alt
           IsFoundRefAlt =.true.
        end do FIND_REF_ALT
-
+       !write(*,*) iEnergy,BField0_II(iLine,iEnergy),nMu0Alt,MaxAlt_IC(iLine,iEnergy)
     enddo ENERGY_LOOP
-    
+    !call con_stop('')
+
   end subroutine locate_reference_alt_for_mu0
 
   !=============================================================================
@@ -899,7 +900,7 @@ contains
     write(*,*) 'allocating arrays'
     call allocate_grid_arrays
 
-    Lshell_I(1)=2.5
+    Lshell_I(1)=4.0
     nTheta_II(1,1)=5
     nTheta_II(1,2)=20
     nTheta_II(1,3)=90
