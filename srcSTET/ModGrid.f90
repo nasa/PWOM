@@ -73,7 +73,7 @@ Module ModSeGrid
   integer, public :: MaxTheta
 
   !E Grid
-  character(len=10) :: TypeGridE
+  character(len=10),public :: TypeGridE
   integer,public :: nEnergy
   real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
@@ -126,7 +126,6 @@ contains
 !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
        PhiBasePlas=&
             ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
-       
        SphiO=SIN(PhiBasePlas)
        QO=SQRT(1+3*SphiO**2)
        MLAT1=PhiBasePlas*180./cPi
