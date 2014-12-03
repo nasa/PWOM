@@ -3,8 +3,19 @@ program main_stet
   use ModSeMpi
   use ModMPI
   use CON_planet, ONLY: init_planet_const, set_planet_defaults
-
+  use ModNumConst,    ONLY: cRadToDeg
+  implicit none
+  
   integer :: iError
+  
+  integer :: nLineIn, iLine
+  real :: L
+
+  real :: Coord_ID(1,2) ! Lat and Lon in degrees for each line
+  real :: Ap_I(7), F107, F107A
+  integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
+
+  real :: Time = 0.0
   !-----------------------------------------------------------------------------
 
   !****************************************************************************
@@ -28,13 +39,28 @@ program main_stet
 
   call init_planet_const
   call set_planet_defaults
+  
+  !\
+  ! Parameters should be read here, for now just set them by hand
+  !/ 
+  nLineIn=1
+  L = 4.0
+  Coord_ID(1,Lat_)=acos(sqrt(1.0/L))*cRadToDeg
+  Coord_ID(1,Lon_)=0.0
+  AP_I(:)=4.0
+  F107 = 80.0
+  F107A= 80.0
+  !\
+  ! Initialize the stet code
+  !/
+  write(*,*) 'Initializing stet'
+  call stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, Time)
+  
+  write(*,*) 'Running stet'
+  do iLine=1,nLineIn
+     call stet_run(iLine)
+  end do
 
-  write(*,*) 'starting se_grid_test'
-!  call se_grid_test
-!  call se_update_state_test
-!  call background_test
-  call stet_run
-!  call se_update_state_iono_test_transport
 end program main_stet
 
 

@@ -185,7 +185,6 @@ end program unit_test_update_iono_plas_pot
        call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
        call plot_omni_pot     (iline,nStep,time,specup,specdn)
 
-       call plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
     end do TIME_LOOP
     
   end subroutine se_update_state_iono_plas_pot_test

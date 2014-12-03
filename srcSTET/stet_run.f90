@@ -1,24 +1,24 @@
 !============================================================================
-! run STET to get a new steady state or to advance some amount of time
-subroutine stet_run
+! run STET to get a new steady state or to advance some amount of time for 
+! a particular line, iLine.
+subroutine stet_run(iLine)
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
        nPlas,Efield_IC,DoIncludePotential
-  use ModSeBackground,only: allocate_background_arrays,mLat_I,mLon_I, &
-       set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
-       plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum, &
+  use ModSeBackground,only: plot_background,plot_ephoto_prod,&
        eThermalDensity_IC,eThermalTemp_IC,nNeutralSpecies,&
        NeutralDens1_IIC,ePhotoProdSpec1_IIC,NeutralDens2_IIC,ePhotoProdSpec2_IIC
   use ModSeState,only: allocate_state_arrays, check_time,&
        update_se_state_iono,update_se_state_iono_pot,update_se_state, &
        update_se_state_pot,initplas, initplas_pot, initiono,initiono_pot,&
+       calc_integrated_output,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,&
        iphiup,iphidn,phiup,phidn,liphiup,liphidn,lphiup,lphidn,&
-       specup, specdn, epsilo,delt
+       specup, specdn, epsilon,delt, Time
   use ModSeCross,only: SIGS,SIGI,SIGA    
   use ModSePlot  
   implicit none
-
-  integer :: iLine=1, flag=1, nStep=0
-  real    :: time=0
+  
+  integer, intent(in) :: iLine
+  integer :: flag=1, nStep=0
   logical :: DoSavePreviousAndReset = .true.
   logical :: IsOpen = .false.
 
@@ -27,48 +27,6 @@ subroutine stet_run
   logical,parameter :: IsIono1=.true.
   !--------------------------------------------------------------------------
   
-  !\
-  ! Set up the grid
-  !/
-  ! For now this is the same as the unit test grid.
-  write(*,*) 'creating grid'
-  call create_se_test_grid
-  
-  ! when including a potential a new grid is needed
-  if (DoIncludePotential) then
-     call set_grid_pot(iLine)
-  endif
-  
-  !\
-  ! Set the background arrays, sources, and locations
-  !/
-  ! Allocate the background right
-  write(*,*) 'allocating background arrays'
-  call allocate_background_arrays
-  
-  !align dipole and rotation
-  DoAlignDipoleRot = .true.
-  
-  ! set location of field line
-  mLat_I(iLine)=60.0 
-  mLon_I(iLine)=0.0
-  
-  !set glat and glon coords
-  call set_footpoint_locations(iLine)
-    
-  ! Get the neutral atmosphere and photo e production spectrum
-  AP(:)=4.0
-  call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
-  
-  ! Fill the background arrays
-  write(*,*) 'filling background arrays'
-  call fill_thermal_plasma_empirical(iLine,F107,F107A,t)
-
-  ! plot initial state
-  call plot_background(iLine,nStep,time)
-  
-  ! plot ephoto production
-  call plot_ephoto_prod(iLine,nStep,time)
   
   !\
   ! The main update
@@ -93,7 +51,7 @@ subroutine stet_run
   lphidn(iLine,:,:,:)=0.0
   
   nStep = 0
-
+  
   !Start Timeloop
   TIME_LOOP: do while (flag == 1)
      ! Initialize the ionosphere
@@ -116,29 +74,64 @@ subroutine stet_run
      
      ! Initialize the plasmasphere
      write(*,*) 'Initializing plasmasphere'
-     call initplas(1,DoSavePreviousAndReset)
+     call initplas(iLine,DoSavePreviousAndReset)
      
      ! update the SE state
      write(*,*) 'update se state'
-     call update_se_state(1, eThermalDensity_IC(iLine,:),&
+     call update_se_state(iLine, eThermalDensity_IC(iLine,:),&
           eThermalTemp_IC(iLine,:),IsOpen)
 
      ! check convergence
      write(*,*) 'check for convergence'
-     call check_time(1,flag)
+     call check_time(iLine,flag)
      
      ! increment step
      nStep=nStep+1
      
   end do TIME_LOOP
 
-  ! plot output
-  call plot_state(1,nStep,time,iphiup,iphidn,phiup,phidn)
+  ! Find heating rate, Se number density and flux
+  write(*,*) 'Getting Integrals for output'
+  call calc_integrated_output(iLine,eThermalDensity_IC(iLine,:))
   
-  call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
-  call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
-  
-  call plot_omni_line(iLine,nStep,time,specup,specdn)
+  !\
+  ! plot model output
+  !/
+  if(DoIncludePotential) then
+     
+     ! plot background
+     call plot_background(iLine,nStep,time)
+     
+     ! plot ephoto production
+     call plot_ephoto_prod(iLine,nStep,time)
 
+     call plot_state_pot(iLine,90,nStep,time,iphiup,iphidn,phiup,phidn)     
+     call plot_state_pot(iLine,1,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(iLine,2,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(iLine,3,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(iLine,4,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(iLine,5,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_state_pot(iLine,6,nStep,time,iphiup,iphidn,phiup,phidn)
 
+     call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.true.)
+     call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
+     
+     call plot_omni_pot(iLine,nStep,time,specup,specdn)
+     call plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+            
+     
+  else
+     ! plot background
+     call plot_background(iLine,nStep,time)
+     
+     ! plot ephoto production
+     call plot_ephoto_prod(iLine,nStep,time)
+
+     call plot_state(iLine,nStep,time,iphiup,iphidn,phiup,phidn)
+     call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
+     call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
+     call plot_omni_line(iLine,nStep,time,specup,specdn)
+     call plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+  end if
+     
 end subroutine stet_run

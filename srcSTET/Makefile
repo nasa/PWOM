@@ -20,7 +20,8 @@ MODULES = \
 	ModSeCross.o\
 	ModBackground.o\
 	ModSeState.o\
-	stet_run.o
+	stet_run.o\
+	stet_init.o
 
 
 
