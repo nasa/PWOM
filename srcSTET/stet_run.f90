@@ -1,13 +1,13 @@
 !============================================================================
 ! run STET to get a new steady state or to advance some amount of time for 
 ! a particular line, iLine.
-subroutine stet_run(iLine)
+subroutine stet_run(iLine,IsOpen)
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
        nPlas,Efield_IC,DoIncludePotential
   use ModSeBackground,only: plot_background,plot_ephoto_prod,&
        eThermalDensity_IC,eThermalTemp_IC,nNeutralSpecies,&
        NeutralDens1_IIC,ePhotoProdSpec1_IIC,NeutralDens2_IIC,ePhotoProdSpec2_IIC
-  use ModSeState,only: allocate_state_arrays, check_time,&
+  use ModSeState,only: check_time,check_time_pot,&
        update_se_state_iono,update_se_state_iono_pot,update_se_state, &
        update_se_state_pot,initplas, initplas_pot, initiono,initiono_pot,&
        calc_integrated_output,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,&
@@ -18,9 +18,10 @@ subroutine stet_run(iLine)
   implicit none
   
   integer, intent(in) :: iLine
+  logical, intent(in) :: IsOpen
+
   integer :: flag=1, nStep=0
   logical :: DoSavePreviousAndReset = .true.
-  logical :: IsOpen = .false.
 
   real :: Ap(7), F107=80, F107A=80, t=0
   
@@ -31,11 +32,10 @@ subroutine stet_run(iLine)
   !\
   ! The main update
   !/
-  call allocate_state_arrays
 
   ! Set the timestep and convergence criteria
   delt=1.0e5
-  epsilon = 0.4
+  epsilon = 0.1
 
   ! Define the initial state
   iphiup(iLine,:,:,:)=0.0
@@ -53,38 +53,73 @@ subroutine stet_run(iLine)
   nStep = 0
   
   !Start Timeloop
+  flag = 1
   TIME_LOOP: do while (flag == 1)
-     ! Initialize the ionosphere
-     write(*,*) 'Initializing iono'
-     call initiono(iLine,DoSavePreviousAndReset)
-     
-     ! update the SE state for iono1
-     write(*,*) 'update se state for iono1'
-     call update_se_state_iono(iLine,IsIono1,eThermalDensity_IC(iLine,:),&
-          eThermalTemp_IC(iLine,:),nNeutralSpecies,&
-          NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
-          ePhotoProdSpec1_IIC(iLine,:,:))
-     
-     ! update the SE state for iono2
-     write(*,*) 'update se state for iono2'
-     call update_se_state_iono(iLine,.not.IsIono1,eThermalDensity_IC(iLine,:),&
-          eThermalTemp_IC(iLine,:),nNeutralSpecies,&
-          NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
-          ePhotoProdSpec2_IIC(iLine,:,:))
-     
-     ! Initialize the plasmasphere
-     write(*,*) 'Initializing plasmasphere'
-     call initplas(iLine,DoSavePreviousAndReset)
-     
-     ! update the SE state
-     write(*,*) 'update se state'
-     call update_se_state(iLine, eThermalDensity_IC(iLine,:),&
-          eThermalTemp_IC(iLine,:),IsOpen)
+     if(.not.DoIncludePotential) then
+        ! Initialize the ionosphere
+        write(*,*) 'Initializing iono'
+        call initiono(iLine,DoSavePreviousAndReset)
+        
+        ! update the SE state for iono1
+        call update_se_state_iono(iLine,IsIono1,eThermalDensity_IC(iLine,:),&
+             eThermalTemp_IC(iLine,:),nNeutralSpecies,&
+             NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+             ePhotoProdSpec1_IIC(iLine,:,:))
+        
+        ! update the SE state for iono2 if field line is closed
+        if (.not.IsOpen) then
+           call update_se_state_iono(iLine,.not.IsIono1,&
+                eThermalDensity_IC(iLine,:),&
+                eThermalTemp_IC(iLine,:),nNeutralSpecies,&
+                NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+                ePhotoProdSpec2_IIC(iLine,:,:))
+        endif
+        
+        ! Initialize the plasmasphere
+        write(*,*) 'Initializing plasmasphere'
+        call initplas(iLine,DoSavePreviousAndReset)
+        
+        ! update the SE state
+        write(*,*) 'update se state'
+        call update_se_state(iLine, eThermalDensity_IC(iLine,:),&
+             eThermalTemp_IC(iLine,:),IsOpen)
+        
+        ! check convergence
+        write(*,*) 'check for convergence'
+        call check_time(iLine,flag)
+     else
+                ! Initialize the ionosphere
+        write(*,*) 'Initializing iono'
+        call initiono_pot(iLine,DoSavePreviousAndReset)
+        
+        ! update the SE state for iono1
+        call update_se_state_iono_pot(iLine,IsIono1,eThermalDensity_IC(iLine,:),&
+             eThermalTemp_IC(iLine,:),nNeutralSpecies,&
+             NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+             ePhotoProdSpec1_IIC(iLine,:,:))
+        
+        ! update the SE state for iono2 if field line is closed
+        if (.not.IsOpen) then
+           call update_se_state_iono_pot(iLine,.not.IsIono1,&
+                eThermalDensity_IC(iLine,:),&
+                eThermalTemp_IC(iLine,:),nNeutralSpecies,&
+                NeutralDens2_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
+                ePhotoProdSpec2_IIC(iLine,:,:))
+        endif
 
-     ! check convergence
-     write(*,*) 'check for convergence'
-     call check_time(iLine,flag)
-     
+        ! Initialize the plasmasphere
+        write(*,*) 'Initializing plasmasphere'
+        call initplas_pot(iLine,DoSavePreviousAndReset)
+        
+        ! update the SE state
+        write(*,*) 'update se state'
+        call update_se_state_pot(iLine, eThermalDensity_IC(iLine,:),&
+             eThermalTemp_IC(iLine,:),IsOpen)
+        
+        ! check convergence
+        write(*,*) 'check for convergence'
+        call check_time_pot(iLine,flag)
+     endif
      ! increment step
      nStep=nStep+1
      
@@ -117,7 +152,7 @@ subroutine stet_run(iLine)
      call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
      
      call plot_omni_pot(iLine,nStep,time,specup,specdn)
-     call plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+     call plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
             
      
   else
@@ -131,7 +166,7 @@ subroutine stet_run(iLine)
      call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
      call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
      call plot_omni_line(iLine,nStep,time,specup,specdn)
-     call plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+     call plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
   end if
      
 end subroutine stet_run

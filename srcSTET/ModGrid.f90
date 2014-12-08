@@ -86,12 +86,18 @@ Module ModSeGrid
                                                  ! mu0 ref and pot ref altitutes
                                                  ! for each line and total 
                                                  ! energy
-  real,parameter :: KineticEnergyMin = 0.25 ! eV, the min kinetic energy allowed
+!  real,parameter :: KineticEnergyMin = 0.25 ! eV, the min kinetic energy allowed
+  real,parameter :: KineticEnergyMin = 1.0 ! eV, the min kinetic energy allowed
   integer,public,allocatable:: MinEnergy_IC(:,:) ! minimum index in region of 
                                                  ! existence for energy
 
   logical,public :: DoIncludePotential=.false.  ! should we include potential 
                                                 ! in calculation.
+  
+  ! information on how global line number (as opposed to line number on 
+  ! given proc)
+  integer, public,allocatable :: iLineGlobal_I(:)
+
   ! public methods
   public :: allocate_grid_arrays
   public :: init_se_grid
@@ -100,14 +106,16 @@ Module ModSeGrid
   public :: BINNUM
   public :: plot_grid_pot
   public :: set_grid_pot
+  public :: update_grid
+
   real :: rPlanetCM
 contains
   !============================================================================
-  subroutine init_se_grid
+  subroutine init_se_grid(iLine)
     use ModPlanetConst, ONLY: Earth_, rPlanet_I
     use ModNumConst,    ONLY: cPi
+    integer, intent(in) :: iLine
     real, parameter :: cMtoCM = 1.0e2
-    integer :: iLine
     real    :: Biono, Beq, MLAT1, PhiBasePlas, QO, SphiO
     !--------------------------------------------------------------------------
 
@@ -120,29 +128,27 @@ contains
     nTop = nPoint/2
     nPlasHalf=nPlas/2
     
-    do iLine = 1, nLine
-       rPlanetCM=rPlanet_I(Earth_)*cMtoCM
-       ! Set field line info
-!       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
-       PhiBasePlas=&
-            ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
-       SphiO=SIN(PhiBasePlas)
-       QO=SQRT(1+3*SphiO**2)
-       MLAT1=PhiBasePlas*180./cPi
-       Beq   = 0.31/Lshell_I(iLine)**3
-       Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
-       BFieldIono_I(iLine) = Biono
-       BFieldEq_I(iLine)   = Beq
-       write(*,*) 'calc bfield and s grid for iLine = ', iLine
-       call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
-       write(*,*) 'calc equatorial PA grid', iLine
-       call calc_equatorial_pitchangle(iLine,Beq,Biono)
-       write(*,*) 'calc mu'
-       call calc_mu(iLine,Beq)
-       write(*,*) 'calc energy grid', iLine
-       call calc_energy_grid
-
-    enddo
+    rPlanetCM=rPlanet_I(Earth_)*cMtoCM
+    ! Set field line info
+    !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
+    PhiBasePlas=&
+         ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
+    SphiO=SIN(PhiBasePlas)
+    QO=SQRT(1+3*SphiO**2)
+    MLAT1=PhiBasePlas*180./cPi
+    Beq   = 0.31/Lshell_I(iLine)**3
+    Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
+    BFieldIono_I(iLine) = Biono
+    BFieldEq_I(iLine)   = Beq
+    write(*,*) 'calc bfield and s grid for iLine = ', iLine
+    call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
+    write(*,*) 'calc equatorial PA grid', iLine
+    call calc_equatorial_pitchangle(iLine,Beq,Biono)
+    write(*,*) 'calc mu'
+    call calc_mu(iLine,Beq)
+    write(*,*) 'calc energy grid', iLine
+    call calc_energy_grid
+    
   end subroutine init_se_grid
 
   !============================================================================
@@ -333,8 +339,15 @@ contains
     integer :: iAngle, iAlt, iEnergy
     !---------------------------------------------------------------------------
     !now pitchangle is energy dependent
+    !write(*,*)'MaxAlt_IC(iLine,1)',MaxAlt_IC(iLine,1)
+    !call con_stop('')
     ENERGY: do iEnergy=1,nEnergy
        ALONG_LINE: do iAlt= 1, nPoint
+          ! check if we are outside of altitude range if we are then cycle the 
+          ! loop along the line
+          if (iAlt>MaxAlt_IC(iLine,iEnergy) &
+               .and. iAlt<nPoint-MaxAlt_IC(iLine,iEnergy)) cycle ALONG_LINE
+
           eta = min(1.0,(Bfield0_II(iLine,iEnergy)/Bfield_IC(iLine,iAlt)) &
                *(EnergyGrid_I(iEnergy)-DeltaPot_IC(iLine,iAlt))   &
                /(EnergyGrid_I(iEnergy)-DeltaPot0_II(iLine,iEnergy)))
@@ -497,7 +510,6 @@ contains
        DeltaPot_IC(iLine,nPoint-iAlt) = DeltaPot_IC(iLine,iAlt) 
     end do
     
-    
   end subroutine calc_potential
 
   !=============================================================================
@@ -648,7 +660,10 @@ contains
              tmp_array = 1 
           end where
           nThetaAlt_IIC(iLine,iEnergy,iPoint) = max(sum(Tmp_array)-1,0)
-          
+          if(nThetaAlt_IIC(iLine,iEnergy,iPoint)==136) then
+             write(*,*) iEnergy,iPoint,LocalThetaMax
+             call con_stop('')
+          endif
           ! Set dThetaEnd, the delta theta at the end of the PA grid
           dThetaEnd_III(iLine,iEnergy,iPoint)=&
                EqAngleGrid_IG(iLine,nThetaAlt_IIC(iLine,iEnergy,iPoint)) &
@@ -751,6 +766,7 @@ contains
     if (.not.allocated(nThetaAlt_IIC))  allocate(nThetaAlt_IIC(nLine,nEnergy,nPoint))
     if (.not.allocated(dThetaEnd_III))  allocate(dThetaEnd_III(nLine,nEnergy,nPoint))
     if (.not.allocated(mu_IIIC))        allocate(mu_IIIC(nLine,0:nAngle,nEnergy,nPoint))
+    if (.not.allocated(iLineGlobal_I))  allocate(iLineGlobal_I(nLine))
   end subroutine allocate_grid_arrays
 
   !============================================================================
@@ -873,6 +889,38 @@ contains
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_grid_pot
 
+  !=============================================================================
+  ! update the grid for a given line when it's position moves or the 
+  ! potential changes
+  subroutine update_grid(iLine,Coord_D,DoOnlySpatial)
+    use ModNumConst,    ONLY: cDegToRad
+    implicit none
+    integer, intent(in) :: iLine ! line whose grid is being updated
+    real,    intent(in) :: Coord_D(2) ! foot point Lat and Lon of line
+    ! When DoOnlySpatial is included then leave the potential update to later
+    ! only set the spatial grid. This is important for PW coupling
+    logical, optional,intent(in) :: DoOnlySpatial
+    logical :: DoOnlySpatial1
+    integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
+    !---------------------------------------------------------------------------
+    if(.not.present(DoOnlySpatial)) then 
+       DoOnlySpatial1=.false.
+    else
+       DoOnlySpatial1=DoOnlySpatial
+    endif
+    ! Set the Lshell for each line based on the input latitude
+    Lshell_I(iLine) = (cos(Coord_D(Lat_)*cDegToRad))**-2.0
+        
+    write(*,*) 'calling init_se_grid'
+    call init_se_grid(iLine)
+    
+    ! when including a potential a new grid is needed
+    if (DoIncludePotential .and. .not.DoOnlySpatial1) then
+       call set_grid_pot(iLine)
+    endif
+  end subroutine update_grid
+  !=============================================================================
+  
 
   !============================================================================
   ! Test Grid: This is a routine that creates the test grid for all unit tests 
@@ -909,7 +957,7 @@ contains
     nAngle = sum(nTheta_II(1,:))
 
     write(*,*) 'calling init_se_grid'
-    call init_se_grid
+    call init_se_grid(1)
     
   end subroutine create_se_test_grid
   !============================================================================
@@ -919,4 +967,5 @@ contains
     write(*,*) 'calling plot_grid'
     call plot_grid
   end subroutine se_grid_test
+
 end Module ModSeGrid

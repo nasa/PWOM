@@ -161,7 +161,23 @@ contains
   !============================================================================
   
   subroutine advect
-    
+    use ModCouplePWOMtoSTET, only: get_stet_for_pwom
+    real, allocatable :: SeDens_C(:), SeFlux_C(:), SeHeat_C(:)
+    !couple time to call update the SE flux
+    real :: DtGetSe=20.0
+    !--------------------------------------------------------------------------
+
+    !get the SE fluxes from STET first
+    if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+    if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+    if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+
+    if (floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe) ) then 
+       call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),&
+            State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),&
+            Efield(1:nDim),Ap,F107,F107A,SeDens_C, SeFlux_C, SeHeat_C)
+    endif
+
     NewState_GV = State_GV
     if (TypeSolver == 'Godunov') then
        Do iIon=1,nIon-1

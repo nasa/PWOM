@@ -169,7 +169,7 @@ contains
   subroutine plot_state_pot(iLine,iEnergyIn,nStep,time,iphiup,iphidn,phiup,phidn)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,EqAngleGrid_IG,Bfield_IC,&
                              nIono,nPlas, nAngle, nEnergy, nLine, nPoint,&
-                             nThetaAlt_IIC,EnergyGrid_I
+                             nThetaAlt_IIC,EnergyGrid_I,MaxAlt_IC
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -199,8 +199,8 @@ contains
        Coord_DII     = 0.0
        
        !Set Coordinates along field line and PA
-       do iPoint=1,nPoint
-          do iAngle=1,2*nAngle
+       ALONG_LINE: do iPoint=1,nPoint
+          ANGLE: do iAngle=1,2*nAngle
              !set coord based on up or down region
              if(iAngle<nAngle) then
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
@@ -214,6 +214,13 @@ contains
                      cPi-EqAngleGrid_IG(iLine,iAngleDn)
              endif
              
+             !if above maxalt for energy then plot state is zero and cycle
+             if(iPoint>MaxAlt_IC(iLine,iEnergyIn) &
+                  .and. iPoint<nPoint-MaxAlt_IC(iLine,iEnergyIn)) then
+                PlotState_IIV(iPoint,iAngle,:)=0.0
+                cycle ANGLE
+             endif
+
              !set plotstate based on up or down region  
              if (iAngle <= nThetaAlt_IIC(iLine,iEnergyIn,iPoint))then
                 PlotState_IIV(iPoint,iAngle,B_)  = Bfield_IC(iLine,iPoint)
@@ -254,8 +261,8 @@ contains
              else
                 PlotState_IIV(iPoint,iAngle,:)=0.0
              endif
-          enddo
-       enddo
+          enddo ANGLE
+       enddo ALONG_LINE
   
        ! set name for plotfile
        write(NamePlot,"(a,i4.4,a)") 'State_',floor(EnergyGrid_I(iEnergyIn)+.001),'.out'
@@ -680,63 +687,65 @@ contains
   !============================================================================
   ! 1D output plots of integrated quantities along the field 
   ! (potential, heating rate, SE number density, SE number flux)
-  subroutine plot_along_field(HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+  subroutine plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
-                             MinEnergy_IC, EnergyGrid_I
+                             MinEnergy_IC, EnergyGrid_I,Efield_IC
 
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
+    integer, intent(in) :: iLine
     real, intent(in) :: HeatingRate_IC(nLine,nPoint), &
          NumberDens_IC(nLine,nPoint),NumberFlux_IC(nLine,nPoint)
 
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=4, Pot_=1, Qe_=2,Nse_=3,Fse_=4
-    character(len=100),parameter :: NamePlotVar='S Pot[eV] Qe[eV/cm3/s] Nse[/cc] Fse[/cm2/s] g r'
+    integer, parameter :: nDim =1, nVar=5, Pot_=1, Qe_=2,Nse_=3,Fse_=4,E_=5
+    character(len=100),parameter :: NamePlotVar=&
+         'S Pot[eV] Qe[eV/cm3/s] Nse[/cc] Fse[/cm2/s] E[V/m] g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='Integrated output'
     character(len=5) :: TypePlot='ascii'
-    integer :: iLine,iPoint
+    integer :: iPoint
     logical,save :: IsFirstCall =.true.
     !--------------------------------------------------------------------------
     allocate(Coord_I(nPoint), PlotState_IV(nPoint,nVar))
     
-    do iLine=1,nLine
-       PlotState_IV = 0.0
-       Coord_I     = 0.0
-       
-       !Set Coordinates along field line and PA
-       do iPoint=1,nPoint
-          Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
-          PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
-          PlotState_IV(iPoint,Qe_)  = HeatingRate_IC(iLine,iPoint)
-          PlotState_IV(iPoint,Nse_) = NumberDens_IC(iLine,iPoint)
-          PlotState_IV(iPoint,Fse_) = NumberFlux_IC(iLine,iPoint)
-       enddo
-       
-       ! set name for plotfile
-       write(NamePlot,"(a,i4.4,a)") 'STET_1D_iLine',iLine,'.out'
-       
-       !Plot grid for given line. Overwrite old results on firstcall
-       if(IsFirstCall) then
-          call save_plot_file(NamePlot, TypePositionIn='rewind', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
-               nDimIn=nDim,CoordIn_I=Coord_I,                &
-               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
-          IsFirstCall = .false.
-       else
-          call save_plot_file(NamePlot, TypePositionIn='append', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
-               nDimIn=nDim,CoordIn_I=Coord_I,                &
-               VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
-       end if
-    end do
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    !Set Coordinates along field line and PA
+    do iPoint=1,nPoint
+       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+       PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
+       PlotState_IV(iPoint,Qe_)  = HeatingRate_IC(iLine,iPoint)
+       PlotState_IV(iPoint,Nse_) = NumberDens_IC(iLine,iPoint)
+       PlotState_IV(iPoint,Fse_) = NumberFlux_IC(iLine,iPoint)
+       PlotState_IV(iPoint,E_)   = Efield_IC(iLine,iPoint)
+    enddo
+    
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'STET_1D_iLine',iLine,'.out'
+    
+    !Plot grid for given line. Overwrite old results on firstcall
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+       if (iLine==nLine) IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+    end if
+    
     
     deallocate(Coord_I, PlotState_IV)
   end subroutine plot_along_field
-
+  
 
   !============================================================================
 

@@ -19,7 +19,7 @@ Module ModSeBackground
   real :: facn=-1, fact=0
 
   ! exponent for extending solution above IRI or PWOM solution 
-  real :: ZEP=1
+  real,public :: ZEP=1
 
   ! Neutral Atmosphere arrays and variables
   integer, parameter,public :: nNeutralSpecies = 3
@@ -243,7 +243,7 @@ contains
  
     !set the solar flux
     CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
-
+    
     !\
     ! Work on ionosphere 1
     !/
@@ -254,6 +254,7 @@ contains
     
     !  Call MSIS to get the neutral densities and temperature
     CALL TSELEC(SW)
+    
     do  iIono=1,nIono
        CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
             gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
@@ -266,12 +267,11 @@ contains
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
     SZA1=SZA1*cDegToRad
-
+    
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
-    write(*,*) 'SZA1',SZA1
     !  Calculate the photoelectron production spectrum
     IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&

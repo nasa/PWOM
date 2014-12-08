@@ -1,6 +1,6 @@
 include ../Makefile.def
 
-SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR}
+SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR} -I${STETDIR}
 
 include ../Makefile.conf
 
@@ -81,13 +81,18 @@ PWOM:	DEPEND
 	@make ${EXE}
 	@echo "PWOM.exe has been created"
 
+#${EXE}:	${EXEOBJECTS}
+#	@(if [ ${OS} = "Darwin" ];         then make PWOM_for_Darwin; \
+#	else                                    make PWOM_general; fi)
+
+
 ${EXE}:	${EXEOBJECTS}
-	@(if [ ${OS} = "Darwin" ];         then make PWOM_for_Darwin; \
-	else                                    make PWOM_general; fi)
+	make PWOM_general
 
 PWOM_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
-		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE -lTIMING \
+		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE \
+		-lTIMING  -lSTET \
 		${Lflag1}
 
 PWOM_for_Darwin:
@@ -97,6 +102,7 @@ PWOM_for_Darwin:
 		ar -x ${LIBDIR}/libEMPIRICALUA.a; \
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a
+		ar -x ${LIBDIR}/libSTET.a
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
 	rm -rf Tmp_
 

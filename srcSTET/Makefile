@@ -21,7 +21,8 @@ MODULES = \
 	ModBackground.o\
 	ModSeState.o\
 	stet_run.o\
-	stet_init.o
+	stet_init.o\
+	ModCouplePWOMtoSTET.o
 
 
 

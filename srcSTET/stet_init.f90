@@ -1,15 +1,12 @@
 ! Initializes the stet code, 
 
 subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
-  use ModSeGrid, only:init_se_grid,set_grid_pot,allocate_grid_arrays,&
-       nLine,nPoint,nIono,nPlas,Efield_IC,DoIncludePotential,&
-       DrIono1,nIono1,DrIono2,nIono2,DrIono3,nIono3,DrIono4,nIono4,TypeGridE,&
-       nEnergy,EnergyMax,DeltaE, nTheta_II, Lshell_I, nAngle
+  use ModSeGrid, only:update_grid,nLine,Efield_IC,DoIncludePotential
   use ModSeBackground,only: allocate_background_arrays,mLat_I,mLon_I, &
        set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
        plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum
   use ModNumConst,    ONLY: cDegToRad
-  use ModSeState,     ONLY: Time
+  use ModSeState,     ONLY: Time,allocate_state_arrays
   implicit none 
   
   integer, intent(in):: nLineIn ! number of lines to be worked on
@@ -35,51 +32,20 @@ subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
   !\
   ! Set up the grid
   !/
-  ! For now this is the same as the unit test grid.
-  write(*,*) 'creating grid'
-  !  call create_se_test_grid
+  write(*,*) 'setting grid dimensions'
+  call set_grid_dimensions_default
   
-  DrIono1 = 1e6
-  nIono1  = 12
-  DrIono2 = 2e6
-  nIono2  = 10
-  DrIono3 = 3e6
-  nIono3  = 10
-  DrIono4 = 5e6
-  nIono4  = 2    
-  
-  nIono=nIono1+nIono2+nIono3+nIono4
-  ! set the energy parameters for the energy grid
-  TypeGridE = 'ConstDE'
-  nEnergy=100
-  !    nEnergy=94
-  EnergyMax=100.5
-  DeltaE = 1.0
-  
-  ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
-  write(*,*) 'allocating arrays'
-  call allocate_grid_arrays
-  
-  ! default values for theta grid. 
-  nTheta_II(:,1)=5
-  nTheta_II(:,2)=20
-  nTheta_II(:,3)=90
-  nTheta_II(:,4)=20
-  nAngle = 135
-
-  ! Set the Lshell for each line based on the input latitude
   do iLine=1,nLine
-     Lshell_I(iLine) = (cos(Coord_ID(iLine,Lat_)*cDegToRad))**-2.0
-  end do
+     call update_grid(iLine,Coord_ID(iLine,:),DoOnlySpatial=.true.)
+  enddo
 
-  
-  write(*,*) 'calling init_se_grid'
-  call init_se_grid
+  !define the electric field 
+  Efield_IC(:,:)=0.0
 
-  ! when including a potential a new grid is needed
+  ! after electric field definition we can finish setting up grid
   if (DoIncludePotential) then
      do iLine=1,nLine
-        call set_grid_pot(iLine)
+        call update_grid(iLine,Coord_ID(iLine,:),DoOnlySpatial=.true.)
      enddo
   endif
 
@@ -109,5 +75,51 @@ subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
      call fill_thermal_plasma_empirical(iLine,F107,F107A,Time)
   end do
   
+  call allocate_state_arrays
+  
 
 end subroutine stet_init
+
+!===============================================================================
+! set the default grid dimensions and parameters. 
+!This should only be done once at the  start of the run
+subroutine set_grid_dimensions_default
+  use ModSeGrid, only: allocate_grid_arrays, nIono,&
+       DrIono1,nIono1,DrIono2,nIono2,DrIono3,nIono3,DrIono4,nIono4,TypeGridE,&
+       nEnergy,EnergyMax,DeltaE, nTheta_II
+  !-----------------------------------------------------------------------------
+ ! For now this is the same as the unit test grid.
+  write(*,*) 'creating grid'
+  !  call create_se_test_grid
+  
+  DrIono1 = 1e6
+  nIono1  = 12
+  DrIono2 = 2e6
+  nIono2  = 10
+  DrIono3 = 3e6
+  nIono3  = 10
+  DrIono4 = 5e6
+  nIono4  = 2    
+  
+  nIono=nIono1+nIono2+nIono3+nIono4
+  ! set the energy parameters for the energy grid
+  TypeGridE = 'ConstDE'
+  !nEnergy=100
+  nEnergy=99
+  !    nEnergy=94
+  EnergyMax=100.5
+  DeltaE = 1.0
+  
+  ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
+  write(*,*) 'allocating arrays'
+  call allocate_grid_arrays
+  
+  ! default values for theta grid. 
+  nTheta_II(:,1)=5
+  nTheta_II(:,2)=20
+  nTheta_II(:,3)=90
+  nTheta_II(:,4)=20
+  nAngle = 135
+
+end subroutine set_grid_dimensions_default
+

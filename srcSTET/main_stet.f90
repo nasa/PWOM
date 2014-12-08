@@ -1,6 +1,7 @@
 program main_stet
   use ModSeGrid
   use ModSeMpi
+  use ModSeBackground,only: ZEP
   use ModMPI
   use CON_planet, ONLY: init_planet_const, set_planet_defaults
   use ModNumConst,    ONLY: cRadToDeg
@@ -44,21 +45,27 @@ program main_stet
   ! Parameters should be read here, for now just set them by hand
   !/ 
   nLineIn=1
-  L = 4.0
+!  L = 4.0
+  L = 8.55
   Coord_ID(1,Lat_)=acos(sqrt(1.0/L))*cRadToDeg
   Coord_ID(1,Lon_)=0.0
   AP_I(:)=4.0
-  F107 = 80.0
-  F107A= 80.0
+  F107 = 60.0
+  F107A= 60.0
+  ZEP=2
+  ! Include the parallel electric field?
+  DoIncludePotential=.true.
+
   !\
   ! Initialize the stet code
   !/
   write(*,*) 'Initializing stet'
   call stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, Time)
   
+  
   write(*,*) 'Running stet'
   do iLine=1,nLineIn
-     call stet_run(iLine)
+     call stet_run(iLine,.true.)
   end do
 
 end program main_stet

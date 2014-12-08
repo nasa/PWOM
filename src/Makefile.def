@@ -8,6 +8,7 @@ LIBDIR    = ${PWDIR}/src
 RUNDIR    = ${PWDIR}/run
 BINDIR    = ${PWDIR}/bin
 SHAREDIR  = ${PWDIR}/share/Library/src
+STETDIR   = ${PWDIR}/srcSTET
 
 TIMINGDIR = ${PWDIR}/util/TIMING/src
 EMPIRICALIEDIR = ${PWDIR}/util/EMPIRICAL/srcIE

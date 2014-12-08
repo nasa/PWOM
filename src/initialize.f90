@@ -7,11 +7,12 @@ subroutine PW_initialize
   use ModIoUnit, ONLY: io_unit_new,UnitTmp_
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
-  use ModCommonVariables, ONLY:IYD
+  use ModCommonVariables, ONLY:IYD,ALTD
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora
   use ModPwWaves,ONLY: wave_init
+  use ModCouplePWOMtoSTET, ONLY: init_pwom_stet_coupling
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -77,7 +78,7 @@ subroutine PW_initialize
        Dt_I(nLine))
   
   call wave_init(nAlt)
-
+  
   !**************************************************************************
   !  Define file names and unit numbers, and open for reading and writing.
   !***************************************************************************
@@ -180,6 +181,8 @@ subroutine PW_initialize
 
   if (UseAurora) call init_aurora
 
+  ! initialize the SE model
+  call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD)
 end subroutine PW_initialize
 
 !=============================================================================

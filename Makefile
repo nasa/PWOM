@@ -31,9 +31,10 @@ PWOM:
 	cd ${SHAREDIR};           make LIB
 	cd ${TIMINGDIR};          make LIB
 	cd ${EMPIRICALIEDIR};     make LIB
-	cd ${EMPIRICALUADIR};    make  LIB
+	cd ${EMPIRICALUADIR};     make  LIB
 	cd ${DATAREADINDICESDIR}; make LIB
-	cd src;                  make PWOM
+	cd ${STETDIR}; 		  make LIB
+	cd src;                   make PWOM
 
 STET:
 	cd ${SHAREDIR};           make LIB
