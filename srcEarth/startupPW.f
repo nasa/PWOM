@@ -333,9 +333,9 @@ c      ETOP=5.0E-3
 
 !     kludge
 !      ETOP = 0.0
-      ETOP = EtopMin*.75
+!      ETOP = EtopMin*.75
 !      ETOP = EtopMin*.375
-!      ETOP = EtopMin*.75*.25
+      ETOP = EtopMin*.75*.25
 
 
       ELFXIN=0.
@@ -498,7 +498,7 @@ C      READ(5,3) NCNPRT
      &     .and.DoCoupleSTET) then 
          call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
-     &        Efield(1:nDim),Ap,F107,F107A,SeDens_C, SeFlux_C, SeHeat_C)
+     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
       endif
       
       if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
