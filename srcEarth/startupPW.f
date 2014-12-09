@@ -13,13 +13,15 @@ C
       use ModGlow, ONLY: get_ionization
 C
       use ModConst ,ONLY: cBoltzmann
-      use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE
+      use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine
       use ModAurora,ONLY: get_aurora,AuroralIonRateO_C
       use ModPwTime,ONLY: CurrentTime,StartTime,iStartTime,
      &                    Hour_,Minute_,Second_
       use ModIndicesInterfaces
       use ModNumConst, ONLY: cDegToRad, cRadToDeg
       use ModLatLon,   ONLY: convert_lat_lon
+      use ModPhotoElectron
+      use ModCouplePWOMtoSTET, only: get_stet_for_pwom
       use CON_planet,  ONLY: IsPlanetModified, RotAxisTheta, RotAxisPhi
 C     
       CurrentTime=StartTime+Time
@@ -328,7 +330,14 @@ c      ETOP=5.0E-3
          endif
          ETOP = ETOP+EtopPhotoElectrons*max(cos(SZA*cDegToRad),0.0)
       endif
-      
+
+!     kludge
+!      ETOP = 0.0
+      ETOP = EtopMin*.75
+!      ETOP = EtopMin*.375
+!      ETOP = EtopMin*.75*.25
+
+
       ELFXIN=0.
 C
 C      ELFXIN=9.
@@ -479,6 +488,25 @@ C      READ(5,3) NCNPRT
       ALTMIN=ALTMIN/1.E5
       ALTMAX=ALTMAX/1.E5
       ETOP1=ETOP*1.23E-6/DRBND
+      
+!get the SE fluxes from STET first
+      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+      
+      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
+     &     .and.DoCoupleSTET) then 
+         call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),
+     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &        Efield(1:nDim),Ap,F107,F107A,SeDens_C, SeFlux_C, SeHeat_C)
+      endif
+      
+      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+         SeDens_C(:)=0.0
+         SeFlux_C(:)=0.0
+         SeHeat_C(:)=0.0
+      endif
+
       CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
 
       CALL PW_CALC_EFIELD(nDim,State_GV(-1:nDim+2,:))

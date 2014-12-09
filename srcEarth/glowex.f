@@ -186,7 +186,7 @@ C
           ! Standard situation: Real axes
           CALL SOLZEN (IYD, UTG, GLAT, GLONG, SZA)
        endif
-
+       SZApe=SZA
        SZA = min(SZA,85.0)
        SZA = SZA * cPi/180.
        SZAD = SZA*cRadToDeg

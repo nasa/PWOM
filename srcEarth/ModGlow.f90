@@ -1,5 +1,3 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
 Module ModGlow
   ! Module for Glowex and connected subroutines
 
@@ -23,7 +21,7 @@ Module ModGlow
   INTEGER IYR
   INTEGER IFACTOR
   REAL EFLUX(NF), EZERO(NF), &
-       SZA, DIP,  EFRAC, &
+       SZApe,SZA, DIP,  EFRAC, &
        ZO(JMAX), ZN2(JMAX), ZO2(JMAX), ZNO(JMAX), &
        ZNS(JMAX), ZND(JMAX), ZRHO(JMAX), ZE(JMAX), &
        ZCOL(NMAJ,JMAX),ZTN(JMAX),ZMAJ(NMAJ,JMAX),ZZ(JMAX), &
