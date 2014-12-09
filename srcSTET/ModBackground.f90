@@ -10,7 +10,7 @@ Module ModSeBackground
 
 
   real, public :: UT = 43200.0 ! default at noon
-  integer      :: Idate=97046 !day in the form of YYDDD
+  integer,public      :: Idate=97046 !day in the form of YYDDD
 
   ! when the dipole and rotation axis are aligned
   logical, public      :: DoAlignDipoleRot = .false.
