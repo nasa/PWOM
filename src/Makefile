@@ -23,6 +23,7 @@ MODULES = \
 	ModLatLon.o\
 	ModPwPlot.o\
 	ModWaves.o\
+	ModPhotoElectron.o\
 	${MODULES_PLANET}
 
 METHODS = \

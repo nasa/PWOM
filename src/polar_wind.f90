@@ -1,5 +1,3 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine polar_wind
 
   ! Discussion:
@@ -22,7 +20,8 @@ subroutine polar_wind
   use ModCommonVariables
   use ModFieldLine
   use ModPwImplicit, only: PW_implicit_update
-  use ModPwPlots, ONLY: PW_print_plot
+  use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
+
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -67,6 +66,7 @@ subroutine polar_wind
   
   if (IsFirstCall .and. DoSavePlot) then
      CALL PW_print_plot
+     if (DoPlotNeutral) call plot_neutral_pw
      if(iLine == nLine) IsFirstCall = .false.
   endif
   
@@ -100,10 +100,13 @@ subroutine polar_wind
      StateOld_GV=State_GV
      if (DoTimeAccurate)then
         TIME=TIME+DT
-        if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )& 
-             CALL PW_print_plot
+        if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
+           CALL PW_print_plot
+           if (DoPlotNeutral) call plot_neutral_pw
+        endif
      else if (mod(nStep,DnOutput) == 0) then
         CALL PW_print_plot
+        if (DoPlotNeutral) call plot_neutral_pw
      end if
      !       Reverse order of advection and implicit temperature update
      
@@ -127,8 +130,10 @@ subroutine polar_wind
      if (IsVariableDt) call calc_dt
      if (DoTimeAccurate)then
         TIME=TIME+DT
-        if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )& 
-             CALL PW_print_plot
+        if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
+           CALL PW_print_plot
+           if (DoPlotNeutral) call plot_neutral_pw
+        endif
         IF (IsStandAlone .and. &
              floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-2.0*DT)/DToutput) )&
              call PW_write_restart(&
@@ -143,6 +148,7 @@ subroutine polar_wind
      else 
         if (mod(nStep,DnOutput) == 0 .or. mod(nStep-1,DnOutput) == 0) then
            CALL PW_print_plot
+           if (DoPlotNeutral) call plot_neutral_pw
            IF (IsStandAlone)&
                 call PW_write_restart(&
                 nDim,RAD(1:nDim),GmLat,GmLong,Time,DT,nStep,NameRestart, &    
@@ -161,23 +167,29 @@ contains
   !============================================================================
   
   subroutine advect
+    use ModPhotoElectron
     use ModCouplePWOMtoSTET, only: get_stet_for_pwom
-    real, allocatable :: SeDens_C(:), SeFlux_C(:), SeHeat_C(:)
-    !couple time to call update the SE flux
-    real :: DtGetSe=20.0
+
     !--------------------------------------------------------------------------
 
     !get the SE fluxes from STET first
-    if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
-    if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
-    if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+    !if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+    !if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+    !if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
 
-    if (floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe) ) then 
+    if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))&
+         .and.DoCoupleSTET) then 
        call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),&
             State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),&
             Efield(1:nDim),Ap,F107,F107A,SeDens_C, SeFlux_C, SeHeat_C)
     endif
 
+    if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+       SeDens_C(:)=0.0
+       SeFlux_C(:)=0.0
+       SeHeat_C(:)=0.0
+    endif
+    
     NewState_GV = State_GV
     if (TypeSolver == 'Godunov') then
        Do iIon=1,nIon-1
@@ -213,8 +225,10 @@ contains
               HeatCon_GI(0:nDim+1,nIon), &
               NewState_GV(-1:nDim+2,iT_I(nIon)))
          ! Set electron density and velocity
-         NewState_GV(1:nDim,RhoE_)=0.0
-         NewState_GV(1:nDim,uE_)  =0.0
+         NewState_GV(1:nDim,RhoE_)= -SeDens_C(:)*Mass_I(nIon)
+         NewState_GV(1:nDim,uE_)  = -SeFlux_C(:)*Mass_I(nIon)
+!         NewState_GV(1:nDim,RhoE_)=0.0
+!         NewState_GV(1:nDim,uE_)  =0.0
          do k=1,nDim
             do iIon=1,nIon-1
                NewState_GV(K,RhoE_) = &
@@ -224,6 +238,8 @@ contains
                     (MassElecIon_I(iIon)*NewState_GV(K,iRho_I(iIon))&
                     *NewState_GV(K,iU_I(iIon)))
             enddo
+            NewState_GV(k,RhoE_) = &
+                 max(NewState_GV(k,RhoE_),eThermalDensMin*Mass_I(nIon))
             NewState_GV(K,uE_)=(NewState_GV(K,uE_) -1.8965E-18*CURR(K))/NewState_GV(K,RhoE_)
          enddo
          !get T from p and rho
@@ -233,8 +249,10 @@ contains
               *NewState_GV(1:nDim,iRho_I(nIon))
       else         
          ! Set electron density and velocity
-         NewState_GV(1:nDim,RhoE_)=0.0
-         NewState_GV(1:nDim,uE_)  =0.0
+         NewState_GV(1:nDim,RhoE_)= -SeDens_C(:)*Mass_I(nIon)
+         NewState_GV(1:nDim,uE_)  = -SeFlux_C(:)*Mass_I(nIon)
+!         NewState_GV(1:nDim,RhoE_)=0.0
+!         NewState_GV(1:nDim,uE_)  =0.0
          do k=1,nDim
             do iIon=1,nIon-1
                NewState_GV(K,RhoE_) = &
@@ -244,7 +262,8 @@ contains
                     (MassElecIon_I(iIon)*NewState_GV(K,iRho_I(iIon))&
                     *NewState_GV(K,iU_I(iIon)))
             enddo
-            
+            NewState_GV(k,RhoE_) = &
+                 max(NewState_GV(k,RhoE_),eThermalDensMin*Mass_I(nIon))
             NewState_GV(K,uE_)=(NewState_GV(K,uE_) -1.8965E-18*CURR(K))/NewState_GV(K,RhoE_)
          enddo
       endif

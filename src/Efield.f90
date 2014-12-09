@@ -1,13 +1,12 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 SUBROUTINE PW_calc_efield(nCell,State_GV)
   use ModCommonVariables,only: nDim,nIon,iRho_I,iU_I,iP_I,MassElecIon_I,&
        Source_CV,uE_,pE_,DrBnd,Mass_I,Efield,GRAVTY,&
-       dArea,CurrMx,MaxGrid,Te_,nVar, NamePlanet, Ion1_,AltD
+       dArea,CurrMx,MaxGrid,Te_,nVar, NamePlanet, Ion1_,AltD,CURR,CurrMn
   use ModPWOM,    ONLY:UseCentrifugal
   use ModPwWaves, ONLY: UseWaveAcceleration, WaveAcceleration_C, &
                         calc_wave_acceleration
+  use ModPhotoElectron
   implicit none
   
   integer,intent(in) :: nCell
@@ -17,7 +16,7 @@ SUBROUTINE PW_calc_efield(nCell,State_GV)
   real    :: PR_GI(0:MaxGrid,nIon),&
              PR(0:MaxGrid),EZ(0:MaxGrid),eNumDens,Dz,Ez1,Dnom
   real, allocatable :: aCentrifugal_C(:)
-  
+  real :: eRhoTotal, eVelTotal
   !----------------------------------------------------------------------------
   
   if (.not.allocated(aCentrifugal_C)) allocate (aCentrifugal_C(nDim))
@@ -30,12 +29,36 @@ SUBROUTINE PW_calc_efield(nCell,State_GV)
         !PR_species = rho * u^2
         PR_GI(K,iIon)=&
              State_GV(K,iU_I(iIon))**2*State_GV(K,iRho_I(iIon))
-        
         if (iIon /= nIon) &
              PR(K)=PR(K)-MassElecIon_I(iIon)*(State_GV(K,iP_I(iIon))+PR_GI(K,iIon))
      enddo
   enddo
-  
+
+  !make sure to use the total electron velocity here
+  if (UseFeebackFromSTET) then
+     do K=0,nDim+1
+        eRhoTotal =0.0
+        eVelTotal =0.0  
+        do iIon=1,nIon-1
+           eRhoTotal = &
+                eRhoTotal+MassElecIon_I(iIon)*State_GV(K,iRho_I(iIon))
+           eVelTotal= &
+                eVelTotal+ &
+                (MassElecIon_I(iIon)*State_GV(K,iRho_I(iIon))&
+                *State_GV(K,iU_I(iIon)))
+        enddo
+        if (k == 0) then
+           eVelTotal =(eVelTotal -1.8965E-18*CurrMn)/eRhoTotal
+        elseif(K==nDim+1)then
+           eVelTotal =(eVelTotal -1.8965E-18*CurrMx)/eRhoTotal
+        else
+           eVelTotal =(eVelTotal -1.8965E-18*CURR(K))/eRhoTotal
+        endif
+        PR_GI(K,nIon)=&
+             eVelTotal**2*eRhoTotal
+     enddo
+  end if
+
   !PR = sum( M_e/M_species *(P_thermal(k) + rho(k) * u(k)^2))
   PR(0:nDim+1)=State_GV(0:nDim+1,pE_)+PR_GI(0:nDim+1,nIon)+PR(0:nDim+1)
   

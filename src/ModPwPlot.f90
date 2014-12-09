@@ -1,5 +1,3 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
 Module ModPwPlots
   
   implicit none
@@ -7,8 +5,10 @@ Module ModPwPlots
   private ! except 
   
   public :: PW_print_plot
+  public :: plot_neutral_pw
 
   character(len=5),  public    :: TypePlot   = 'ascii'
+  logical,  public             :: DoPlotNeutral   = .false.
   character(len=22), parameter :: NameHeader = 'Polarwind output_var11'  
 contains
   !=============================================================================
@@ -85,6 +85,60 @@ contains
     deallocate(Coord_I)
     RETURN
   END SUBROUTINE PW_print_plot
+  
+  !============================================================================
+  subroutine plot_neutral_pw
+    use ModCommonVariables
+    use ModIoUnit, ONLY: UnitTmp_
+    use ModPWOM,   ONLY: iLine,iLineGlobal
+    use ModPlotFile,ONLY: save_plot_file
+    use ModGlow,   ONLY: SZApe
+    
+    real MO,MH,MHe,Me
+    real, allocatable :: PlotState_IV(:,:)
+    real, allocatable :: Coord_I(:)
+    integer :: iAlt, iIon
+    character(len=79), parameter :: NamePlotVarNeutral= &
+         'r Lat Lon SZA [O] [O2] [N2] [H] [He] g'
+    integer, parameter :: nPlotVarNeutral = 8
+    character(len=100) :: NameNeutral
+    !---------------------------------------------------------------------------
+    ! Allocate PlotState and Coord arrays
+    if (.not.allocated(PlotState_IV)) allocate(PlotState_IV(1:nDim,nPlotVarNeutral))
+    if (.not.allocated(Coord_I)) allocate(Coord_I(1:nDim))
+    
+    !\
+    ! Fill PlotState_IV array 
+    !/
+
+    ! Set Lat Lon
+    PlotState_IV (1:nDim, 1) = GmLat
+    PlotState_IV (1:nDim, 2) = GmLong
+    PlotState_IV (1:nDim, 3) = SZApe
+    PlotState_IV (1:nDim, 4)  = NDensity_CI(1:nDim,O_)
+    PlotState_IV (1:nDim, 5)  = NDensity_CI(1:nDim,O2_)
+    PlotState_IV (1:nDim, 6)  = NDensity_CI(1:nDim,N2_)
+    PlotState_IV (1:nDim, 7)  = NDensity_CI(1:nDim,H_)
+    PlotState_IV (1:nDim, 8)  = NDensity_CI(1:nDim,He_)    
+
+    ! Set altitude for output
+    Coord_I (1:nDim) = AltD(1:nDim)
+
+    ! Set output file name
+    write(NameNeutral,"(a,i4.4,a)") &
+         'PW/plots/north_neutral_iline',iLineGlobal(iLine),'.out'
+    !write plot
+    call save_plot_file(NameNeutral, TypePositionIn='append',     &
+         TypeFileIn=TypePlot,StringHeaderIn = NameHeader,                 & 
+         NameVarIn = NamePlotVarNeutral, nStepIn= nint(time/dt),TimeIn=time,   &
+         nDimIn=1,CoordIn_I = Coord_I, VarIn_IV = PlotState_IV,           &
+         ParamIn_I = (/gamma/))
+    
+    ! Deallocate to save memory
+    deallocate(PlotState_IV)
+    deallocate(Coord_I)
+    return
+  end subroutine plot_neutral_pw
   
   !========================================================================
   real function alog10_check(x)
