@@ -65,9 +65,9 @@ contains
   !=============================================================================
   ! input the pwom grid, thermal e density, and Efield. run stet for iLine
   subroutine get_stet_for_pwom(TimePw,iLine,Coord_D,eDensPW_C,eTempPW_C,&
-       EfieldPW_C,Ap_I,F107,F107A,SeDensPW_C, SeFluxPW_C, SeHeatPW_C)
+       EfieldPW_C,Ap_I,F107,F107A,IYD,SeDensPW_C, SeFluxPW_C, SeHeatPW_C)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC
-    use ModSeBackground,only: mLat_I,mLon_I, &
+    use ModSeBackground,only: mLat_I,mLon_I, Idate,&
          set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
          plot_ephoto_prod,get_neutrals_and_pe_spectrum
     use ModSeState,only: Time
@@ -82,6 +82,7 @@ contains
     real,  intent(in) :: eDensPW_C(nAltPw), eTempPW_C(nAltPw),EfieldPW_C(nAltPw)
     ! Ap and F107 values from PWOM to set thermosphere in STET
     real,  intent(in) :: Ap_I(7), F107, F107A
+    integer,intent(in):: IYD !same as idate, but set in PWOM
     ! SE dens, flux, and heat from STET (interpolated to PWOM grid)
     real,  intent(out)::SeDensPW_C(nAltPw),SeFluxPW_C(nAltPw),SeHeatPW_C(nAltPw)
     ! named parameters for coordinates
@@ -98,6 +99,9 @@ contains
     ! Set the Time in STET to match the time in PWOM
     Time=TimePw
     
+    ! set idate needed for MSIS call
+    Idate=IYD
+
     ! Set the Lat and Lon coordinates and Lshell for field line
     mLat_I(iLine)=Coord_D(Lat_) 
     mLon_I(iLine)=Coord_D(Lon_) 
