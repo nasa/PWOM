@@ -669,7 +669,7 @@ contains
                       IF (E1.LT.Emin .OR. E1.GT.Emax) cycle
                       DSPECT = &
                            ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)&
-                           *PROB(K1,I,L)*PROB(K2,I,LA)
+                           *PROB(K1,I,L)*PROB(K2,I,LAUG(I))
                       PHOTOI(K1,I,J) = PHOTOI(K1,I,J) + DSPECT      ! Technically, it's
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
