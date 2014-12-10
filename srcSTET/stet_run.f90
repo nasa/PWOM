@@ -1,7 +1,7 @@
 !============================================================================
 ! run STET to get a new steady state or to advance some amount of time for 
 ! a particular line, iLine.
-subroutine stet_run(iLine,IsOpen)
+subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
        nPlas,Efield_IC,DoIncludePotential
   use ModSeBackground,only: plot_background,plot_ephoto_prod,&
@@ -18,14 +18,13 @@ subroutine stet_run(iLine,IsOpen)
   implicit none
   
   integer, intent(in) :: iLine
-  logical, intent(in) :: IsOpen
+  logical, intent(in) :: IsOpen,DoCouplePWOM
 
   integer :: flag=1, nStep=0
   logical :: DoSavePreviousAndReset = .true.
 
-  real :: Ap(7), F107=80, F107A=80, t=0
-  
   logical,parameter :: IsIono1=.true.
+  real, parameter :: DtCouplePWOM=20.0 !this should come from PWOM in future
   !--------------------------------------------------------------------------
   
   
@@ -132,41 +131,43 @@ subroutine stet_run(iLine,IsOpen)
   !\
   ! plot model output
   !/
-  if(DoIncludePotential) then
-     
-     ! plot background
-     call plot_background(iLine,nStep,time)
-     
-     ! plot ephoto production
-     call plot_ephoto_prod(iLine,nStep,time)
-
-!     call plot_state_pot(iLine,90,nStep,time,iphiup,iphidn,phiup,phidn)     
-!     call plot_state_pot(iLine,1,nStep,time,iphiup,iphidn,phiup,phidn)
-!     call plot_state_pot(iLine,2,nStep,time,iphiup,iphidn,phiup,phidn)
-!     call plot_state_pot(iLine,3,nStep,time,iphiup,iphidn,phiup,phidn)
-!     call plot_state_pot(iLine,4,nStep,time,iphiup,iphidn,phiup,phidn)
-!     call plot_state_pot(iLine,5,nStep,time,iphiup,iphidn,phiup,phidn)
-!     call plot_state_pot(iLine,6,nStep,time,iphiup,iphidn,phiup,phidn)
-
-     call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.true.)
-     call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
-     
-     call plot_omni_pot(iLine,nStep,time,specup,specdn)
-     call plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
-            
-     
-  else
-     ! plot background
-     call plot_background(iLine,nStep,time)
-     
-     ! plot ephoto production
-     call plot_ephoto_prod(iLine,nStep,time)
-
-     call plot_state(iLine,nStep,time,iphiup,iphidn,phiup,phidn)
-     call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
-     call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
-     call plot_omni_line(iLine,nStep,time,specup,specdn)
-     call plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+  if ((Time-real(floor((Time+1.0e-5)/DtSavePlot))*Dtsaveplot<DtCouplePWOM) &
+       .or. .not.DoCouplePWOM)then 
+     if(DoIncludePotential) then
+        
+        ! plot background
+        call plot_background(iLine,nStep,time)
+        
+        ! plot ephoto production
+        call plot_ephoto_prod(iLine,nStep,time)
+        
+        !     call plot_state_pot(iLine,90,nStep,time,iphiup,iphidn,phiup,phidn)     
+        !     call plot_state_pot(iLine,1,nStep,time,iphiup,iphidn,phiup,phidn)
+        !     call plot_state_pot(iLine,2,nStep,time,iphiup,iphidn,phiup,phidn)
+        !     call plot_state_pot(iLine,3,nStep,time,iphiup,iphidn,phiup,phidn)
+        !     call plot_state_pot(iLine,4,nStep,time,iphiup,iphidn,phiup,phidn)
+        !     call plot_state_pot(iLine,5,nStep,time,iphiup,iphidn,phiup,phidn)
+        !     call plot_state_pot(iLine,6,nStep,time,iphiup,iphidn,phiup,phidn)
+        
+        call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.true.)
+        call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
+        
+        call plot_omni_pot(iLine,nStep,time,specup,specdn)
+        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+        
+        
+     else
+        ! plot background
+        call plot_background(iLine,nStep,time)
+        
+        ! plot ephoto production
+        call plot_ephoto_prod(iLine,nStep,time)
+        
+        call plot_state(iLine,nStep,time,iphiup,iphidn,phiup,phidn)
+        call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
+        call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
+        call plot_omni_line(iLine,nStep,time,specup,specdn)
+        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+     end if
   end if
-     
 end subroutine stet_run

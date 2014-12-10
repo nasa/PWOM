@@ -145,7 +145,7 @@ contains
     call update_grid(iLine,Coord_D)
     
     ! Get a new steady state solution for an open line 
-    call stet_run(iLine,IsOpen)
+    call stet_run(iLine,IsOpen,.true.)
     
     ! Interpolate the output back to PWOM grid
     call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)

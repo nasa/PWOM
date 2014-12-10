@@ -65,7 +65,7 @@ program main_stet
   
   write(*,*) 'Running stet'
   do iLine=1,nLineIn
-     call stet_run(iLine,.true.)
+     call stet_run(iLine,.true.,.false.)
   end do
 
 end program main_stet

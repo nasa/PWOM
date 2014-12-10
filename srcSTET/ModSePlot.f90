@@ -3,6 +3,8 @@ Module ModSePlot
   
   private !except
   
+  real, public :: DtSavePlot=60.0
+  
   public :: plot_state
   public :: plot_state_pot
   public :: plot_omni_iono
@@ -687,7 +689,7 @@ contains
   !============================================================================
   ! 1D output plots of integrated quantities along the field 
   ! (potential, heating rate, SE number density, SE number flux)
-  subroutine plot_along_field(iLine,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+  subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
                              MinEnergy_IC, EnergyGrid_I,Efield_IC
 
@@ -695,7 +697,7 @@ contains
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
     integer, intent(in) :: iLine
-    real, intent(in) :: HeatingRate_IC(nLine,nPoint), &
+    real, intent(in) :: time,HeatingRate_IC(nLine,nPoint), &
          NumberDens_IC(nLine,nPoint),NumberFlux_IC(nLine,nPoint)
 
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
@@ -730,14 +732,14 @@ contains
     if(IsFirstCall) then
        call save_plot_file(NamePlot, TypePositionIn='rewind', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=Time,     &
             nDimIn=nDim,CoordIn_I=Coord_I,                &
             VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
        if (iLine==nLine) IsFirstCall = .false.
     else
        call save_plot_file(NamePlot, TypePositionIn='append', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=1.0,     &
+            NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=Time,     &
             nDimIn=nDim,CoordIn_I=Coord_I,                &
             VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
     end if
