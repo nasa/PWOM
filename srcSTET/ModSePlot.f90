@@ -3,7 +3,7 @@ Module ModSePlot
   
   private !except
   
-  real, public :: DtSavePlot=60.0
+  real, public :: DtSavePlot=300.0
   
   public :: plot_state
   public :: plot_state_pot

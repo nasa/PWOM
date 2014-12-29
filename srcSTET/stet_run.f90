@@ -24,7 +24,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   logical :: DoSavePreviousAndReset = .true.
 
   logical,parameter :: IsIono1=.true.
-  real, parameter :: DtCouplePWOM=20.0 !this should come from PWOM in future
+  real, parameter :: DtCouplePWOM=120.0 !this should come from PWOM in future
   !--------------------------------------------------------------------------
   
   
