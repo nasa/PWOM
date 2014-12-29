@@ -46,7 +46,9 @@ Module ModSeState
   real,public,allocatable :: HeatingRate_IC(:,:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_IC(:,:) ! number density of SE [/cm3]
   real,public,allocatable :: NumberFlux_IC(:,:) ! number flux of SE [/cm2/s]
-  
+
+  !Precipitation info
+  logical :: UsePrecipitation = .false.
   
   !public methods
   public :: allocate_state_arrays
@@ -549,7 +551,7 @@ contains
                 iphidn(iLine,k,nIono+1,j)=phidn(iLine,k,1,j)
              end do
 
-             ! Add precip info here
+
           endif
 
           !set bounds for ionosphere loop depending if you are in iono 1 or 2
@@ -1124,6 +1126,7 @@ contains
     
     ! incomming photo electron production spectrum
     real   , intent(in) :: ePhotoProdSpec_IC(nEnergy,nIono)
+  
     
     REAL h,p,Fcheck, sigmaO,muO,velt,eta, lbeta(nPoint),alpha(nAngle), &
          sigma(nAngle),Flastj,kk, del1,del2, newphi,beta(nPoint),sigO1, &
@@ -1147,6 +1150,8 @@ contains
     real :: fhold(0:nAngle)
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
+    ! precipitation 
+    real :: PrecipCoef
     !---------------------------------------------------------------------------
 
     !initialize lbeta to 0
@@ -1340,6 +1345,17 @@ contains
              end do
 
              ! Add precip info here
+             ! Add precip info here KLUDGE
+             if(UsePrecipitation .and. EnergyGrid_I(j) > 100.0 ) then 
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   !These current values are for soft electron precipitation 
+                   ! from strangeway et al 2005. In future should come from 
+                   ! PWOM
+                   PrecipCoef=get_precip_norm(400.0,100.0,1000.0,2.0)
+                   iphidn(iLine,k,nIono+1,j)= &
+                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)/400.0)
+                end do
+             end if
           endif
 
           !set bounds for ionosphere loop depending if you are in iono 1 or 2
@@ -1828,6 +1844,20 @@ contains
     RETURN
   END SUBROUTINE ThetaVar1
   !=============================================================================
+  ! function to return normalization value for Maxwellian precipitation 
+  real function  get_precip_norm(E0,E1,E2,eFlux)
+    real, intent(in) :: E0, E1, E2, eFlux ! average, min, and max energy of precip
+                                    ! eflux is integrated energy flux in 
+                                    ! ergs/cm^2
+    get_precip_norm = 1.98774e11*eFlux/&
+         (exp(-E1/E0)*E0*(E1**2.0+2.0*E1*E0+2.0*E0**2.0)&
+         -exp(-E2/E0)*E0*(E2**2.0+2.0*E2*E0+2.0*E0**2.0))
+    return
+  end function get_precip_norm
+  
+  !=============================================================================
+
+
   
   !* ------------------------------------------------------------------ **
   !  Subroutine CheckConv sees if a flux has converged or not.
