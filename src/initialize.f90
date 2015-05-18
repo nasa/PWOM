@@ -13,6 +13,8 @@ subroutine PW_initialize
   use ModAurora, ONLY: init_aurora
   use ModPwWaves,ONLY: wave_init
   use ModCouplePWOMtoSTET, ONLY: init_pwom_stet_coupling
+  use ModPhotoelectron, ONLY: PrecipEnergyMin, PrecipEnergyMax, &
+       PrecipEnergyMean, PrecipEnergyFlux, UseFixedPrecip
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -182,7 +184,13 @@ subroutine PW_initialize
   if (UseAurora) call init_aurora
 
   ! initialize the SE model
-  call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD)
+  if(UseFixedPrecip) then
+     call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD,&
+          PrecipEminPwIn=PrecipEnergyMin,PrecipEmaxPwIn=PrecipEnergyMax, &
+          PrecipEmeanPwIn=PrecipEnergyMean,PrecipEfluxPwIn=PrecipEnergyFlux)
+  else
+     call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD)
+  end if
 end subroutine PW_initialize
 
 !=============================================================================

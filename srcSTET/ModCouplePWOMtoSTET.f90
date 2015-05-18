@@ -17,12 +17,16 @@ contains
   ! set up coupling between pwom and stet for all lines. 
   ! thermal e density and temperature for each line and interpolate to STET 
   ! grid 
-  subroutine init_pwom_stet_coupling(nAltPwIn,nLinePw,iLineGlobalPw_I,AltPwIn_C)
+  subroutine init_pwom_stet_coupling(nAltPwIn,nLinePw,iLineGlobalPw_I,&
+       AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn)
     use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential
     use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP
-    use ModSeState,only: allocate_state_arrays
+    use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
+         PrecipEmean,PrecipEflux,UsePrecipitation
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
-    real,    intent(in) :: AltPwIn_C(nAltPwIn)    
+    real,    intent(in) :: AltPwIn_C(nAltPwIn)
+    real, optional, intent(in)::PrecipEminPwIn,PrecipEmaxPwIn, &
+                                PrecipEmeanPwIn,PrecipEfluxPwIn
     !---------------------------------------------------------------------------
     DoUsePWOM = .true.    
     
@@ -60,12 +64,26 @@ contains
     !allocate the SE state arrays
     call allocate_state_arrays
 
+    ! Set the incomming precipitation
+    if (present(PrecipEminPwIn).and.present(PrecipEmaxPwIn) &
+         .and.present(PrecipEmeanPwIn).and.present(PrecipEfluxPwIn)) then
+       UsePrecipitation = .true.
+       PrecipEmax=PrecipEmaxPwIn
+       PrecipEmin=PrecipEminPwIn
+       PrecipEmean=PrecipEmeanPwIn
+       PrecipEflux=PrecipEfluxPwIn
+    elseif(present(PrecipEminPwIn).or.present(PrecipEmaxPwIn) &
+         .or.present(PrecipEmeanPwIn).or.present(PrecipEfluxPwIn)) then
+       call con_stop('PW_error: STET precip update values incomplete')
+    endif
+       
   end subroutine init_pwom_stet_coupling
   
   !=============================================================================
   ! input the pwom grid, thermal e density, and Efield. run stet for iLine
   subroutine get_stet_for_pwom(TimePw,iLine,Coord_D,eDensPW_C,eTempPW_C,&
-       EfieldPW_C,Ap_I,F107,F107A,IYD,SeDensPW_C, SeFluxPW_C, SeHeatPW_C)
+       EfieldPW_C,Ap_I,F107,F107A,IYD,SeDensPW_C, SeFluxPW_C, SeHeatPW_C, &
+       IonRatePW_C)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC
     use ModSeBackground,only: mLat_I,mLon_I, Idate,&
          set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
@@ -85,6 +103,8 @@ contains
     integer,intent(in):: IYD !same as idate, but set in PWOM
     ! SE dens, flux, and heat from STET (interpolated to PWOM grid)
     real,  intent(out)::SeDensPW_C(nAltPw),SeFluxPW_C(nAltPw),SeHeatPW_C(nAltPw)
+    ! Ionization rate from STET(interpolated to PWOM grid)
+    real,optional,  intent(out):: IonRatePW_C(nAltPw)
     ! named parameters for coordinates
     integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
     ! Is line open, for now always assume yes, but this could be passed
@@ -148,8 +168,17 @@ contains
     call stet_run(iLine,IsOpen,.true.)
     
     ! Interpolate the output back to PWOM grid
-    call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)
+    if (present(IonRatePW_C)) then
+       call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
+            IonRatePW_C=IonRatePW_C)
+    else
+       call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)
+    endif
     
+    write(*,*) '!!!!!!!!!!!!!!!!!!!'
+    write(*,*) 'FINISH CALLING get_stet_for_pwom at time=',TimePw
+    write(*,*) '!!!!!!!!!!!!!!!!!!!'
+
 !    call con_stop('')     
   end subroutine get_stet_for_pwom
   
@@ -157,15 +186,18 @@ contains
   !=============================================================================
   ! interpolate PWOM thermal electron density and temperature onto STET grid
 
-  subroutine interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)
+  subroutine interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
+       IonRatePW_C)
     use ModSeGrid,      only: FieldLineGrid_IC,nPoint
-    use ModSeState,     only: NumberDens_IC,NumberFlux_IC,HeatingRate_IC
+    use ModSeState,     only: NumberDens_IC,NumberFlux_IC,HeatingRate_IC, &
+                              TotalIonizationRate_IC
     use ModInterpolate, only: linear
     implicit none
     ! index of line we are working on
     integer, intent(in) :: iLine
     ! thermal e dens [/cc], temp [k] and E|| [V/m] from PWOM
     real,  intent(out)::SeDensPW_C(nAltPw),SeFluxPW_C(nAltPw),SeHeatPW_C(nAltPw)
+    real,  optional, intent(out)::IonRatePW_C(nAltPw)
     
     real :: Coord ! coordinate for interpolation
     integer :: iAlt
@@ -184,7 +216,11 @@ contains
        SeHeatPW_C(iAlt) = &
             linear(HeatingRate_IC(iLine,:),1,nPoint,Coord,&
             FieldLineGrid_IC(iLine,:))*cEVtoErg
-       
+       if (present(IonRatePW_C)) then
+          IonRatePW_C(iAlt) = &
+               linear(TotalIonizationRate_IC(iLine,:),1,nPoint,Coord,&
+               FieldLineGrid_IC(iLine,:))
+       endif
        !write(*,*) AltPw_C(iAlt)/1e5,SeDensPW_C(iAlt),SeFluxPW_C(iAlt),SeHeatPW_C(iAlt)
     enddo ALONG_LINE
   end subroutine interpolate_stet_to_PWOM

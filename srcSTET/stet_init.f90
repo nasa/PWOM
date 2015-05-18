@@ -105,9 +105,16 @@ subroutine set_grid_dimensions_default
   ! set the energy parameters for the energy grid
   TypeGridE = 'ConstDE'
   !nEnergy=100
-  nEnergy=99
+  !nEnergy=99
   !    nEnergy=94
-  EnergyMax=100.5
+
+  ! Energy grid for only photoelectrons
+  !nEnergy=99
+  !EnergyMax=100.5
+
+  ! Energy grid for precipitation
+  nEnergy=999  
+  EnergyMax=1000.5
   DeltaE = 1.0
   
   ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  

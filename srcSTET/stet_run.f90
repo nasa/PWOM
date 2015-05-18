@@ -11,6 +11,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
        update_se_state_iono,update_se_state_iono_pot,update_se_state, &
        update_se_state_pot,initplas, initplas_pot, initiono,initiono_pot,&
        calc_integrated_output,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,&
+       TotalIonizationRate_IC,&
        iphiup,iphidn,phiup,phidn,liphiup,liphidn,lphiup,lphidn,&
        specup, specdn, epsilon,delt, Time
   use ModSeCross,only: SIGS,SIGI,SIGA    
@@ -153,7 +154,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
         
         call plot_omni_pot(iLine,nStep,time,specup,specdn)
-        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC)
         
         
      else
@@ -167,7 +168,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
         call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
         call plot_omni_line(iLine,nStep,time,specup,specdn)
-        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC)
      end if
   end if
 end subroutine stet_run

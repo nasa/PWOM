@@ -689,7 +689,8 @@ contains
   !============================================================================
   ! 1D output plots of integrated quantities along the field 
   ! (potential, heating rate, SE number density, SE number flux)
-  subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC)
+  subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,&
+       NumberFlux_IC,TotalIonizationRate_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
                              MinEnergy_IC, EnergyGrid_I,Efield_IC
 
@@ -698,12 +699,14 @@ contains
     use ModNumConst,   ONLY: cRadToDeg
     integer, intent(in) :: iLine
     real, intent(in) :: time,HeatingRate_IC(nLine,nPoint), &
-         NumberDens_IC(nLine,nPoint),NumberFlux_IC(nLine,nPoint)
+         NumberDens_IC(nLine,nPoint),NumberFlux_IC(nLine,nPoint),&
+         TotalIonizationRate_IC(nLine,nPoint)
 
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=5, Pot_=1, Qe_=2,Nse_=3,Fse_=4,E_=5
+    integer, parameter :: nDim =1, nVar=6, Pot_=1, Qe_=2,Nse_=3,Fse_=4,E_=5,&
+                          rate_=6
     character(len=100),parameter :: NamePlotVar=&
-         'S Pot[eV] Qe[eV/cm3/s] Nse[/cc] Fse[/cm2/s] E[V/m] g r'
+         'S Pot[eV] Qe[eV/cm3/s] Nse[/cc] Fse[/cm2/s] E[V/m] IonRate[/cm3/s] g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='Integrated output'
     character(len=5) :: TypePlot='ascii'
@@ -723,6 +726,7 @@ contains
        PlotState_IV(iPoint,Nse_) = NumberDens_IC(iLine,iPoint)
        PlotState_IV(iPoint,Fse_) = NumberFlux_IC(iLine,iPoint)
        PlotState_IV(iPoint,E_)   = Efield_IC(iLine,iPoint)
+       PlotState_IV(iPoint,rate_)= TotalIonizationRate_IC(iLine,iPoint)
     enddo
     
     ! set name for plotfile

@@ -41,15 +41,21 @@ Module ModSeState
   real,allocatable :: Qestar_ICI(:,:,:) ! secondary production in ionosphere 
   real,allocatable :: Qpstar_ICI(:,:,:) ! Beam-induced production 
                                         ! (non-degredating beam)
+
+  real,allocatable :: Qstar_ICI(:,:,:) ! Total e production spec in ionosphere 
   
   !Arrays for integrated output variables
   real,public,allocatable :: HeatingRate_IC(:,:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_IC(:,:) ! number density of SE [/cm3]
   real,public,allocatable :: NumberFlux_IC(:,:) ! number flux of SE [/cm2/s]
+  
+  ! Total electron production rate (matches ionization rate) [/cm3/s]
+  real,public,allocatable :: TotalIonizationRate_IC(:,:) 
 
   !Precipitation info
-  logical :: UsePrecipitation = .false.
-  
+  logical, public :: UsePrecipitation = .false.
+  real   , public :: PrecipEmin, PrecipEmax,PrecipEmean,PrecipEflux
+
   !public methods
   public :: allocate_state_arrays
   public :: check_time,check_time_pot
@@ -456,7 +462,7 @@ contains
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
                   Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
-             
+             Qstar_ICI(iLine,iIono,j)=Qstar
                        
              do k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -591,7 +597,8 @@ contains
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
                   Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
-
+             Qstar_ICI(iLine,iIono,j)=Qstar
+             
              DO k=1,nThetaAlt_II(iLine,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
                      NeutralDens_IC(:,iIonoHalf),j,iIono,k,cascade,lossum,2)
@@ -1239,6 +1246,7 @@ contains
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
                   Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+             Qstar_ICI(iLine,iIono,j)=Qstar
              
              do k=1,nThetaAlt_IIC(iLine,j,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -1351,9 +1359,12 @@ contains
                    !These current values are for soft electron precipitation 
                    ! from strangeway et al 2005. In future should come from 
                    ! PWOM
-                   PrecipCoef=get_precip_norm(400.0,100.0,1000.0,2.0)
+                   !PrecipCoef=get_precip_norm(400.0,100.0,1000.0,2.0)
+                   PrecipCoef=get_precip_norm(PrecipEmean,PrecipEmin,&
+                        PrecipEmax,PrecipEflux)
                    iphidn(iLine,k,nIono+1,j)= &
-                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)/400.0)
+                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                        /PrecipEmean)
                 end do
              end if
           endif
@@ -1398,6 +1409,7 @@ contains
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
                   Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+             Qstar_ICI(iLine,iIono,j)=Qstar
 
              DO k=1,nThetaAlt_IIC(iLine,j,i)-1
                 call get_cascade_and_lossum(iLine,nNeutral,SIGA,&
@@ -2286,9 +2298,26 @@ contains
     if (.not.allocated(NumDensIntegrand_I))allocate(NumDensIntegrand_I(nEnergy))
     if (.not.allocated(delKE_I)) allocate(delKE_I(nEnergy))
 
-    !calculate the volume heating rate
+    !allocate and initialize integrand arrays
+    if (.not.allocated(IntegrandFluxUp_I))allocate(IntegrandFluxUp_I(nAngle))
+    if (.not.allocated(IntegrandFluxDn_I))allocate(IntegrandFluxDn_I(nAngle))
+    if (.not.allocated(FluxUp_IC))        allocate(FluxUp_IC(nEnergy,nPoint))
+    if (.not.allocated(FluxDn_IC))        allocate(FluxDn_IC(nEnergy,nPoint))
+    if (.not.allocated(NetFlux_IC))       allocate(NetFlux_IC(nEnergy,nPoint))
+    IntegrandFluxUp_I(:)=0.0
+    IntegrandFluxDn_I(:)=0.0
+    FluxUp_IC(:,:)=0.0
+    FluxDn_IC(:,:)=0.0
+    NetFlux_IC(:,:)=0.0
+    NumberFlux_IC(iLine,:)=0.0
+
     HeatingRate_IC(iLine,:) = 0.0
-    do iPoint=1,nPoint
+    NumberDens_IC(iLine,:)=0.0
+
+    ALONG_LINE: do iPoint=1,nPoint
+       !\
+       ! calculate the volume heating rate
+       !/
        ENERGY: do iEnergy=1,nEnergy
           if (DoIncludePotential) then
              !when above maxalt for a given energy integrand is zero and cycle
@@ -2300,6 +2329,7 @@ contains
              Spec(iEnergy)=&
                   (specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint))&
                   / KineticEnergy_IIC(iLine,iEnergy,iPoint)
+             !set the delta kinetic energy array
              if (iEnergy<nEnergy) then
                 delKE_I(iEnergy) = KineticEnergy_IIC(iLine,iEnergy+1,iPoint) &
                      - KineticEnergy_IIC(iLine,iEnergy,iPoint)
@@ -2315,16 +2345,30 @@ contains
        end do ENERGY
        CALL midpnt_int(HeatingRate_IC(iLine,iPoint),Spec,delKE_I,1,nEnergy,&
             nEnergy,2)
-!       HeatingRate_IC(iLine,iPoint)=&
-!            HeatingRate_IC(iLine,iPoint)+specup(iLine,iEnergy,iPoint) &
-!            - specdn(iLine,iEnergy,iPoint)
        HeatingRate_IC(iLine,iPoint)=&
             4.*cPi*Acoef*eThermalDensity_C(iPoint)*HeatingRate_IC(iLine,iPoint)
-    end do
-
-    ! calculate number density
-    NumberDens_IC(iLine,:)=0.0
-    do iPoint=1,nPoint
+       !\
+       ! calculate the total electron production rate for each altitude
+       !/
+       if (iPoint <= nIono .or. iPoint > nPoint-nIono)then 
+          ! set iIono index
+          if (iPoint <= nIono) then
+             iIono = iPoint
+          else
+             iIono = iPoint-nIono-nPlas
+          endif
+          
+          CALL midpnt_int(TotalIonizationRate_IC(iLine,iPoint),&
+               Qstar_ICI(iLine,iIono,:),delKE_I,1,nEnergy,nEnergy,2)
+          TotalIonizationRate_IC(iLine,iPoint) = &
+               4.0*cPi*TotalIonizationRate_IC(iLine,iPoint)
+       else
+          TotalIonizationRate_IC(iLine,iPoint)=0.0
+       endif
+       
+       !\
+       ! calculate number density
+       !/
        ENERGY2: do iEnergy=1,nEnergy
           if (DoIncludePotential) then
              !when above maxalt for a given energy integrand is zero and cycle
@@ -2345,29 +2389,14 @@ contains
        CALL midpnt_int(NumberDens_IC(iLine,iPoint),NumDensIntegrand_I,&
             delKE_I,1,nEnergy,nEnergy,2)
        NumberDens_IC(iLine,iPoint)=4.*cPi*1.7E-8*NumberDens_IC(iLine,iPoint)
-    end do
+       
+       !\
+       ! calculate the number flux
+       !/
+       ! start by finding the netfluxfor each energy
+       ! for each altitude find the net flux for each energy, then integrate 
+       ! over energy
 
-    !\
-    ! calculate the number flux
-    !/
-    !start by finding the netfluxfor each energy
-    
-    !allocate and initialize integrand arrays
-    if (.not.allocated(IntegrandFluxUp_I))allocate(IntegrandFluxUp_I(nAngle))
-    if (.not.allocated(IntegrandFluxDn_I))allocate(IntegrandFluxDn_I(nAngle))
-    if (.not.allocated(FluxUp_IC))        allocate(FluxUp_IC(nEnergy,nPoint))
-    if (.not.allocated(FluxDn_IC))        allocate(FluxDn_IC(nEnergy,nPoint))
-    if (.not.allocated(NetFlux_IC))       allocate(NetFlux_IC(nEnergy,nPoint))
-    IntegrandFluxUp_I(:)=0.0
-    IntegrandFluxDn_I(:)=0.0
-    FluxUp_IC(:,:)=0.0
-    FluxDn_IC(:,:)=0.0
-    NetFlux_IC(:,:)=0.0
-    NumberFlux_IC(iLine,:)=0.0
-
-    ! for each altitude find the net flux for each energy, then integrate 
-    ! over energy
-    DO iPoint=1,nPoint
        !set up the integrand
        ENERGY3: do iEnergy=1,nEnergy
           !Get the up flux 
@@ -2402,12 +2431,12 @@ contains
                 endif
              end do
              ! integrate to get the up and down flux
-                CALL midpnt_int(FluxUp_IC(iEnergy,iPoint),IntegrandFluxUp_I,&
-                     mu_III(iLine,:,iPoint),1,nThetaAlt_II(iLine,iPoint),&
-                     nAngle,1)
-                CALL midpnt_int(FluxDn_IC(iEnergy,iPoint),IntegrandFluxDn_I,&
-                     mu_III(iLine,:,iPoint),1,nThetaAlt_II(iLine,iPoint),&
-                     nAngle,1)
+             CALL midpnt_int(FluxUp_IC(iEnergy,iPoint),IntegrandFluxUp_I,&
+                  mu_III(iLine,:,iPoint),1,nThetaAlt_II(iLine,iPoint),&
+                  nAngle,1)
+             CALL midpnt_int(FluxDn_IC(iEnergy,iPoint),IntegrandFluxDn_I,&
+                  mu_III(iLine,:,iPoint),1,nThetaAlt_II(iLine,iPoint),&
+                  nAngle,1)
           else
              ! when including potential use mu_IIIC and appropriate theta 
              ! range
@@ -2463,13 +2492,13 @@ contains
           NetFlux_IC(iEnergy,iPoint)=&
                2.0*cPi*(FluxUp_IC(iEnergy,iPoint)+FluxDn_IC(iEnergy,iPoint))
        end do ENERGY3
-
+       
        ! calculate the number flux
        CALL midpnt_int(NumberFlux_IC(iLine,iPoint),NetFlux_IC(:,iPoint),&
             delKE_I,1,nEnergy,nEnergy,2)
-    end do
-
-
+    end do ALONG_LINE
+    
+    
     ! deallocate to save memory
     deallocate(spec,delKE_I,NumDensIntegrand_I,IntegrandFluxUp_I,&
          IntegrandFluxDn_I,NetFlux_IC)
@@ -2500,7 +2529,7 @@ contains
 
     if(.not.allocated(Qestar_ICI))allocate(Qestar_ICI(nLine,2*nIono,nEnergy))
     if(.not.allocated(Qpstar_ICI))allocate(Qpstar_ICI(nLine,2*nIono,nEnergy))
-
+    if(.not.allocated(Qstar_ICI)) allocate(Qstar_ICI (nLine,2*nIono,nEnergy))
     ! Initiallize Qpstar to 0 as we do not include this will get updated 
     ! if a separate primary beam is included
     Qpstar_ICI(:,:,:)=0
@@ -2509,7 +2538,8 @@ contains
     if(.not.allocated(HeatingRate_IC)) allocate(HeatingRate_IC(nLine,nPoint))
     if(.not.allocated(NumberDens_IC))  allocate(NumberDens_IC(nLine,nPoint))
     if(.not.allocated(NumberFlux_IC))  allocate(NumberFlux_IC(nLine,nPoint))
-    
+    if(.not.allocated(TotalIonizationRate_IC))&
+         allocate(TotalIonizationRate_IC(nLine,nPoint))
   end subroutine allocate_state_arrays
 
 end Module ModSeState

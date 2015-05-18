@@ -286,12 +286,38 @@ C                                                                      C
 !         call get_aurora(nDim,AltD(1:nDim),NDensity_CI(1:nDim,O_:N2_),
 !     &        NeutralPressure_C(1:nDim)*0.1)
 !      endif
-      	
-      call  get_ionization(nDim, AltD(1:nDim), IonRateO_C(1:nDim))		
+
+!get the SE fluxes from STET first (call here to get Ionization rate
+      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+      
+      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
+     &     .and.DoCoupleSTET) then 
+         call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),
+     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
+     &        IonRatePW_C=IonRateO_C(1:nDim))
+         ! Divide the Ionization rate from STET by oxygen density to get
+         ! production in units of ions/cc/s rather than ions/s
+         IonRateO_C(1:nDim)=IonRateO_C(1:nDim)/XO(1:nDim)
+      else
+         call  get_ionization(nDim, AltD(1:nDim), IonRateO_C(1:nDim))
+      endif
+      
+      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+         SeDens_C(:)=0.0
+         SeFlux_C(:)=0.0
+         SeHeat_C(:)=0.0
+         call  get_ionization(nDim, AltD(1:nDim), IonRateO_C(1:nDim))		
+      endif
+
+
 
 !      do K =1,nDim
-!         write(*,*) AltD(K),IonRateO_C(K),AuroralIonRateO_C(K)
+!         write(*,*) AltD(K),IonRateO_C(K)*XO(K)!,AuroralIonRateO_C(K)
 !      enddo
+!      call con_stop('')
       DO 1099 J = 1,40
 
  9999    FORMAT(2X,1PE15.3,2X,1PE15.3)
@@ -488,25 +514,30 @@ C      READ(5,3) NCNPRT
       ALTMIN=ALTMIN/1.E5
       ALTMAX=ALTMAX/1.E5
       ETOP1=ETOP*1.23E-6/DRBND
-      
-!get the SE fluxes from STET first
-      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
-      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
-      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
-      
-      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
-     &     .and.DoCoupleSTET) then 
-         call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),
-     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
-     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
-      endif
-      
-      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
-         SeDens_C(:)=0.0
-         SeFlux_C(:)=0.0
-         SeHeat_C(:)=0.0
-      endif
 
+!      !get the SE fluxes from STET first
+!      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+!      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+!      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+!      
+!      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
+!     &     .and.DoCoupleSTET) then 
+!         call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),
+!     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+!     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
+!         write(*,*) 'max(IonRateO_C),min(IonRateO_C)',
+!     &        maxval(IonRateO_C(1:nDim)),minval(IonRateO_C(1:nDim))
+!         !stop
+!      endif
+!      
+!      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+!         SeDens_C(:)=0.0
+!         SeFlux_C(:)=0.0
+!         SeHeat_C(:)=0.0
+!      endif
+
+
+      
       CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
 
       CALL PW_CALC_EFIELD(nDim,State_GV(-1:nDim+2,:))
