@@ -12,13 +12,13 @@ Module ModSeGrid
   real, public                 :: DrIono1,DrIono2,DrIono3,DrIono4
 
   ! Index Size of Each ionospheric zone
-  integer, public, allocatable :: nIono1,nIono2,nIono3,nIono4
+  integer, public :: nIono1,nIono2,nIono3,nIono4
 
   ! Index Size of total ionosphere
 !  integer, public, allocatable :: nIono
   
   ! Altitude of Ionospheric and Plasmaspheric base 
-  real, public, allocatable :: BaseAltIono, BaseAltPlas
+  real, public :: BaseAltIono, BaseAltPlas
 
   
   ! Angle Grid
