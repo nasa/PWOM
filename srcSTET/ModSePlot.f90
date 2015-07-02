@@ -292,7 +292,7 @@ contains
   ! plot omnidirectional flux in the ionosphere
   subroutine plot_omni_iono(iLine,nStep,time,specup,specdn,IsIono1)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, nIono, nEnergy, nLine, &
-         nPoint,EnergyGrid_I
+         nPoint,EnergyGrid_I,iLineGlobal_I
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -347,7 +347,7 @@ contains
        enddo
        
        ! set name for plotfile
-       write(NamePlot,"(a,i4.4,a)") 'OmniIono1_',iLine,'.out'
+       write(NamePlot,"(a,i4.4,a)") 'OmniIono1_',iLineGlobal_I(iLine),'.out'
   
        !Plot grid for given line
        if(IsFirstCall1) then
@@ -384,7 +384,7 @@ contains
           enddo
        enddo
        ! set name for plotfile
-       write(NamePlot,"(a,i4.4,a)") 'OmniIono2_',iLine,'.out'
+       write(NamePlot,"(a,i4.4,a)") 'OmniIono2_',iLineGlobal_I(iLine),'.out'
        
        !Plot grid for given line
        if(IsFirstCall2) then
@@ -412,7 +412,7 @@ contains
   ! plot omnidirectional flux in the ionosphere
   subroutine plot_omni_iono_pot(iLine,nStep,time,specup,specdn,IsIono1)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, nIono, nEnergy, nLine, &
-         nPoint,KineticEnergy_IIC
+         nPoint,KineticEnergy_IIC,iLineGlobal_I
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -467,7 +467,7 @@ contains
        enddo
        
        ! set name for plotfile
-       write(NamePlot,"(a,i4.4,a)") 'OmniIono1_',iLine,'.out'
+       write(NamePlot,"(a,i4.4,a)") 'OmniIono1_',iLineGlobal_I(iLine),'.out'
   
        !Plot grid for given line
        if(IsFirstCall1) then
@@ -532,7 +532,7 @@ contains
   ! plot omnidirectional flux along the entire line
   subroutine plot_omni_line(iLine,nStep,time,specup,specdn)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, nEnergy, nLine, &
-         nPoint,EnergyGrid_I
+         nPoint,EnergyGrid_I,iLineGlobal_I
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -582,7 +582,7 @@ contains
     enddo
     
     ! set name for plotfile
-    write(NamePlot,"(a,i4.4,a)") 'Fluxes_',iLine,'.out'
+    write(NamePlot,"(a,i4.4,a)") 'Fluxes_',iLineGlobal_I(iLine),'.out'
     
     !Plot grid for given line
     if(IsFirstCall) then
@@ -611,7 +611,7 @@ contains
   ! energy output.
   subroutine plot_omni_pot(iLine,nStep,time,specup,specdn)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, nEnergy, nLine, &
-         nPoint,KineticEnergy_IIC
+         nPoint,KineticEnergy_IIC,iLineGlobal_I
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -661,7 +661,7 @@ contains
     enddo
     
     ! set name for plotfile
-    write(NamePlot,"(a,i4.4,a)") 'Fluxes_',iLine,'.out'
+    write(NamePlot,"(a,i4.4,a)") 'Fluxes_',iLineGlobal_I(iLine),'.out'
     
     !Plot grid for given line
     if(IsFirstCall) then
@@ -692,7 +692,7 @@ contains
   subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,&
        NumberFlux_IC,TotalIonizationRate_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
-                             MinEnergy_IC, EnergyGrid_I,Efield_IC
+                             MinEnergy_IC, EnergyGrid_I,Efield_IC,iLineGlobal_I
 
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
@@ -730,7 +730,7 @@ contains
     enddo
     
     ! set name for plotfile
-    write(NamePlot,"(a,i4.4,a)") 'STET_1D_iLine',iLine,'.out'
+    write(NamePlot,"(a,i4.4,a)") 'STET_1D_iLine',iLineGlobal_I(iLine),'.out'
     
     !Plot grid for given line. Overwrite old results on firstcall
     if(IsFirstCall) then
