@@ -109,12 +109,12 @@ subroutine set_grid_dimensions_default
   !    nEnergy=94
 
   ! Energy grid for only photoelectrons
-  !nEnergy=99
-  !EnergyMax=100.5
+  nEnergy=99
+  EnergyMax=100.5
 
   ! Energy grid for precipitation
-  nEnergy=999  
-  EnergyMax=1000.5
+!  nEnergy=999  
+!  EnergyMax=1000.5
   DeltaE = 1.0
   
   ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
