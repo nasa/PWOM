@@ -98,39 +98,39 @@ test_run: PWOM
 test_check:
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0001.dat \
-		data/output/${PLANET}/restart_iline0001.dat \
+		data_local/output/${PLANET}/restart_iline0001.dat \
 		> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0002.dat \
-		data/output/${PLANET}/restart_iline0002.dat \
+		data_local/output/${PLANET}/restart_iline0002.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0003.dat \
-		data/output/${PLANET}/restart_iline0003.dat \
+		data_local/output/${PLANET}/restart_iline0003.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0004.dat \
-		data/output/${PLANET}/restart_iline0004.dat \
+		data_local/output/${PLANET}/restart_iline0004.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0005.dat \
-		data/output/${PLANET}/restart_iline0005.dat \
+		data_local/output/${PLANET}/restart_iline0005.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0006.dat \
-		data/output/${PLANET}/restart_iline0006.dat \
+		data_local/output/${PLANET}/restart_iline0006.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0007.dat \
-		data/output/${PLANET}/restart_iline0007.dat \
+		data_local/output/${PLANET}/restart_iline0007.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0008.dat \
-		data/output/${PLANET}/restart_iline0008.dat \
+		data_local/output/${PLANET}/restart_iline0008.dat \
 		>> test_${PLANET}${MYTEST}.diff)
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-8 \
 		${TESTDIR}/PW/plots/north_plots_iline0001.out \
-		data/output/${PLANET}/north_plots_iline0001.out \
+		data_local/output/${PLANET}/north_plots_iline0001.out \
 		> test_${PLANET}${MYTEST}_plots.diff)
 	ls -l *.diff
 
@@ -143,7 +143,7 @@ test_restart:
 	make   test_check MYTEST=_restart
 
 test_restart_save:
-	cp data/input/${PLANET}/restart_iline* ${TESTDIR}/PW/restartIN/
+	cp data_local/input/${PLANET}/restart_iline* ${TESTDIR}/PW/restartIN/
 	cp input/${PLANET}/PARAM.in.restartsave ${TESTDIR}/PARAM.in
 	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe
 	cd ${TESTDIR}; mv PW/restartOUT/* PW/restartIN/
@@ -168,8 +168,9 @@ rundir:
 		fi;)
 	cd ${RUNDIR}/PW; \
 		mkdir restartIN restartOUT plots; \
-		cp ${PWDIR}/data/input/${PLANET}/restart_iline* restartIN/ ;\
-		cp ${PWDIR}/data/input/${PLANET}/North.dat .
+		cp ${PWDIR}/data_local/input/${PLANET}/restart_iline* restartIN/ ;\
+		cp ${PWDIR}/data_local/input/${PLANET}/North.dat .;\
+		cp -r ${PWDIR}/srcSTET/IRI_DATA .
 	@(if [ "$(STANDALONE)" != "NO" ]; then \
 		cd ${RUNDIR}; \
 			ln -s ${BINDIR}/PWOM.exe .; \

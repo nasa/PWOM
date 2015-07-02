@@ -187,7 +187,7 @@ contains
     IF (STL1.GT.24.) STL1=STL1-24.
     write(*,*) 'calling iri'
     CALL IRI90(JF,JMAG,gLat1_I(iLine),gLon1_I(iLine),RZ12,MMDD,STL1, &
-         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,' ',IriOutput_VC,OARR)
+         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,'PW/IRI_DATA/ ',IriOutput_VC,OARR)
     write(*,*) 'finish iri'
     do i=nIono,1,-1
        eThermalDensity_IC(iLine,i)=IriOutput_VC(1,i)*PerM3toPerCm3 
@@ -206,7 +206,7 @@ contains
     
     !  Call IRI for the second ionosphere
     CALL IRI90(JF,JMAG,gLat2_I(iLine),gLon2_I(iLine),RZ12,MMDD,STL1, &
-         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,' ',IriOutput_VC,OARR)
+         FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,'PW/IRI_DATA/ ',IriOutput_VC,OARR)
     
     do i=nIono,1,-1
        j=nPoint-i+1
