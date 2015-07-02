@@ -30,9 +30,8 @@ contains
     !---------------------------------------------------------------------------
     DoUsePWOM = .true.    
     
-    ! Set the global line number and total lines in STET to match PWOM lines
+    ! Set lines on proc to match lines in PWOM
     nLine = nLinePw
-    iLineGlobal_I=iLineGlobalPw_I
     
     ! Assume thermosphere drops with B2 for PW case
     ZEP=2.0
@@ -42,6 +41,10 @@ contains
     write(*,*) 'setting grid dimensions'
     call set_grid_dimensions_default
     
+    ! Set the global line number
+    iLineGlobal_I=iLineGlobalPw_I
+
+
     ! Allocate the background arrays
     write(*,*) 'allocating background arrays'
     call allocate_background_arrays
@@ -84,7 +87,7 @@ contains
   subroutine get_stet_for_pwom(TimePw,iLine,Coord_D,eDensPW_C,eTempPW_C,&
        EfieldPW_C,Ap_I,F107,F107A,IYD,SeDensPW_C, SeFluxPW_C, SeHeatPW_C, &
        IonRatePW_C)
-    use ModSeGrid, only: Lshell_I,update_grid,Efield_IC
+    use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I
     use ModSeBackground,only: mLat_I,mLon_I, Idate,&
          set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
          plot_ephoto_prod,get_neutrals_and_pe_spectrum
@@ -114,6 +117,7 @@ contains
     !---------------------------------------------------------------------------
     write(*,*) '!!!!!!!!!!!!!!!!!!!'
     write(*,*) 'CALLING get_stet_for_pwom at time=',TimePw
+    write(*,*) 'Working on iLine (local,global)=',iLine,iLineGlobal_I(iLine)
     write(*,*) '!!!!!!!!!!!!!!!!!!!'
 
     ! Set the Time in STET to match the time in PWOM
