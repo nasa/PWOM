@@ -39,6 +39,7 @@ $NewPlanet = "Earth" if $Install;
 
 foreach (@Arguments){
     if(/^-saturn$/i)          {$NewPlanet="Saturn";            next};
+    if(/^-jupiter$/i)          {$NewPlanet="Jupiter";            next};
     if(/^-earth$/i)           {$NewPlanet="Earth";             next};
     if(/^-s$/)                {$Show=1;                        next};
 
@@ -89,6 +90,7 @@ sub set_planet{
     my $Files = "$Dir/PLANET $Dir/Makefile.planet $Dir/ModCommonPlanet.f90".
 	" $Dir/upper_heat_conduction.f90";
     $Files .= " $Dir/get_rate.f90" if $Planet eq "Saturn";
+    $Files .= " $Dir/get_rate.f90" if $Planet eq "Jupiter";
     $Files .= " $Dir/ModGlow.f90"  if $Planet eq "Earth";
     &shell_command("cp $Files src/");
 
@@ -109,6 +111,8 @@ sub print_help{
 -Earth      Configure PWOM for Earth. This flag is case insensitive.
 
 -Saturn     Configure PWOM for Saturn. This flag is case insensitive.
+
+-Jupiter    Configure PWOM for Jupiter. This flag is case insensitive.
 
 -s          Show current planet.
 
