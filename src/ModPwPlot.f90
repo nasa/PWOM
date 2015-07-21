@@ -92,15 +92,15 @@ contains
     use ModIoUnit, ONLY: UnitTmp_
     use ModPWOM,   ONLY: iLine,iLineGlobal
     use ModPlotFile,ONLY: save_plot_file
-    use ModGlow,   ONLY: SZApe
+    !use ModGlow,   ONLY: SZApe
     
     real MO,MH,MHe,Me
     real, allocatable :: PlotState_IV(:,:)
     real, allocatable :: Coord_I(:)
     integer :: iAlt, iIon
     character(len=79), parameter :: NamePlotVarNeutral= &
-         'r Lat Lon SZA [O] [O2] [N2] [H] [He] g'
-    integer, parameter :: nPlotVarNeutral = 8
+         'r Lat Lon [O] [O2] [N2] [H] [He] g'
+    integer, parameter :: nPlotVarNeutral = 7
     character(len=100) :: NameNeutral
     !---------------------------------------------------------------------------
     ! Allocate PlotState and Coord arrays
@@ -114,12 +114,12 @@ contains
     ! Set Lat Lon
     PlotState_IV (1:nDim, 1) = GmLat
     PlotState_IV (1:nDim, 2) = GmLong
-    PlotState_IV (1:nDim, 3) = SZApe
-    PlotState_IV (1:nDim, 4)  = NDensity_CI(1:nDim,O_)
-    PlotState_IV (1:nDim, 5)  = NDensity_CI(1:nDim,O2_)
-    PlotState_IV (1:nDim, 6)  = NDensity_CI(1:nDim,N2_)
-    PlotState_IV (1:nDim, 7)  = NDensity_CI(1:nDim,H_)
-    PlotState_IV (1:nDim, 8)  = NDensity_CI(1:nDim,He_)    
+    !PlotState_IV (1:nDim, 3) = SZApe
+    PlotState_IV (1:nDim, 3)  = NDensity_CI(1:nDim,O_)
+    PlotState_IV (1:nDim, 4)  = NDensity_CI(1:nDim,O2_)
+    PlotState_IV (1:nDim, 5)  = NDensity_CI(1:nDim,N2_)
+    PlotState_IV (1:nDim, 6)  = NDensity_CI(1:nDim,H_)
+    PlotState_IV (1:nDim, 7)  = NDensity_CI(1:nDim,He_)    
 
     ! Set altitude for output
     Coord_I (1:nDim) = AltD(1:nDim)
