@@ -9,7 +9,7 @@ module ModPhotoElectron
   !minimum thermal density of electrons [/cc]
   real :: eThermalDensMin=2.0
 
-  logical :: DoCoupleSTET = .true., UseFeebackFromSTET=.true.
+  logical :: DoCoupleSTET = .true., UseFeedbackFromSTET=.true.
 
   !Fixed precipitation to pass to STET
   logical :: UseFixedPrecip = .false.

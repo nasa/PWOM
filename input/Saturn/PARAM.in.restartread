@@ -29,3 +29,6 @@ F		IsUseJr
 #STOP
 10.0		Tmax
 -1		MaxStep
+
+#STET
+F		DoCoupleSTET

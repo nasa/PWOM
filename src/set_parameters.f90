@@ -12,7 +12,8 @@ subroutine PW_set_parameters(NameAction)
   use ModPwPlots, ONLY: TypePlot
   use ModPwWaves, ONLY: UseWaveAcceleration 
   use ModPhotoElectron, ONLY: PrecipEnergyMin, PrecipEnergyMax, &
-       PrecipEnergyMean, PrecipEnergyFlux,UseFixedPrecip,DoCoupleSTET
+       PrecipEnergyMean, PrecipEnergyFlux,UseFixedPrecip, &
+       DoCoupleSTET, UseFeedbackFromSTET
 
   implicit none
   
@@ -207,6 +208,11 @@ subroutine PW_set_parameters(NameAction)
         if (iError /= 0) then
            write(*,*) "PW_ERROR: read indices was NOT successful"
         endif
+
+     case('#STET')
+        call read_var('DoCoupleSTET', DoCoupleSTET)
+        call read_var('UseFeedbackFromSTET', UseFeedbackFromSTET)
+
      case('#SETPRECIP')
         call read_var('UseFixedPrecip',  UseFixedPrecip)
         call read_var('PrecipEnergyMin', PrecipEnergyMin)        
@@ -214,8 +220,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('PrecipEnergyMean',PrecipEnergyMean)        
         call read_var('PrecipEnergyFlux',PrecipEnergyFlux)        
         
-        if(.not.DoCoupleSTET) &
-             write(*,*) 'PW_WARNING: #SETPRECIP invoked but STET not coupled'
+!        if(.not.DoCoupleSTET) &
+!             write(*,*) 'PW_WARNING: #SETPRECIP invoked but STET not coupled'
         
      endselect
   enddo

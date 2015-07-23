@@ -305,7 +305,7 @@ C                                                                      C
          call  get_ionization(nDim, AltD(1:nDim), IonRateO_C(1:nDim))
       endif
       
-      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
          SeDens_C(:)=0.0
          SeFlux_C(:)=0.0
          SeHeat_C(:)=0.0
@@ -530,7 +530,7 @@ C      READ(5,3) NCNPRT
 !         !stop
 !      endif
 !      
-!      if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+!      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
 !         SeDens_C(:)=0.0
 !         SeFlux_C(:)=0.0
 !         SeHeat_C(:)=0.0

@@ -35,7 +35,7 @@ SUBROUTINE PW_calc_efield(nCell,State_GV)
   enddo
 
   !make sure to use the total electron velocity here
-  if (UseFeebackFromSTET) then
+  if (UseFeedbackFromSTET) then
      do K=0,nDim+1
         eRhoTotal =0.0
         eVelTotal =0.0  

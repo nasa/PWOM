@@ -347,6 +347,16 @@ execution. Tmax sets the stop time in timeaccurate mode. and MaxStep sets the
 maximum number of iterations for non-timeaccurate mode.
 </command>
 
+<command name="STET">
+	<parameter name="DoCoupleSTET" type="logical" default="T" />
+	<parameter name="UseFeedbackFromSTET" type="logical" default="T" />
+
+#STET
+T		DoCoupleSTET
+T		UseFeedbackFromSTET
+
+#STET commands DoCoupleSTET and UseFeedbackFromSTET should be set to false for Saturn, true for Earth.
+</command>
 
 
 </commandgroup>

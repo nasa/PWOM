@@ -289,7 +289,7 @@ CALEX These are the energy collision terms as seen in eq 4.86 in Nagy
       enddo
       Source_CV(I,pE_) =StateIn_GV(I,RhoE_)*Source_CV(I,pE_)
 
-      if(UseFeebackFromSTET) then
+      if(UseFeedbackFromSTET) then
          !add the energy deposition from SEs
          Source_CV(I,pE_) =Source_CV(I,pE_)+SeHeat_C(I)
       endif

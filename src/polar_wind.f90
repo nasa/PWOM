@@ -173,9 +173,9 @@ contains
     !--------------------------------------------------------------------------
 
     !get the SE fluxes from STET first
-    !if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
-    !if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
-    !if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+    if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+    if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+    if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
 
     if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))&
          .and.DoCoupleSTET) then 
@@ -184,7 +184,7 @@ contains
             Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
     endif
 
-    if((.not.DoCoupleSTET) .or. (.not.UseFeebackFromSTET)) then
+    if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
        SeDens_C(:)=0.0
        SeFlux_C(:)=0.0
        SeHeat_C(:)=0.0
