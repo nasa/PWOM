@@ -7,7 +7,7 @@ module ModPhotoElectron
   real :: DtGetSe=120.0
   
   !minimum thermal density of electrons [/cc]
-  real :: eThermalDensMin=2.0
+  real :: eThermalDensMin=1.0
 
   logical :: DoCoupleSTET = .true., UseFeedbackFromSTET=.true.
 

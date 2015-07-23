@@ -91,7 +91,7 @@ contains
   !============================================================================
   subroutine get_b0(AltRef, B0ref)
     
-    use ModCommonVariables, ONLY: GmLat
+    use ModCommonVariables, ONLY: SmLat
     use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I
     use ModNumConst,        ONLY: cDegToRad
     real, intent(in):: AltRef !incomming reference alt [m]
@@ -108,7 +108,7 @@ contains
     !set the reference radius
     rRef = rPlanet+AltRef
     ! find corresponding l-shell
-    Lshell = 1.0/(cos(GmLat*cDegToRad))**2.0
+    Lshell = 1.0/(cos(SmLat*cDegToRad))**2.0
     
     ! find corresponding latitude for location on l-shell
     Lat = acos(sqrt(rRef*cCmToM/(Lshell*rPlanet)))

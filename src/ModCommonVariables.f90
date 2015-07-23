@@ -75,7 +75,8 @@ module ModCommonVariables
        ,HLPE,HLPE0,HLPO,HLPH,HLPHE
   Logical :: UseStaticAtmosphere=.false.
   INTEGER :: IYD=76183,IART=1
-  REAL    ::UT,SEC,GLAT,GLONG,STL,F107A=60.,F107=60.,GMLAT,GMLONG
+  REAL    :: UT,SEC,GLAT,GLONG,GLAT2,GLONG2,GMLAT,GMLON,STL,F107A=60.,F107=60.
+  REAL    :: SmLat,SmLon
   real    :: AP(7)=(/4.,4.,4.,4.,4.,4.,4./)
   REAL  IonRateO_C(MaxGrid)
 !  REAL  TLB,S,DB04,DB16,DB28,DB32,DB40,DB48,DB01,ZA,T0,Z0, &

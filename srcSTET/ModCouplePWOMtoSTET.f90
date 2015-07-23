@@ -3,7 +3,6 @@ Module ModCouplePWOMtoSTET
   
   private !except
   
-  logical, public :: DoUsePWOM = .false.
   integer :: nAltPw
   real,allocatable :: AltPw_C(:)
   real :: dAltPw
@@ -20,7 +19,8 @@ contains
   subroutine init_pwom_stet_coupling(nAltPwIn,nLinePw,iLineGlobalPw_I,&
        AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn)
     use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential
-    use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP
+    use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP,&
+                              DoUsePWOM
     use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
          PrecipEmean,PrecipEflux,UsePrecipitation
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
@@ -84,21 +84,23 @@ contains
   
   !=============================================================================
   ! input the pwom grid, thermal e density, and Efield. run stet for iLine
-  subroutine get_stet_for_pwom(TimePw,iLine,Coord_D,eDensPW_C,eTempPW_C,&
-       EfieldPW_C,Ap_I,F107,F107A,IYD,SeDensPW_C, SeFluxPW_C, SeHeatPW_C, &
-       IonRatePW_C)
+  subroutine get_stet_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
+       eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
+       SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I
-    use ModSeBackground,only: mLat_I,mLon_I, Idate,&
-         set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
-         plot_ephoto_prod,get_neutrals_and_pe_spectrum
+    use ModSeBackground,only: mLat_I,mLon_I, gLat1_I,gLat2_I,gLon1_I,gLon2_I,&
+         Idate, UT,set_footpoint_locations,fill_thermal_plasma_empirical,&
+         plot_background,plot_ephoto_prod,get_neutrals_and_pe_spectrum
     use ModSeState,only: Time
     implicit none
     ! Incomming time from PWOM
     real, intent(in) :: TimePw
+    ! Universal Time for background
+    real, intent(in) :: UtPW
     ! index of line we are working on
     integer, intent(in) :: iLine
-    ! magnetic Lat and Lon coord for base of line in degrees
-    real,  intent(in) :: Coord_D(2)
+    ! magnetic and geo Lat and Lon coord for base of line in degrees
+    real,  intent(in) :: Coord_D(2),CoordG_D(2),CoordG2_D(2)
     ! thermal e dens [/cc], temp [k] and E|| [V/m] from PWOM
     real,  intent(in) :: eDensPW_C(nAltPw), eTempPW_C(nAltPw),EfieldPW_C(nAltPw)
     ! Ap and F107 values from PWOM to set thermosphere in STET
@@ -125,20 +127,24 @@ contains
     
     ! set idate needed for MSIS call
     Idate=IYD
+    
+    ! set UT in ModBackground to match UT from PWOM
+    UT=UtPw
 
     ! Set the Lat and Lon coordinates and Lshell for field line
     mLat_I(iLine)=Coord_D(Lat_) 
     mLon_I(iLine)=Coord_D(Lon_) 
-    
+    gLat1_I(iLine)=CoordG_D(Lat_) 
+    gLon1_I(iLine)=CoordG_D(Lon_) 
+    gLat2_I(iLine)=CoordG2_D(Lat_) 
+    gLon2_I(iLine)=CoordG2_D(Lon_) 
     ! Set Efield to zero everywhere. So only PWOM efield is used.
     Efield_IC(iLine,:)=0.0
     
     !Lshell_I(iLine) = cos(Coord_D(Lat_)*cDegToRad)
 
-    ! Set glat and glon coords
-    call set_footpoint_locations(iLine)
 
-    ! Now that we know the footpoint locations we can set the spatial part 
+    ! From footpoint locations  from PWOM we can set the spatial part 
     ! of the grid which we need to set the background and interpolate the 
     ! PWOM values. The PA ranges will be wrong and the region of exisitance.
     ! this will be corrected after the Efield from PWOM is interpolated 

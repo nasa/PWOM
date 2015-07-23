@@ -33,7 +33,7 @@ subroutine polar_wind
   !-----------------------------------------------------------------------
   nDim = nAlt
   call get_field_line(nDim,State_GV(1:nDim,:),                       &
-       GMLAT,GMLONG,Jr,wHorizontal,uJoule2=uJoule2,                &
+       SmLat,SmLon,Jr,wHorizontal,uJoule2=uJoule2,                &
        iUnitOutput=iUnitOutput,       &
        NameRestart=NameRestart,                                    &
        iLine=iLine, Time=Time,MaxLineTime=Tmax,                    &
@@ -137,11 +137,11 @@ subroutine polar_wind
         IF (IsStandAlone .and. &
              floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-2.0*DT)/DToutput) )&
              call PW_write_restart(&
-             nDim,RAD(1:nDim),GmLat,GmLong,Time,DT,nStep,NameRestart, &    
+             nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
              State_GV(1:nDim,:))                  
         IF (TIME+1.0e-5 >= TMAX) Then 
            Call put_field_line(nDim,State_GV(1:nDim,:),    &
-                GMLAT,GMLONG,Jr,wHorizontal,&
+                SmLat,SmLon,Jr,wHorizontal,&
                 Time=Time,nStep=nStep,r_C=RAD   ) 
            RETURN
         endif
@@ -151,12 +151,12 @@ subroutine polar_wind
            if (DoPlotNeutral) call plot_neutral_pw
            IF (IsStandAlone)&
                 call PW_write_restart(&
-                nDim,RAD(1:nDim),GmLat,GmLong,Time,DT,nStep,NameRestart, &    
+                nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
                 State_GV(1:nDim,:))             
         endif
         IF (nStep >= MaxStep) Then 
            Call put_field_line(nDim,State_GV(1:nDim,:),    &
-                GMLAT,GMLONG,Jr,wHorizontal,&
+                SmLat,SmLon,Jr,wHorizontal,&
                 Time=Time,nStep=nStep,r_C=RAD   ) 
            RETURN
         end if
@@ -169,7 +169,11 @@ contains
   subroutine advect
     use ModPhotoElectron
     use ModCouplePWOMtoSTET, only: get_stet_for_pwom
+    use ModPwTime,ONLY: StartTime, Hour_,Minute_, Second_, iCurrentTime_I, &
+         CurrentTime
+    use ModTimeConvert, ONLY: time_real_to_int
 
+    real :: UTsec
     !--------------------------------------------------------------------------
 
     !get the SE fluxes from STET first
@@ -178,8 +182,15 @@ contains
     if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
 
     if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))&
-         .and.DoCoupleSTET) then 
-       call get_stet_for_pwom(Time,iLine,(/GMLAT,GMLONG/),&
+         .and.DoCoupleSTET) then
+       !get UT for current time
+       CurrentTime=StartTime+Time
+       call time_real_to_int(CurrentTime,iCurrentTime_I)
+       UTsec = iCurrentTime_I(Hour_)*3600.0+iCurrentTime_I(Minute_)*60.0 &
+            +iCurrentTime_I(Second_)
+
+       call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),&
+            (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
             State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),&
             Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
     endif

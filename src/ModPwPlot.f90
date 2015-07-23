@@ -32,8 +32,8 @@ contains
     !/
 
     ! Set Lat Lon
-    PlotState_IV (0:nDim+1, 1) = GmLat
-    PlotState_IV (0:nDim+1, 2) = GmLong
+    PlotState_IV (0:nDim+1, 1) = SmLat
+    PlotState_IV (0:nDim+1, 2) = SmLon
 
     ! Set Velocity 
     do iIon=1,nIon
@@ -109,8 +109,8 @@ contains
     !/
 
     ! Set Lat Lon
-    PlotState_IV (1:nDim, 1) = GmLat
-    PlotState_IV (1:nDim, 2) = GmLong
+    PlotState_IV (1:nDim, 1) = SmLat
+    PlotState_IV (1:nDim, 2) = SmLon
 
     !PlotState_IV (1:nDim, 3) = SZApe
     !PlotState_IV (1:nDim, 3)  = NDensity_CI(1:nDim,O_)

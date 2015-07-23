@@ -14,6 +14,10 @@ Module ModSeBackground
 
   ! when the dipole and rotation axis are aligned
   logical, public      :: DoAlignDipoleRot = .false.
+  
+  ! need to know if we are coupled to PWOM when setting background
+  logical, public :: DoUsePWOM = .false.
+
 
   ! variables for thinning the topside ionosophere 
   real :: facn=-1, fact=0
@@ -266,6 +270,9 @@ contains
     
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
+!    write(*,*) 'SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)',&
+!         SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)
+!    call con_stop('')
     SZA1=SZA1*cDegToRad
     
     !  Set the slant path column densities for O,O2 and N2
