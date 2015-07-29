@@ -23,13 +23,13 @@ Module ModCommonPlanet
   REAL jp1,jp2,jp3,jp4,kc1,kc2,kc3,kc6,kc7,kc8,kr1,kr2
   REAL kc9(MaxGrid)
   
-  integer, parameter :: nIon = 3, nSpecies=6
+  integer, parameter :: nIon = 3, nSpecies=7
   integer, parameter :: Ion1_ = 1, &    !Saturn:H3+   
        Ion2_ = 2, &    !Saturn:H+
-       Neutral1_= 3, & !Saturn:H2
-       Neutral2_= 4, & !Saturn:H
-       Neutral3_= 5, & !Saturn:H2O
-       Neutral4_= 6    !Saturn:CH4
+       Neutral1_= 4, & !Saturn:H2
+       Neutral2_= 5, & !Saturn:H
+       Neutral3_= 6, & !Saturn:H2O
+       Neutral4_= 7    !Saturn:CH4
   
   ! named state variables
   integer, parameter :: RhoO_=1, uO_=2,  pO_=3,  To_=4, &
