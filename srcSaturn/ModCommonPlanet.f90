@@ -18,7 +18,8 @@ Module ModCommonPlanet
        FFHpc2(MaxGrid),FFHpc3(MaxGrid), FFHpc9(MaxGrid),&
        FFHpc8(MaxGrid),FFHpr1(MaxGrid),FFH3pc1(MaxGrid),FFH3pc2(MaxGrid), &
        FFH3pc6(MaxGrid),FFH3pc7(MaxGrid),FFH3pr2(MaxGrid)
-  
+
+  REAL HLPE,HLPE0,HLPion1,HLPion2,HLPHE
   
   REAL jp1,jp2,jp3,jp4,kc1,kc2,kc3,kc6,kc7,kc8,kr1,kr2
   REAL kc9(MaxGrid)
@@ -32,7 +33,7 @@ Module ModCommonPlanet
        Neutral4_= 7    !Saturn:CH4
   
   ! named state variables
-  integer, parameter :: RhoO_=1, uO_=2,  pO_=3,  To_=4, &
+  integer, parameter :: RhoH3_=1, uH3_=2,  pH3_=3,  Th3_=4, &
        RhoH_=5, uH_=6,  pH_=7,  Th_=8, &
        RhoE_=9,uE_=10, pE_=11, Te_=12
   
@@ -56,7 +57,7 @@ Module ModCommonPlanet
  'r Lat Lon uH3 uH ue lgnH3 lgnH lgne TH3 TH Te MH3 MH Me Ef Pe g'
   integer, parameter :: nPlotVarNeutral = 7
   character(len=79), parameter :: NamePlotVarNeutral= &
- 'r Lat Lon [H2] [H] [H20] [CH4] none g'
+ 'r Lat Lon [H2] [H] [H2O] [CH4] none g'
 
 
 end Module ModCommonPlanet

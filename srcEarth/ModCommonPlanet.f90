@@ -40,6 +40,8 @@ Module ModCommonPlanet
        CMHEO2,CMHEHE,CMHEO,CMHEH,CMHEOX,CMHEHD,CMHEEL,CMELN2,CMELO2,&
        CMELHE,CMELO,CMELH,CMELOX,CMELHL,CMELHD
   
+  REAL HLPE,HLPE0,HLPO,HLPH,HLPHE
+
   ! Neutral parameters,densities,pressures
   integer, parameter :: nNeutral = 5, O_=1, O2_=2, N2_=3, H_=4, He_=5
   real :: NDensity_CI(MaxGrid,nNeutral),NeutralPressure_C(MaxGrid)

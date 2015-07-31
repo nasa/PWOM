@@ -6,6 +6,7 @@ CALEX then calculates the momentum and energy collision terms
       use ModAurora,ONLY: get_aurora,HeatingRate_C
       use ModPWOM  ,ONLY: UseAurora
       use ModPhotoElectron
+      use ModCommonPlanet,ONLY: HLPO,HLPH,HLPHE,HLPE
       
       integer, intent(in) :: N 
       real,    intent(in) :: StateIn_GV(-1:N+2,nVar)

@@ -10,6 +10,7 @@ C
 C
 
       use ModCommonVariables
+      use ModCommonPlanet,ONLY: HLPO,HLPH,HLPHE,HLPE,HLPE0
       use ModGlow, ONLY: get_ionization
 C
       use ModConst ,ONLY: cBoltzmann
