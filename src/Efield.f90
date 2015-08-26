@@ -110,7 +110,7 @@ SUBROUTINE PW_calc_efield(nCell,State_GV)
      
   enddo
   EFIELD(NDIM)=2.13E-7*CURRMX/State_GV(NDIM,Te_)**1.5
-  
+
   IF (EFIELD(NDIM).LT.0.) EFIELD(NDIM)=0.
   
   !     Update the momentum and energy source terms now that the 

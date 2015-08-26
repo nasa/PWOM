@@ -40,7 +40,8 @@ subroutine polar_wind
        TypeSolver=TypeSolver,                                      &
        DToutput=DToutput,DoLog=DoLog,&
        nStep=nStep,Dt=DtVariable,AvE=AveIE,Eflux=EfluxIE)
-  
+
+  print *,'Line ',iline
   ! If using variable timestep, then set Dt=Dt(Last line call)
   if (IsVariableDt) then
      Dt = DtVariable
@@ -61,7 +62,7 @@ subroutine polar_wind
   NDIM2=NDIM-1
   NDIM1=NDIM+1
   NDIMM=NDIM+2
-  
+
   CALL STRT
   
   if (IsFirstCall .and. DoSavePlot) then
@@ -69,7 +70,7 @@ subroutine polar_wind
      if (DoPlotNeutral) call plot_neutral_pw
      if(iLine == nLine) IsFirstCall = .false.
   endif
-  
+
   !***************************************************************************
   ! This is the start of a while loop that carries out the main steps of
   ! the simulation
@@ -92,7 +93,7 @@ subroutine polar_wind
         CALL PW_set_upper_bc
         CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
         CALL PW_calc_efield(nDim,State_GV(-1:nDim+2,:))         
-        
+
      endif
 
      NSTEP=NSTEP+1
@@ -110,7 +111,6 @@ subroutine polar_wind
      end if
      !       Reverse order of advection and implicit temperature update
      
- 
      If (IsFullyImplicit) then
         call PW_implicit_update
      else
@@ -120,6 +120,7 @@ subroutine polar_wind
         CALL PW_set_upper_bc
         CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
         CALL PW_calc_efield(nDim,State_GV(-1:nDim+2,:))         
+      
      endif
 
      !    finish update by calculating boundaries, collision source 

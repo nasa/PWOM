@@ -90,6 +90,4 @@ module ModCommonVariables
   real :: FricHeatCoef_II(nIon, nSpecies)
   real :: MassFracCoef_II(nIon, nSpecies)
 
-
-       
 end module ModCommonVariables

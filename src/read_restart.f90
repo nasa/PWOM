@@ -50,6 +50,7 @@ subroutine PW_read_restart
   else
      !Restart File and simulation use different grid. Interpolate restart 
      !solution onto simulation grid
+     print *,'Interpolate restart solution onto simulation grid'
      do iLine=1,nLine
         do iAlt=1,nAlt
            Loc  = (DrBnd*iAlt)/DrFile+1.0

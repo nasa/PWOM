@@ -17,8 +17,9 @@ contains
     use ModIoUnit, ONLY: UnitTmp_
     use ModPWOM,   ONLY: iLine,NameGraphics
     use ModPlotFile,ONLY: save_plot_file
-    
-    real MO,MH,MHe,Me
+    use ModCommonPlanet,ONLY: nVar
+
+    real MO,MH,MH2,Me
     real, allocatable :: PlotState_IV(:,:)
     real, allocatable :: Coord_I(:)
     integer :: iAlt, iIon
@@ -39,7 +40,7 @@ contains
     do iIon=1,nIon
        PlotState_IV (0:nDim+1, iIon+2) = State_GV(0:nDim+1,iU_I(iIon))/1.E5
     end do
-        
+    
     ! Set ion densities
     do iIon=1,nIon
        do iAlt= 0,nDim+1
@@ -47,7 +48,7 @@ contains
                alog10_check(State_GV(iAlt,iRho_I(iIon))/Mass_I(iIon))
        end do
     end do
-    
+
     ! Set Temperatures
     do iIon=1,nIon
        PlotState_IV (0:nDim+1, iIon+2+2*nIon)  = State_GV(0:nDim+1,iT_I(iIon))
@@ -121,7 +122,7 @@ contains
 
     ! Set neutral densities
     do iNeutral=1,nNeutral
-       PlotState_IV (1:nDim, 2+nNeutral)  = NDensity_CI(1:nDim,nNeutral)
+       PlotState_IV (1:nDim, 2+iNeutral)  = NDensity_CI(1:nDim,iNeutral)
     enddo
     ! Set altitude for output
     Coord_I (1:nDim) = AltD(1:nDim)
