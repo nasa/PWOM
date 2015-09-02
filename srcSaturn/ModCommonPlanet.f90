@@ -13,7 +13,8 @@ Module ModCommonPlanet
        XTN(MAXGRID)
   
   REAL CLHpH3p(MaxGrid),CLELHp(MaxGrid),CLELH3p(MaxGrid), &
-       CLHpH(MaxGrid),CLELH(MaxGrid)
+       CLHpH(MaxGrid),CLELH(MaxGrid),CLH2pH3p(MaxGrid), &
+       CLH2pHp(MaxGrid),CLELH2p(MaxGrid)
   REAL FFHpp1(MaxGrid),FFHpp3(MaxGrid),FFHpp4(MaxGrid), &
        FFHpc2(MaxGrid),FFHpc3(MaxGrid), FFHpc9(MaxGrid),&
        FFHpc8(MaxGrid),FFHpr1(MaxGrid),FFH3pc1(MaxGrid),FFH3pc2(MaxGrid), &

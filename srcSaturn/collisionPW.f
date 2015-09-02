@@ -37,12 +37,13 @@ C KGS Put in source
      &     StateIn_GV(I,RhoE_)/Mass_I(nIon)*
      &     (StateIn_GV(I,Te_)**(-0.7)) ) * Mass_I(Ion2_)
 
-C KGS H2+ currently folded in to H3pc1 & needs to be put in explicitly
-      Source_CV(I,RhoH3_)=(FFH3pc1(I)+FFH3pc2(I)*StateIn_GV(I,RhoH_)
-     ;/Mass_I(Ion2_)+FFH3pc6(I)*StateIn_GV(I,RhoH3_)/Mass_I(Ion1_)
-     ;+FFH3pc7(I)*StateIn_GV(I,RhoH3_)/Mass_I(Ion1_)
-     ;+FFH3pr2(I)*(StateIn_GV(I,Te_)**(-0.5))*StateIn_GV(I,RhoH3_)
-     ;*StateIn_GV(I,RhoE_)/Mass_I(Ion1_)/Mass_I(nIon))*Mass_I(Ion1_)
+C KGS H2+ originally folded in to H3pc1 & now put in explicitly
+      Source_CV(I,RhoH3_)=(FFH3pc1(I)*StateIn_GV(I,RhoH2_)/Mass_I(Ion3_) +
+     &     FFH3pc2(I)*StateIn_GV(I,RhoH_)/Mass_I(Ion2_) +
+     &     FFH3pc6(I)*StateIn_GV(I,RhoH3_)/Mass_I(Ion1_) +
+     &     FFH3pc7(I)*StateIn_GV(I,RhoH3_)/Mass_I(Ion1_) +
+     &     FFH3pr2(I)*(StateIn_GV(I,Te_)**(-0.5))*StateIn_GV(I,RhoH3_)
+     &     *StateIn_GV(I,RhoE_)/Mass_I(Ion1_)/Mass_I(nIon))*Mass_I(Ion1_)
       
       Source_CV(I,RhoE_)=MassElecIon_I(Ion2_)*Source_CV(I,RhoH_)
      ;+MassElecIon_I(Ion1_)*Source_CV(I,RhoH3_)+MassElecIon_I(Ion3_)*Source_CV(I,RhoH2_)
@@ -54,24 +55,26 @@ C**********************************************************************
 C Calculate collision frequencies. 
 C**********************************************************************
 
-C KGS figure out how to put H2+ in here
       TRHYD=0.5*(XTN(I)+StateIn_GV(I,Th_))
 
 C These are (reduced temperatures) * (m1+m2) raised to the 1.5
 C as shown on page 86 Nagy. This is for use in collision freqs
 C of coulomb collisions below.       
       T1HpH3p=(StateIn_GV(I,Th3_)+3.*StateIn_GV(I,Th_))**1.5
+      T1H2pH3p=(2.*StateIn_GV(I,Th3_)+3.*StateIn_GV(I,Th2_))**1.5
+      T1H2pHp=(2.*StateIn_GV(I,Th_)+StateIn_GV(I,Th2_))**1.5     
 
       TE32=StateIn_GV(I,Te_)**1.5
       DTE32=StateIn_GV(I,RhoE_)/TE32
 
 
 C H2+, H+, and H3+
+ ! KGS fix terms containing H2+ in startup
          CollisionFreq_IIC(Ion2_,Ion1_,I)=CLHpH3p(I)*StateIn_GV(I,RhoH3_)/T1HpH3p
-         CollisionFreq_IIC(Ion3_,Ion1_,I)= 0.0 ! KGS fix this
-         CollisionFreq_IIC(Ion3_,Ion2_,I)= 0.0 ! KGS fix this
+         CollisionFreq_IIC(Ion3_,Ion1_,I)=CLH2pH3p(I)*StateIn_GV(I,RhoH3_)/T1H2pH3p
+         CollisionFreq_IIC(Ion3_,Ion2_,I)=CLH2pHp(I)*StateIn_GV(I,RhoH_)/T1H2pHp
 C electron H+ and electron H3+
-         CollisionFreq_IIC(nIon,Ion3_,I) = 0.0  ! KGS fix this
+         CollisionFreq_IIC(nIon,Ion3_,I) = CLELH2p(I)*StateIn_GV(I,RhoH2_)/TE32  ! KGS check this
          CollisionFreq_IIC(nIon,Ion2_,I) = CLELHp(I)*StateIn_GV(I,RhoH_)/TE32
          CollisionFreq_IIC(nIon,Ion1_,I)= CLELH3p(I)*StateIn_GV(I,RhoH3_)/TE32
                 
@@ -113,22 +116,30 @@ C Velocity difference needed for source terms
 
 C This calculates collision source terms: 
 C fclsn1=n*((u2-u1)*cf12+(u3-u1)*cf13+...)
-C KGS Put H2+ here
-      Source_CV(I,uH3_)=StateIn_GV(I,RhoH3_)*(dU_21*CollisionFreq_IIC(Ion1_,Ion2_,I)-
-     $dU_1e*CollisionFreq_IIC(Ion1_,nIon,I)
-     &-StateIn_GV(I,uH3_)
-     &*(CollisionFreq_IIC(Ion1_,Neutral2_,I)+CollisionFreq_IIC(Ion1_,Neutral1_,I)))
+C KGS Check H2+ here
+      Source_CV(I,uH3_)=StateIn_GV(I,RhoH3_)*(dU_21*CollisionFreq_IIC(Ion1_,Ion2_,I)
+     &     + dU_31*CollisionFreq_IIC(Ion1_,Ion3_,I)
+     &     - dU_1e*CollisionFreq_IIC(Ion1_,nIon,I)
+     &     - StateIn_GV(I,uH3_)
+     &      * (CollisionFreq_IIC(Ion1_,Neutral2_,I)+CollisionFreq_IIC(Ion1_,Neutral1_,I)))
       
-      Source_CV(I,uH_)=StateIn_GV(I,RhoH_)*(-dU_21*CollisionFreq_IIC(Ion2_,Ion1_,I)-
-     $dU_2e*CollisionFreq_IIC(Ion2_,nIon,I)-StateIn_GV(I,uH_)
-     &*(CollisionFreq_IIC(Ion2_,Neutral2_,I)+CollisionFreq_IIC(Ion2_,Neutral1_,I)))
+      Source_CV(I,uH_)=StateIn_GV(I,RhoH_)*(-dU_21*CollisionFreq_IIC(Ion2_,Ion1_,I)
+     &     + dU_32*CollisionFreq_IIC(Ion2_,Ion3_,I)
+     &     - dU_2e*CollisionFreq_IIC(Ion2_,nIon,I)
+     &     - StateIn_GV(I,uH_)
+     &      * (CollisionFreq_IIC(Ion2_,Neutral2_,I)+CollisionFreq_IIC(Ion2_,Neutral1_,I)))
 
- 
-      Source_CV(I,uH2_) = 0.0
+      Source_CV(I,uH2_)=StateIn_GV(I,RhoH2_)*(-dU_31*CollisionFreq_IIC(Ion3_,Ion1_,I)
+     &     - dU_32*CollisionFreq_IIC(Ion3_,Ion1_,I)
+     &     - dU_3e*CollisionFreq_IIC(Ion3_,nIon,I)
+     &     - StateIn_GV(I,uH2_)
+     &      * (CollisionFreq_IIC(Ion3_,Neutral2_,I)+CollisionFreq_IIC(Ion3_,Neutral1_,I)))
 
-      Source_CV(I,uE_)=StateIn_GV(I,RhoE_)*(dU_1e*CollisionFreq_IIC(nIon,Ion1_,I)+
-     $dU_2e*CollisionFreq_IIC(nIon,Ion2_,I)-StateIn_GV(I,uE_)
-     &*(CollisionFreq_IIC(nIon,Neutral2_,I)+CollisionFreq_IIC(nIon,Neutral1_,I)))
+      Source_CV(I,uE_)=StateIn_GV(I,RhoE_)*(dU_1e*CollisionFreq_IIC(nIon,Ion1_,I)
+     &     + dU_2e*CollisionFreq_IIC(nIon,Ion2_,I)
+     &     + dU_3e*CollisionFreq_IIC(nIon,Ion3_,I)
+     &     - StateIn_GV(I,uE_)
+     &      * (CollisionFreq_IIC(nIon,Neutral2_,I)+CollisionFreq_IIC(nIon,Neutral1_,I)))
 
 C**********************************************************************
 C Determine the energy source terms
@@ -164,7 +175,7 @@ CALEX the energy collision term
       dT_II(Ion3_,Ion2_)=StateIn_GV(I,Th2_)-StateIn_GV(I,Th_)
       dT_II(Ion3_,Ion1_)=StateIn_GV(I,Th2_)-StateIn_GV(I,Th3_)
       dT_II(Ion3_,nIon)=StateIn_GV(I,Th2_)-StateIn_GV(I,Te_)
-      dT_II(Ion3_,Neutral1_:Neutral4_)=StateIn_GV(I,Th_)-XTN(I)
+      dT_II(Ion3_,Neutral1_:Neutral4_)=StateIn_GV(I,Th2_)-XTN(I)
 
       dT_II(Ion2_,Ion3_)=StateIn_GV(I,Th_)-StateIn_GV(I,Th2_)
       dT_II(Ion2_,Ion1_)=StateIn_GV(I,Th_)-StateIn_GV(I,Th3_)
@@ -203,10 +214,10 @@ CALEX the energy collision term
       Source_CV(I,pH_) =StateIn_GV(I,RhoH_)*Source_CV(I,pH_)
 
       do jSpecies=1,nSpecies
-!         if(Ion3_ /= jSpecies) Source_CV(I,pH2_) = Source_CV(I,pH2_) - dT_II(Ion3_,jSpecies)
-!     &  *HeatFlowCoef_II(Ion3_,jSpecies)*CollisionFreq_IIC(Ion3_,jSpecies,I)
-!     & + dU2_II(Ion3_,jSpecies)
-!     &  *FricHeatCoef_II(Ion3_,jSpecies)*CollisionFreq_IIC(Ion3_,jSpecies,I)
+         if(Ion3_ /= jSpecies) Source_CV(I,pH2_) = Source_CV(I,pH2_) - dT_II(Ion3_,jSpecies)
+     &  *HeatFlowCoef_II(Ion3_,jSpecies)*CollisionFreq_IIC(Ion3_,jSpecies,I)
+     & + dU2_II(Ion3_,jSpecies)
+     &  *FricHeatCoef_II(Ion3_,jSpecies)*CollisionFreq_IIC(Ion3_,jSpecies,I)
       enddo
       Source_CV(I,pH2_) =StateIn_GV(I,RhoH2_)*Source_CV(I,pH2_)
 

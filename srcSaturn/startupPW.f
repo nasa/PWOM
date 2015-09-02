@@ -290,6 +290,7 @@ CALEX terms with "surf" in them refer to surface values
       HLPE=1.23E-6*GMIN1/RGAS_I(nIon)
       HLPion1=2.86E-8*(Mass_I(nIon)/Mass_I(Ion1_))*GMIN1/RGAS_I(Ion1_)
       HLPion2=7.37E-8*(Mass_I(nIon)/Mass_I(Ion2_))*GMIN1/RGAS_I(Ion2_)
+! KGS fix this
       HLPion3=7.37E-8*(Mass_I(nIon)/Mass_I(Ion3_))*GMIN1/RGAS_I(Ion3_)
 
  
@@ -300,7 +301,7 @@ CALEX neutrals on the heat conduction as was done at earth.
       HeatCon_GI(0,Ion1_)=HLPion1*(State_GV(0,RhoH3_)/State_GV(0,RhoE_))*State_GV(0,Th3_)**2.5
       HeatCon_GI(0,nIon)=HLPE*State_GV(0,Te_)**2.5
       HeatCon_GI(0,Ion2_)=HLPion2*(State_GV(0,RhoH_)/State_GV(0,RhoE_))*State_GV(0,Th_)**2.5
-      HeatCon_GI(0,Ion3_)=HLPion2*(State_GV(0,RhoH2_)/State_GV(0,RhoE_))*State_GV(0,Th2_)**2.5
+      HeatCon_GI(0,Ion3_)=HLPion3*(State_GV(0,RhoH2_)/State_GV(0,RhoE_))*State_GV(0,Th2_)**2.5
 
       
 C!      HeatCon_GI(0,Ion1_)=HLPion1*State_GV(0,Th3_)**2.5
@@ -1230,7 +1231,8 @@ CALEX write out source coeff
 CALEX         write(26,*) FFHpp1(I),FFHpp3(I),FFHpp4(I),FFHpc2(I),FFHpc3(I),FFHpc8(I),FFHpr1(I)
         
 
-         FFH3pc1(I)=kc1*(jp2/kc1)*XH2(I)   ! KGS H2+ folded in here
+!         FFH3pc1(I)=kc1*(jp2/kc1)*XH2(I)   ! KGS H2+ folded in here
+         FFH3pc1(I)=kc1*XH2(I)              ! KGS Make sure this is multiplied by H2+ now
          FFH3pc2(I)=kc2*XH2(I)*XH2(I)
          FFH3pc6(I)=-kc6*XCH4(I)
          FFH3pc7(I)=-kc7*XH2O(I)
@@ -1244,27 +1246,49 @@ CALEX         write(27,*) FFH3pc1(I),FFH3pc2(I),FFH3pc6(I),FFH3pc7(I),FFH3pr2(I)
          FFH2pc1(I)=-kc1*XH2(I)
 
 CALEX CL=COLLISION COEF, CF=collision freq ?         
-C KGS What should I do here?
+C KGS CF(1,2) = CL(1,2) * n(2)
+C KGS n(2)m(2)CF(2,1) = n(1)m(1)CF(1,2)
 CALEX the coulomb collisions
-CAlex H+ and H3+         
-         CLHpH3p(I)=1.905*4.**1.5/Mass_I(Ion1_)
+CAlex H+ and H3+
+c KGS and H2+   from eq 4.143?
+         CLHpH3p(I)=1.905*4.**1.5/Mass_I(Ion1_) ! KGS orig
+         CLHpH3p(I)=1.100*4.**1.5/Mass_I(Ion1_) ! KGS correct value?
+         CLH2pH3p(I)=3.17*6.**0.5/Mass_I(Ion1_) ! KGS double-check
+         CLH2pHp(I)=3.81*2.**0.5/Mass_I(Ion2_)  ! KGS double-check
 CALEX electron H+ and electron H3+
+c KGS and electron H2+
          CLELHp(I)=54.5/Mass_I(Ion2_)
          CLELH3p(I)=54.5/Mass_I(Ion1_)
+         CLELH2p(I)=54.5/Mass_I(Ion3_)
 
 CALEX  ion neutrals
+C KGS looks similar to Nagy 4.88 Maxwell Molecule Collisions
+C KGS but some terms seem to be missing
+         ! H+ - H2
          CLHpH(I)=2.65E-10*XH(I)
 !         CFHpH2(I)=2.6E-9*XH2(I)*(.82/.667)**.5
          CollisionFreq_IIC(Ion2_,Neutral1_,I)=
      &        2.6E-9*XH2(I)*(.82/.667)**.5
 
+! KGS 2-2 Coulomb Collision is in collisionPW.f
+
+         ! H3+ - H
 !         CFH3pH(I)=2.6E-9*XH(I)*(.667/.75)**.5
          CollisionFreq_IIC(Ion1_,Neutral2_,I)=
      &        2.6E-9*XH(I)*(.667/.75)**.5
 
+         ! H3+ - H2
 !         CFH3pH2(I)=2.6E-9*XH2(I)*(.82/1.2)**.5
          CollisionFreq_IIC(Ion1_,Neutral1_,I)=
      &        2.6E-9*XH2(I)*(.82/1.2)**.5
+
+C KGS make sure I should be using Maxwell Molecule Collisions here
+         ! H2+ - H2
+         CollisionFreq_IIC(Ion3_,Neutral1_,I)=
+     &        2.6E-9*XH2(I)*(.82/1.0)**.5    ! KGS check these
+         ! H2+ - H
+         CollisionFreq_IIC(Ion3_,Neutral2_,I)=
+     &        2.6E-9*XH(I)*(.667/.667)**.5
 
 CALEX electron H, e H2 done in collis
          CLELH(I)=4.5E-9*XH(I)
@@ -1301,8 +1325,8 @@ CALEX CTOXN2 = 3*R_o*M_o/(M_o+M_{N2}) see nagy p.83
       !CTHpH3p=3.*RGAS_I(Ion2_)*Mass_I(Ion2_)/(Mass_I(Ion2_)+Mass_I(Ion1_))
       !CTHpEL=3.*RGAS_I(Ion2_)*Mass_I(Ion2_)/(Mass_I(Ion2_)+Mass_I(nIon))
       
-      HeatFlowCoef_II(Ion3_,Neutral2_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion3_))
-      HeatFlowCoef_II(Ion3_,Neutral1_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+2.*Mass_I(Ion3_))
+      HeatFlowCoef_II(Ion3_,Neutral2_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion2_))
+      HeatFlowCoef_II(Ion3_,Neutral1_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion3_))
       HeatFlowCoef_II(Ion3_,Ion1_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion1_))
       HeatFlowCoef_II(Ion3_,Ion2_)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion2_))
       HeatFlowCoef_II(Ion3_,nIon)=3.*RGAS_I(Ion3_)*Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(nIon))
@@ -1347,7 +1371,7 @@ CALEX CMOXN2 = M_{N2}/(M_o+M_{N2}) see nagy p.83
 !      CMHpH3p=Mass_I(Ion1_)/(Mass_I(Ion2_)+Mass_I(Ion1_))
 !      CMHpEL=Mass_I(nIon)/(Mass_I(Ion2_)+Mass_I(nIon))
 
-      FricHeatCoef_II(Ion3_,Neutral2_)=Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion3_))
+      FricHeatCoef_II(Ion3_,Neutral2_)=Mass_I(Ion3_)/(Mass_I(Ion3_)+Mass_I(Ion2_))
       FricHeatCoef_II(Ion3_,Neutral1_)=2.*XAMU/(Mass_I(Ion3_)+2.*XAMU)
       FricHeatCoef_II(Ion3_,Ion2_)=Mass_I(Ion2_)/(Mass_I(Ion3_)+Mass_I(Ion2_))
       FricHeatCoef_II(Ion3_,Ion1_)=Mass_I(Ion1_)/(Mass_I(Ion3_)+Mass_I(Ion1_))
