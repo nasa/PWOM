@@ -3,10 +3,12 @@ program unit_test_grid_potential
   use ModSeMpi
 
   use ModMPI
-  use CON_planet, ONLY: init_planet_const, set_planet_defaults
+  use CON_planet, ONLY: init_planet_const, set_planet_defaults,is_planet_init
 
   integer :: iError
-  
+!  character(len=5) :: NamePlanet = 'EARTH'
+  character(len=7) :: NamePlanet = 'JUPITER'
+  logical :: IsPlanetSet=.false.  
   !-----------------------------------------------------------------------------
 
   !****************************************************************************
@@ -29,8 +31,17 @@ program unit_test_grid_potential
   write(*,*) 'Initiallizing Planet'
 
   call init_planet_const
-  call set_planet_defaults
 
+  if (NamePlanet == 'EARTH') then
+     call set_planet_defaults
+     IsPlanetSet = .true.
+  else
+     IsPlanetSet = is_planet_init(NamePlanet)
+  endif
+  
+  if (.not.IsPlanetSet) then
+     call CON_stop('Planet not set. Stopping STET')
+  endif
   write(*,*) 'starting se_grid_test'
 
   call grid_potential_test
@@ -42,7 +53,7 @@ end program unit_test_grid_potential
 subroutine grid_potential_test
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,plot_grid_pot,&
        nLine,nPoint,nIono,nPoint,nTop,Efield_IC,FieldLineGrid_IC
-  use ModSePlot, only: plot_along_field
+  !use ModSePlot, only: plot_along_field
 
   integer :: iLine=1, flag=1
   logical :: DoSavePreviousAndReset = .true.
@@ -68,7 +79,7 @@ subroutine grid_potential_test
   call set_grid_pot(iLine)
 
   ! plot the potential, and min total energy considered
-  call plot_along_field
+  !call plot_along_field(iLine)
 
   !write output for several total energies
   call plot_grid_pot(iLine,0,90,0.0)

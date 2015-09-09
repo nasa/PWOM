@@ -112,10 +112,11 @@ Module ModSeGrid
 contains
   !============================================================================
   subroutine init_se_grid(iLine)
-    use ModPlanetConst, ONLY: Earth_, rPlanet_I
+    use ModPlanetConst, ONLY: Planet_, rPlanet_I, DipoleStrengthPlanet_I
     use ModNumConst,    ONLY: cPi
     integer, intent(in) :: iLine
     real, parameter :: cMtoCM = 1.0e2
+    real,parameter :: cTeslaToGauss=10000.0 ! convert tesla to gauss
     real    :: Biono, Beq, MLAT1, PhiBasePlas, QO, SphiO
     !--------------------------------------------------------------------------
 
@@ -128,7 +129,7 @@ contains
     nTop = nPoint/2
     nPlasHalf=nPlas/2
     
-    rPlanetCM=rPlanet_I(Earth_)*cMtoCM
+    rPlanetCM=rPlanet_I(Planet_)*cMtoCM
     ! Set field line info
     !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
     PhiBasePlas=&
@@ -136,8 +137,11 @@ contains
     SphiO=SIN(PhiBasePlas)
     QO=SQRT(1+3*SphiO**2)
     MLAT1=PhiBasePlas*180./cPi
-    Beq   = 0.31/Lshell_I(iLine)**3
-    Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
+!    Beq   = 0.31/Lshell_I(iLine)**3
+    Beq   = abs(DipoleStrengthPlanet_I(Planet_))/Lshell_I(iLine)**3*cTeslaToGauss
+!    Biono = 0.31*QO/(Lshell_I(iLine)**3*(1-SphiO**2)**3)
+    Biono = abs(DipoleStrengthPlanet_I(Planet_))*QO&
+         /(Lshell_I(iLine)**3*(1-SphiO**2)**3)*cTeslaToGauss
     BFieldIono_I(iLine) = Biono
     BFieldEq_I(iLine)   = Beq
     write(*,*) 'calc bfield and s grid for iLine = ', iLine
@@ -358,7 +362,7 @@ contains
 
           ! set mu at angles between 0 and 90 
           ANGLE: do iAngle=1,nThetaAlt_IIC(iLine,iEnergy,iAlt)-1
-             ! calculation of mu from mu not in case of potential. formula from 
+             ! calculation of mu from mu0 in case of potential. formula from 
              ! Liemohn et al., 1997
              mu_IIIC(iLine,iAngle,iEnergy,iAlt) = &
                   sqrt(1.0-1.0/eta*(1.0-&
@@ -381,15 +385,17 @@ contains
   !      B       Magnetic field strength for this step; G
   !
   SUBROUTINE get_b_deltaS_point(phi,lphi,h,L,B)
-    use ModPlanetConst, ONLY: Earth_
+    use ModPlanetConst, ONLY: Planet_,DipoleStrengthPlanet_I
     REAL phi,lphi,h,L,B,Q,lQ
+    real,parameter :: cTeslaToGauss=10000.0 ! convert tesla to gauss
     !---------------------------------------------------------------------------
     
     Q=SQRT(1+3*(SIN(phi))**2)
     lQ=SQRT(1+3*(SIN(lphi))**2)
     h=ABS(.5*L*rPlanetCM*(lQ*SIN(lphi)-Q*SIN(phi)+1/SQRT(3.)*LOG((SQRT(3.) &
          *SIN(lphi)+lQ)/(SQRT(3.)*SIN(phi)+Q))))
-    B=0.31*Q/(L**3*(COS(phi))**6)
+!    B=0.31*Q/(L**3*(COS(phi))**6)
+    B=abs(DipoleStrengthPlanet_I(Planet_))*Q/(L**3*(COS(phi))**6)*cTeslaToGauss
     RETURN
   END SUBROUTINE get_b_deltaS_point
   !============================================================================
@@ -822,14 +828,15 @@ contains
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
-
+    use ModPlanetConst,ONLY: Planet_, rPlanet_I
     integer, intent(in) :: iLine, nStep, iEnergy
     real,    intent(in) :: time
 
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
+    !real, parameter     :: rEarthCM = 6375.0e5
     !grid parameters
     integer, parameter :: nDim =2, nVar=2, S_=1, PA_=2,B_=1
+    real, parameter :: cMtoCM = 1.0e2
 
     !set the corresponding energy channels for E1-E5
     character(len=100),parameter :: NamePlotVar='S PA B PA g r'
@@ -840,6 +847,7 @@ contains
     !--------------------------------------------------------------------------
     allocate(Coord_DII(nDim,nPoint,2*nAngle),PlotState_IIV(nPoint,2*nAngle,nVar))
 
+    rPlanetCM=rPlanet_I(Planet_)*cMtoCM
 !    do iLine=1,nLine
        PlotState_IIV = 0.0
        Coord_DII     = 0.0
@@ -850,12 +858,12 @@ contains
              !set coord based on up or down region
              if(iAngle<nAngle) then
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
              else
                 iAngleDn = 2*nAngle-iAngle
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= &
                      cPi-EqAngleGrid_IG(iLine,iAngleDn)
              endif

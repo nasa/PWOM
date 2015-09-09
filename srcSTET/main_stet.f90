@@ -3,7 +3,7 @@ program main_stet
   use ModSeMpi
   use ModSeBackground,only: ZEP
   use ModMPI
-  use CON_planet, ONLY: init_planet_const, set_planet_defaults
+  use CON_planet, ONLY: init_planet_const, set_planet_defaults,is_planet_init
   use ModNumConst,    ONLY: cRadToDeg
   implicit none
   
@@ -17,6 +17,9 @@ program main_stet
   integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
 
   real :: Time = 0.0
+
+  character(len=5) :: NamePlanet = 'EARTH'
+  logical :: IsPlanetSet=.false.
   !-----------------------------------------------------------------------------
 
   !****************************************************************************
@@ -39,7 +42,17 @@ program main_stet
   write(*,*) 'Initiallizing Planet'
 
   call init_planet_const
-  call set_planet_defaults
+
+  if (NamePlanet == 'EARTH') then
+     call set_planet_defaults
+     IsPlanetSet = .true.
+  else
+     IsPlanetSet = is_planet_init(NamePlanet)
+  endif
+  
+  if (.not.IsPlanetSet) then
+     call CON_stop('Planet not set. Stopping STET')
+  endif
   
   !\
   ! Parameters should be read here, for now just set them by hand
