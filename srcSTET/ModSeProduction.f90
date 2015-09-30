@@ -1,6 +1,6 @@
 Module ModSeProduction
   ! This module contains all of the converted awfulness 
-
+  save
   private !except
   public :: RCOLUM
   public :: espec
@@ -11,6 +11,9 @@ Module ModSeProduction
   integer, parameter :: LMAX=59
   !number of excited states
   integer, parameter :: NEI=10
+  
+  !number of major neutral species
+  integer,save :: nNeutral
 
   ! WAVE1   Array of minimum boundaries for radiation intervals; Ang
   ! WAVE2   Array of maximum boundaries for radiation intervals: Ang
@@ -19,6 +22,23 @@ Module ModSeProduction
 
   ! store the slant column density
   real, allocatable ::ZCOL(:,:)
+
+  ! Store the crosseections
+  real :: SIGION(nNeutral,LMAX),SIGABS(nNeutral,LMAX)
+
+  real :: PROB(nStatesMax,nNeutral,LMAX),
+  
+  !atomic mass of neutrals
+  real,allocatable :: NeutralMassAMU_I(:)
+
+  !surface gravity in cm/2^2
+  real :: gSurface = 0.0
+  
+  integer :: nStatesPerSpecies_I(:), nStatesMax 
+
+  ! Store the ionization potentials
+  real,allocatable :: TPOT(:,:)
+  
 contains
   
   !=============================================================================
@@ -46,14 +66,15 @@ contains
   SUBROUTINE RCOLUM (CHI, ZZ, ZMAJ, TN, IONO)
     !
 !    INCLUDE 'numbers.h'
-    PARAMETER (NMAJ=3)
-    PARAMETER (NM=3)
-    PARAMETER (NU=4)
+    PARAMETER (NM=3) 
+    PARAMETER (NU=4) !heights in us standard model
     !
-    DIMENSION ZZ(IONO), ZMAJ(NMAJ,IONO), TN(IONO), &
-         ZVCD(NMAJ,IONO), ZCG(NM), ZUS(NU), TNUS(NU), ZCUS(NM,NU)
+    DIMENSION ZZ(IONO), TN(IONO), &
+          ZCG(NM), ZUS(NU), TNUS(NU), ZCUS(NM,NU)
+    real, allocatable :: ZMAJ(:,:),ZVCD(:,:)
     !
     DATA PI/3.1415926535/, RE/6.37E8/
+    ! These are the heights, temperatures and densities for US standard model
     DATA ZUS/0., 1.5E6, 5.E6, 9.E6/, TNUS/288., 217., 271., 187./
     DATA ZCUS/8.00E17, 4.54E24, 1.69E25, &
          8.00E17, 5.46E23, 2.03E24, &
@@ -61,11 +82,14 @@ contains
          7.80E17, 8.48E18, 3.16E19/
     !
     !
-    if (.not.allocated(ZCOL)) allocate(ZCOL(NMAJ,IONO))
-    CALL VCD (ZZ, ZMAJ, ZVCD, IONO, NMAJ)
+    if (.not.allocated(ZMAJ)) allocate(ZMAJ(nNeutral,IONO))
+    if (.not.allocated(ZVCD)) allocate(ZVCD(nNeutral,IONO))
+
+    if (.not.allocated(ZCOL)) allocate(ZCOL(nNeutral,IONO))
+    CALL VCD (ZZ, ZMAJ, ZVCD, IONO, nNeutral)
     !
     IF (CHI .GE. 2.) THEN
-       do I=1,NMAJ
+       do I=1,nNeutral
           do J=1,IONO
              ZCOL(I,J) = 1.0E30
           enddo
@@ -74,7 +98,7 @@ contains
     ENDIF
     !
     IF (CHI .LE. PI/2.) THEN
-       DO I=1,NMAJ
+       DO I=1,nNeutral
           DO J=1,IONO
              ZCOL(I,J) = ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
           enddo
@@ -84,7 +108,7 @@ contains
           GHRG=(RE+ZZ(J))*SIN(CHI)
           GHZ=GHRG-RE
           IF (GHZ .LE. 0.) THEN
-             do I=1,NMAJ
+             do I=1,nNeutral
                 ZCOL(I,J) = 1.0E30
              end do
              cycle
@@ -94,22 +118,27 @@ contains
                 IF (ZZ(JG) .LE. GHZ .AND. ZZ(JG+1) .GT. GHZ) GOTO 120
              enddo
 120          TNG = TN(JG)+(TN(JG+1)-TN(JG))*(GHZ-ZZ(JG))/(ZZ(JG+1)-ZZ(JG))
-             do I=1,NMAJ
+             do I=1,nNeutral
                 ZCG(I) = ZVCD(I,JG) * (ZVCD(I,JG+1) / ZVCD(I,JG)) ** &
                      ((GHZ-ZZ(JG)) / (ZZ(JG+1)-ZZ(JG)))
              enddo
           ELSE
+             !Here the grazing altitude is less than the bottom of the model 
+             !therefore the values are interpolated from US standard atmosphere 
+             !at sea level. Only good for Earth, Not suitable for Jupiter!!!
+             ! for Jupiter we have densities down to 0 altitude so just use 
+             ! GITM values. For jupiter zz should go to 0 alt.
              do JG=1,3
                 IF (ZUS(JG) .LT. GHZ .AND. ZUS(JG+1) .GT. GHZ) GOTO 180
              enddo
 180          TNG = TNUS(JG) &
                   + (TNUS(JG+1)-TNUS(JG))*(GHZ-ZUS(JG))/(ZUS(JG+1)-ZUS(JG))
-             do I=1,NMAJ
+             do I=1,nNeutral
                 ZCG(I) = ZCUS(I,JG) * (ZCUS(I,JG+1) / ZCUS(I,JG)) ** &
                      ((GHZ-ZUS(JG)) / (ZUS(JG+1)-ZUS(JG)))
              end do
           ENDIF
-          do I=1,NMAJ
+          do I=1,nNeutral
              ZCOL(I,J) = 2. * ZCG(I) * CHAP(PI/2.,GHZ,TNG,I) &
                   - ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
           end do
@@ -124,15 +153,15 @@ contains
   !
   !
   FUNCTION CHAP (CHI, Z, T, I)
-    PARAMETER (NMAJ=3)
-    DIMENSION AM(NMAJ)
-    DATA AM/16., 32., 28./, PI/3.1415926535/, RE/6.37E8/, G/978.1/
-    GR=G*(RE/(RE+Z))**2
-    HN=1.38E-16*T/(AM(I)*1.662E-24*GR)
-    HG=(RE+Z)/HN
+    use ModSeGrid,      ONLY: rPlanetCM
+    use ModNumConst,    ONLY: cPi
+    ! masses of neutral species. needs to be more general
+    GR=gSurface*(rPlanetCM/(rPlanetCM+Z))**2
+    HN=1.38E-16*T/(NeutralMassAMU_I(I)*1.662E-24*GR)
+    HG=(rPlanetCM+Z)/HN
     HF=0.5*HG*(COS(CHI)**2)
     SQHF=SQRT(HF)
-    CHAP=SQRT(0.5*PI*HG)*SPERFC(SQHF)
+    CHAP=SQRT(0.5*cPi*HG)*SPERFC(SQHF)
     RETURN
   END FUNCTION CHAP
   !
@@ -152,10 +181,10 @@ contains
   !
   !
   !
-  SUBROUTINE VCD(ZZ,ZMAJ,ZVCD,IONO,NMAJ)
-    DIMENSION ZZ(IONO), ZMAJ(NMAJ,IONO), ZVCD(NMAJ,IONO)
+  SUBROUTINE VCD(ZZ,ZMAJ,ZVCD,IONO,nNeutralIn)
+    DIMENSION ZZ(IONO), ZMAJ(nNeutralIn,IONO), ZVCD(nNeutralIn,IONO)
     !
-    DO I=1,NMAJ
+    DO I=1,nNeutralIn
        ZVCD(I,IONO) =   ZMAJ(I,IONO) &
             * (ZZ(IONO)-ZZ(IONO-1)) &
             / ALOG(ZMAJ(I,IONO-1)/ZMAJ(I,IONO))
@@ -206,12 +235,19 @@ contains
 ! SIGABS  photoabsorption cross sections, O, O2, N2; cm2
 ! SIGION  photoionization cross sections, O, O2, N2; cm2
 ! SIGAO, SIGAO2, SIGAN2, SIGIO, SIGIO2, SIGIN2; cross sect. data arrays
-! NNN     number of states for each species
+! nStatesPerSpecies     number of states for each species
 ! TPOT    ionization potentials for each species, state; eV
 ! PROB    branching ratios for each state, species, and wavelength bin:
-!         O+ states: 4S, 2Do, 2Po, 4Pe, 2Pe
-!         O2+ states: X, a+A, b, dissoc.
-!         N2+ states: X, A, B, C, F, dissoc.
+!         EARTH:
+!           O+ states: 4S, 2Do, 2Po, 4Pe, 2Pe
+!           O2+ states: X, a+A, b, dissoc.
+!           N2+ states: X, A, B, C, F, dissoc.
+!         Jupiter:
+!           H2+ states: 
+!           H+  states: H+, 
+!           CH4+states: H+ + CH3, CH+ +H2 +H, CH2+ + H2,CH3+ +H, CH4+
+!           He+ states: 
+
 ! PROBO, PROBO2, PROBN2; branching ratio data arrays
 ! BSO2    yield of O(1S) from dissociation of O2
 ! EPSIL1  energy loss lower bound for state, species, wavelength; eV
@@ -224,11 +260,13 @@ contains
 ! JMAX    number of altitude levels (actually I am now just using IONO)
 ! Elen    number of energetic electron energy bins
 ! LMAX    number of wavelength intervals for solar flux
-! NMAJ    number of major species
+! nNeutral    number of major species
+! nStatesMax     number of states produced by photoionization/dissociation
+
+  !following not used!
 ! NEX     number of ionized/excited species
 ! NW      number of airglow emission wavelengths
 ! NC      number of component production terms for each emission
-! NST     number of states produced by photoionization/dissociation
 ! NEI     number of states produced by electron impact
 ! NF      number of available types of auroral fluxes
 !
@@ -242,34 +280,27 @@ contains
     PARAMETER (NEX=20)
     PARAMETER (NW=20)
     PARAMETER (NC=10)
-    PARAMETER (NST=6)
     PARAMETER (NF=4)
-    PARAMETER (NMAJ=3)
     !
 !    COMMON /CGLOW/ &
-!         ZCOL(NMAJ,IONO),WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
+!         ZCOL(nNeutral,IONO),WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
     !
     !      COMMON /CENERGY/ ener(Elen),del(Elen),Emin,Jo
     !
-    DIMENSION FLUX(LMAX,IONO), NNN(NMAJ), &
-         SIGION(NMAJ,LMAX),SIGABS(NMAJ,LMAX),PESPEC(NEnergy,IONO), &
-         TPOT(NST,NMAJ), PROB(NST,NMAJ,LMAX),ZMAJ(NMAJ,IONO), &
-         EPSIL1(NST,NMAJ,LMAX), EPSIL2(NST,NMAJ,LMAX), &
-         SIGAO(LMAX), SIGAO2(LMAX), SIGAN2(LMAX), &
-         SIGIO(LMAX), SIGIO2(LMAX), SIGIN2(LMAX), &
-         PROBO(NST,LMAX), PROBO2(NST,LMAX), PROBN2(NST,LMAX), &
-         PHOTOI(NST,NMAJ,IONO), PHOTOD(NST,NMAJ,IONO), &
-         BSO2(LMAX), AUGE(NMAJ), AUGL(NMAJ), TAU(LMAX), LAUG(NMAJ), &
-         EPA(NST,NST,NMAJ,LMAX),EPB1(NMAJ,LMAX),EPB2(NMAJ,LMAX)
+    DIMENSION FLUX(LMAX,IONO), &
+         PESPEC(NEnergy,IONO), &
+         ZMAJ(nNeutral,IONO), &
+         EPSIL1(nStatesMax,nNeutral,LMAX), EPSIL2(nStatesMax,nNeutral,LMAX), &
+         PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
+         BSO2(LMAX), AUGE(nNeutral), AUGL(nNeutral), TAU(LMAX), LAUG(nNeutral), &
+         EPA(nStatesMax,nStatesMax,nNeutral,LMAX),EPB1(nNeutral,LMAX),EPB2(nNeutral,LMAX)
     !
     SAVE SIGION, SIGABS, PROB, EPSIL1, EPSIL2, EPA, EPB1, EPB2
     !
-    DATA  NNN/5,4,6/, IFIRST/1/, LIMIN/16/ ! No PROBs below L=16
+    DATA  IFIRST/1/, LIMIN/16/ ! No PROBs below L=16
     !
     !
-    DATA TPOT/13.61, 16.93, 18.63, 28.50, 40.00,  0.00, &
-         12.07, 16.10, 18.20, 20.00,  0.00,  0.00, &
-         15.60, 16.70, 18.80, 30.00, 34.80, 25.00/
+
     !
     DATA BSO2/12*0.,.01,.03,.10,.09,.10,.09,.07,.07,.03,.01,37*0./
     !
@@ -279,203 +310,6 @@ contains
     DATA C1/12397.7/               ! Converting wavelengths to energie
     !
     !
-    ! NB - absorption and ionization cross sections are multiplied by 1.E-18
-    ! on first call.
-    !
-    DATA SIGAO /  18 * 0.00, &
-         0.00, 0.00, 1.66, 3.85, 4.06, 4.08, &
-         4.08, 4.08, 4.08, 7.06, 8.52, 8.98, &
-         13.10,13.19,13.30,12.88,13.20,12.44, &
-         12.23,12.00,11.18,11.04, 9.64, 9.79, &
-         8.68, 7.69, 7.68, 6.63, 7.13, 6.04, &
-         5.22, 2.95, 1.73, 0.61, 0.16, 0.05, &
-         0.51, 0.07, .012, .002, .0002/
-    !
-    DATA SIGAO2/ 0.50, 1.50, 3.40, 6.00,10.00,13.00, &
-         15.00,12.00, 2.20, 0.40,13.00, 0.01, &
-         1.40, 0.40, 1.00, 1.23, 1.15, 1.63, &
-         22.15, 4.00,12.12, 8.54,16.63,24.32, &
-         26.66,18.91,20.82,28.55,27.48,21.49, &
-         25.97,27.33,25.19,26.64,22.81,25.95, &
-         24.56,22.84,21.79,20.13,18.19,18.40, &
-         17.35,16.64,16.61,14.74,15.69,13.54, &
-         11.04, 7.11, 3.76, 1.21, 0.32, 0.10, &
-         1.02, 0.14, .024, .004, .0004/
-    !
-    DATA SIGAN2/  18 * 0.00, &
-         38.40, 0.70,19.43,34.88,15.06,16.91, &
-         16.50,21.19,35.46,24.26,21.82,26.42, &
-         23.36,23.37,22.80,22.78,22.40,24.13, &
-         24.63,23.47,23.17,21.64,16.44,16.91, &
-         13.79,11.70,11.67,10.57,10.90,10.21, &
-         8.52, 4.80, 2.29, 0.72, 0.24, 1.16, &
-         0.48, 0.09, .015, .003, .0003/
-    !
-    DATA SIGIO /  18 * 0.00, &
-         0.00, 0.00, 1.66, 3.85, 4.06, 4.08, &
-         4.08, 4.08, 4.08, 7.06, 8.52, 8.98, &
-         13.10,13.19,13.30,12.88,13.20,12.44, &
-         12.23,12.00,11.18,11.04, 9.64, 9.79, &
-         8.68, 7.69, 7.68, 6.63, 7.13, 6.04, &
-         5.22, 2.95, 1.73, 0.61, 0.16, 0.05, &
-         0.51, 0.07, .012, .002, .0002/
-    !
-    DATA SIGIO2/ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 0.19, 0.00, 1.00, &
-         16.36, 2.50, 7.94, 5.17, 6.24,12.02, &
-         12.86,10.87,11.21,23.58,23.95,20.80, &
-         25.95,27.33,25.19,26.64,22.81,25.95, &
-         24.56,22.84,21.79,20.13,18.19,18.40, &
-         17.35,16.64,16.61,14.74,15.69,13.54, &
-         11.04, 7.11, 3.76, 1.21, 0.32, 0.10, &
-         1.02, 0.14, .024, .004, .0004/
-    !
-    DATA SIGIN2/  18 * 0.00, &
-         0.00, 0.00, 0.00, 0.00, 0.00, 9.90, &
-         8.67,11.89,23.77,21.03,21.02,25.06, &
-         23.36,23.37,22.80,22.78,22.40,24.13, &
-         24.63,23.47,23.17,21.64,16.44,16.91, &
-         13.79,11.70,11.67,10.57,10.90,10.21, &
-         8.52, 4.80, 2.29, 0.72, 0.24, 1.16, &
-         0.48, 0.09, .015, .003, .0003/
-    !
-    DATA ((PROBO(K,L),K=1,6),L=1,38) &
-         / 120 * 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.52, 0.48, 0.00, 0.00, 0.00, 0.00, &
-         0.43, 0.57, 0.00, 0.00, 0.00, 0.00, &
-         0.40, 0.55, 0.05, 0.00, 0.00, 0.00, &
-         0.30, 0.45, 0.25, 0.00, 0.00, 0.00, &
-         0.41, 0.45, 0.24, 0.00, 0.00, 0.00, &
-         0.30, 0.45, 0.25, 0.00, 0.00, 0.00, &
-         0.29, 0.45, 0.26, 0.00, 0.00, 0.00, &
-         0.29, 0.45, 0.25, 0.00, 0.00, 0.00, &
-         0.29, 0.45, 0.26, 0.00, 0.00, 0.00, &
-         0.28, 0.45, 0.26, 0.00, 0.00, 0.00, &
-         0.28, 0.45, 0.27, 0.00, 0.00, 0.00/
-    DATA ((PROBO(K,L),K=1,6),L=39,52) &
-         / 0.28, 0.45, 0.27, 0.00, 0.00, 0.00, &
-         0.27, 0.42, 0.26, 0.05, 0.00, 0.00, &
-         0.26, 0.40, 0.25, 0.08, 0.00, 0.00, &
-         0.26, 0.40, 0.25, 0.08, 0.00, 0.00, &
-         0.26, 0.40, 0.25, 0.09, 0.00, 0.00, &
-         0.25, 0.37, 0.24, 0.09, 0.04, 0.00, &
-         0.25, 0.37, 0.24, 0.09, 0.04, 0.00, &
-         0.25, 0.36, 0.23, 0.10, 0.06, 0.00, &
-         0.25, 0.37, 0.23, 0.10, 0.05, 0.00, &
-         0.25, 0.36, 0.23, 0.10, 0.06, 0.00, &
-         0.30, 0.31, 0.20, 0.11, 0.07, 0.00, &
-         0.37, 0.26, 0.17, 0.13, 0.06, 0.00, &
-         0.29, 0.32, 0.21, 0.10, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00/
-    DATA ((PROBO(K,L),K=1,6),L=53,59) &
-         / 0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
-         0.30, 0.32, 0.21, 0.09, 0.08, 0.00/
-    !
-    DATA ((PROBO2(K,L),K=1,6),L=1,33) &
-         /  90 * 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.96, 0.04, 0.00, 0.00, 0.00, 0.00, &
-         0.90, 0.10, 0.00, 0.00, 0.00, 0.00, &
-         0.56, 0.44, 0.00, 0.00, 0.00, 0.00, &
-         0.56, 0.40, 0.00, 0.00, 0.00, 0.00, &
-         0.40, 0.46, 0.14, 0.00, 0.00, 0.00, &
-         0.24, 0.36, 0.35, 0.05, 0.00, 0.00, &
-         0.24, 0.36, 0.35, 0.05, 0.00, 0.00, &
-         0.23, 0.38, 0.31, 0.07, 0.00, 0.00/
-    DATA ((PROBO2(K,L),K=1,6),L=34,52) &
-         / 0.35, 0.28, 0.21, 0.16, 0.00, 0.00, &
-         0.30, 0.33, 0.21, 0.16, 0.00, 0.00, &
-         0.36, 0.24, 0.22, 0.18, 0.00, 0.00, &
-         0.36, 0.28, 0.13, 0.23, 0.00, 0.00, &
-         0.42, 0.25, 0.12, 0.21, 0.00, 0.00, &
-         0.42, 0.25, 0.12, 0.21, 0.00, 0.00, &
-         0.42, 0.24, 0.12, 0.22, 0.00, 0.00, &
-         0.40, 0.22, 0.12, 0.26, 0.00, 0.00, &
-         0.37, 0.21, 0.12, 0.30, 0.00, 0.00, &
-         0.36, 0.20, 0.12, 0.32, 0.00, 0.00, &
-         0.35, 0.19, 0.11, 0.35, 0.00, 0.00, &
-         0.35, 0.19, 0.11, 0.35, 0.00, 0.00, &
-         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
-         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
-         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
-         0.33, 0.18, 0.10, 0.39, 0.00, 0.00, &
-         0.30, 0.16, 0.09, 0.45, 0.00, 0.00, &
-         0.20, 0.11, 0.07, 0.62, 0.00, 0.00, &
-         0.10, 0.06, 0.04, 0.80, 0.00, 0.00/
-    DATA ((PROBO2(K,L),K=1,6),L=53,59) &
-         / 0.10, 0.06, 0.04, 0.80, 0.00, 0.00, &
-         0.10, 0.06, 0.04, 0.80, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 1.00, 0.00, 0.00/
-    !
-    DATA ((PROBN2(K,L),K=1,6),L=1,38) &
-         / 120 * 0.00, &
-         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
-         0.53, 0.47, 0.00, 0.00, 0.00, 0.00, &
-         0.64, 0.36, 0.00, 0.00, 0.00, 0.00, &
-         0.34, 0.66, 0.00, 0.00, 0.00, 0.00, &
-         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
-         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
-         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
-         0.33, 0.57, 0.10, 0.00, 0.00, 0.00, &
-         0.32, 0.58, 0.10, 0.00, 0.00, 0.00, &
-         0.35, 0.55, 0.10, 0.00, 0.00, 0.00, &
-         0.38, 0.53, 0.09, 0.00, 0.00, 0.00, &
-         0.40, 0.47, 0.09, 0.00, 0.00, 0.04/
-    DATA ((PROBN2(K,L),K=1,6),L=39,52) &
-         / 0.42, 0.46, 0.08, 0.00, 0.00, 0.04, &
-         0.44, 0.44, 0.08, 0.00, 0.00, 0.04, &
-         0.35, 0.46, 0.10, 0.03, 0.00, 0.06, &
-         0.33, 0.46, 0.10, 0.03, 0.00, 0.07, &
-         0.25, 0.43, 0.10, 0.05, 0.01, 0.16, &
-         0.22, 0.38, 0.09, 0.06, 0.05, 0.20, &
-         0.22, 0.38, 0.09, 0.06, 0.05, 0.20, &
-         0.20, 0.33, 0.07, 0.03, 0.10, 0.26, &
-         0.20, 0.36, 0.07, 0.04, 0.09, 0.24, &
-         0.19, 0.27, 0.07, 0.04, 0.12, 0.31, &
-         0.18, 0.21, 0.07, 0.04, 0.15, 0.35, &
-         0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
-         0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
-         0.17, 0.18, 0.07, 0.04, 0.17, 0.36/
-    DATA ((PROBN2(K,L),K=1,6),L=53,59) &
-         / 0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
-         0.02, 0.02, 0.00, 0.00, 0.00, 0.96/
     !
     !
     ! First time only:  pack photoabsorption, photoioniation cross sections
@@ -485,39 +319,20 @@ contains
 
     IF (IFIRST .EQ. 1) THEN
        IFIRST = 0
-       DO  L=1,LMAX
-          SIGABS(1,L) = SIGAO(L)  * 1.E-18
-          SIGABS(2,L) = SIGAO2(L) * 1.E-18
-          SIGABS(3,L) = SIGAN2(L) * 1.E-18
-          SIGION(1,L) = SIGIO(L)  * 1.E-18
-          SIGION(2,L) = SIGIO2(L) * 1.E-18
-          SIGION(3,L) = SIGIN2(L) * 1.E-18
-       end DO
           !
-
        DO  L=1,LMAX
-          DO  K=1,NST
-             PROB(K,1,L) = PROBO(K,L)
-             PROB(K,2,L) = PROBO2(K,L)
-             PROB(K,3,L) = PROBN2(K,L)
-          end do
-       end DO
-       !
-       write(*,*) 'test1'
-
-       DO  L=1,LMAX
-          DO  I=1,NMAJ
+          DO  I=1,nNeutral
     
              IF (WAVE1(L).LE.AUGL(I)) THEN
                 EPB1(I,L)=C1/WAVE1(L)-AUGE(I)
                 EPB2(I,L)=C1/WAVE2(L)-AUGE(I)
-                DO  K1=1,NNN(I)
-                   DO  K2=1,NNN(I)
+                DO  K1=1,nStatesPerSpecies_I(I)
+                   DO  K2=1,nStatesPerSpecies_I(I)
                       EPA(K1,K2,I,L)=AUGE(I)-TPOT(K1,I)-TPOT(K2,I)
                    end do
                 end do
              ELSE
-                DO  K=1,NNN(I)
+                DO  K=1,nStatesPerSpecies_I(I)
                    EPSIL1(K,I,L)=C1/WAVE1(L)-TPOT(K,I)
                    EPSIL2(K,I,L)=C1/WAVE2(L)-TPOT(K,I)
                 enddo
@@ -534,8 +349,8 @@ contains
     ! Zero arrays:
     !
     DO J=1,IONO
-       DO I=1,NMAJ
-          DO K=1,NST
+       DO I=1,nNeutral
+          DO K=1,nStatesMax
              PHOTOI(K,I,J) = 0.
              PHOTOD(K,I,J) = 0.
           end do
@@ -553,7 +368,7 @@ contains
     DO  L=1,LMAX
        DO  J=1,Iono
           TAU(L)=0.
-          DO  I=1,NMAJ
+          DO  I=1,nNeutral
              TAU(L)=TAU(L)+SIGABS(I,L)*ZCOL(I,J)
           end do
           IF (TAU(L) .LT. 20.) THEN
@@ -589,7 +404,7 @@ contains
        !
        ! Loop over species:
        !
-       DO  I=1,NMAJ
+       DO  I=1,nNeutral
           !
           !
           ! Choose between ionization possibilities
@@ -604,7 +419,7 @@ contains
                 !
                 ! Loop over states:
                 !
-                DO  K=1,NNN(I)
+                DO  K=1,nStatesPerSpecies_I(I)
                    !
                    E1= EPSIL1(K,I,L)
                    E2= EPSIL2(K,I,L)
@@ -660,9 +475,9 @@ contains
                 !
                 ! Calculate the electron with energy AUGE-TPOT(K1)-TPOT(K2)
                 !
-                DO  K1=1,NNN(I)      ! Excited state of ion for initial e-
+                DO  K1=1,nStatesPerSpecies_I(I)! Excited state of ion for initial e-
                    !
-                   DO  K2=1,NNN(I)      ! Excited state of final ion
+                   DO  K2=1,nStatesPerSpecies_I(I) ! Excited state of final ion
                       !
                       E1= EPA(K1,K2,I,L)
                       E2= E1
@@ -780,7 +595,7 @@ contains
   ! yyddd, universal time in seconds, geographic latitude and longitude
   ! in degrees.
   !
-  !
+  ! note for jupiter or another planet will need planet specific calculation
   SUBROUTINE SOLZEN (IDATE, UT, GLAT, GLONG, SZA)
     !
     DATA PI/3.1415926536/
@@ -1241,6 +1056,333 @@ contains
     RETURN
     
   END SUBROUTINE SSFLUX
+
+  !============================================================================
+  subroutine init_production
+    use ModPlanetConst, ONLY: Planet_, rPlanet_I
+
+    !\
+    ! Earth
+    !/
+    integer, parameter :: nStatesMaxEarth=6 !only for setting data arrays
+    ! branching ratios (O,O2,N2)
+    real :: PROBO(nStatesMaxEarth,LMAX), PROBO2(nStatesMaxEarth,LMAX) 
+    real :: PROBN2(nStatesMaxEarth,LMAX)
+    ! absorption crossections (O,O2,N2)
+    real :: SIGAO(LMAX), SIGAO2(LMAX), SIGAN2(LMAX)
+    ! ionization crossections (O,O2,N2)
+    real :: SIGIO(LMAX), SIGIO2(LMAX), SIGIN2(LMAX)
+    ! named parameters for neutral species
+    integer, parameter :: O_=1, O2_=2, N2_=3
+    
+    !\
+    ! Jupiter/Saturn
+    !/
+    ! branching ratios (H2,H,CH4,He)
+    real,allocatable :: PROBH2(:,:), PROBH(:,:),PROBCH4(:,:),PROBHe(:,:)
+    ! absorption crossections (O,O2,N2)
+    real :: SIGAH2(LMAX), SIGAH(LMAX), SIGACH4(LMAX),SIGAHe(LMAX)
+    ! ionization crossections (O,O2,N2)
+    real :: SIGIH2(LMAX), SIGIH(LMAX), SIGICH4(LMAX), SIGIHe(LMAX)
+    ! named parameters for neutral species
+    integer, parameter :: H2_=1, H_=2, CH4_=3, He_=4
+
+  DATA ((PROBO(K,L),K=1,6),L=1,38) &
+         / 120 * 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.52, 0.48, 0.00, 0.00, 0.00, 0.00, &
+         0.43, 0.57, 0.00, 0.00, 0.00, 0.00, &
+         0.40, 0.55, 0.05, 0.00, 0.00, 0.00, &
+         0.30, 0.45, 0.25, 0.00, 0.00, 0.00, &
+         0.41, 0.45, 0.24, 0.00, 0.00, 0.00, &
+         0.30, 0.45, 0.25, 0.00, 0.00, 0.00, &
+         0.29, 0.45, 0.26, 0.00, 0.00, 0.00, &
+         0.29, 0.45, 0.25, 0.00, 0.00, 0.00, &
+         0.29, 0.45, 0.26, 0.00, 0.00, 0.00, &
+         0.28, 0.45, 0.26, 0.00, 0.00, 0.00, &
+         0.28, 0.45, 0.27, 0.00, 0.00, 0.00/
+    DATA ((PROBO(K,L),K=1,6),L=39,52) &
+         / 0.28, 0.45, 0.27, 0.00, 0.00, 0.00, &
+         0.27, 0.42, 0.26, 0.05, 0.00, 0.00, &
+         0.26, 0.40, 0.25, 0.08, 0.00, 0.00, &
+         0.26, 0.40, 0.25, 0.08, 0.00, 0.00, &
+         0.26, 0.40, 0.25, 0.09, 0.00, 0.00, &
+         0.25, 0.37, 0.24, 0.09, 0.04, 0.00, &
+         0.25, 0.37, 0.24, 0.09, 0.04, 0.00, &
+         0.25, 0.36, 0.23, 0.10, 0.06, 0.00, &
+         0.25, 0.37, 0.23, 0.10, 0.05, 0.00, &
+         0.25, 0.36, 0.23, 0.10, 0.06, 0.00, &
+         0.30, 0.31, 0.20, 0.11, 0.07, 0.00, &
+         0.37, 0.26, 0.17, 0.13, 0.06, 0.00, &
+         0.29, 0.32, 0.21, 0.10, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00/
+    DATA ((PROBO(K,L),K=1,6),L=53,59) &
+         / 0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00, &
+         0.30, 0.32, 0.21, 0.09, 0.08, 0.00/
+    !
+    DATA ((PROBO2(K,L),K=1,6),L=1,33) &
+         /  90 * 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.96, 0.04, 0.00, 0.00, 0.00, 0.00, &
+         0.90, 0.10, 0.00, 0.00, 0.00, 0.00, &
+         0.56, 0.44, 0.00, 0.00, 0.00, 0.00, &
+         0.56, 0.40, 0.00, 0.00, 0.00, 0.00, &
+         0.40, 0.46, 0.14, 0.00, 0.00, 0.00, &
+         0.24, 0.36, 0.35, 0.05, 0.00, 0.00, &
+         0.24, 0.36, 0.35, 0.05, 0.00, 0.00, &
+         0.23, 0.38, 0.31, 0.07, 0.00, 0.00/
+    DATA ((PROBO2(K,L),K=1,6),L=34,52) &
+         / 0.35, 0.28, 0.21, 0.16, 0.00, 0.00, &
+         0.30, 0.33, 0.21, 0.16, 0.00, 0.00, &
+         0.36, 0.24, 0.22, 0.18, 0.00, 0.00, &
+         0.36, 0.28, 0.13, 0.23, 0.00, 0.00, &
+         0.42, 0.25, 0.12, 0.21, 0.00, 0.00, &
+         0.42, 0.25, 0.12, 0.21, 0.00, 0.00, &
+         0.42, 0.24, 0.12, 0.22, 0.00, 0.00, &
+         0.40, 0.22, 0.12, 0.26, 0.00, 0.00, &
+         0.37, 0.21, 0.12, 0.30, 0.00, 0.00, &
+         0.36, 0.20, 0.12, 0.32, 0.00, 0.00, &
+         0.35, 0.19, 0.11, 0.35, 0.00, 0.00, &
+         0.35, 0.19, 0.11, 0.35, 0.00, 0.00, &
+         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
+         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
+         0.34, 0.18, 0.11, 0.37, 0.00, 0.00, &
+         0.33, 0.18, 0.10, 0.39, 0.00, 0.00, &
+         0.30, 0.16, 0.09, 0.45, 0.00, 0.00, &
+         0.20, 0.11, 0.07, 0.62, 0.00, 0.00, &
+         0.10, 0.06, 0.04, 0.80, 0.00, 0.00/
+    DATA ((PROBO2(K,L),K=1,6),L=53,59) &
+         / 0.10, 0.06, 0.04, 0.80, 0.00, 0.00, &
+         0.10, 0.06, 0.04, 0.80, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 1.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 1.00, 0.00, 0.00/
+    !
+    DATA ((PROBN2(K,L),K=1,6),L=1,38) &
+         / 120 * 0.00, &
+         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         1.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.53, 0.47, 0.00, 0.00, 0.00, 0.00, &
+         0.64, 0.36, 0.00, 0.00, 0.00, 0.00, &
+         0.34, 0.66, 0.00, 0.00, 0.00, 0.00, &
+         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
+         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
+         0.31, 0.59, 0.10, 0.00, 0.00, 0.00, &
+         0.33, 0.57, 0.10, 0.00, 0.00, 0.00, &
+         0.32, 0.58, 0.10, 0.00, 0.00, 0.00, &
+         0.35, 0.55, 0.10, 0.00, 0.00, 0.00, &
+         0.38, 0.53, 0.09, 0.00, 0.00, 0.00, &
+         0.40, 0.47, 0.09, 0.00, 0.00, 0.04/
+    DATA ((PROBN2(K,L),K=1,6),L=39,52) &
+         / 0.42, 0.46, 0.08, 0.00, 0.00, 0.04, &
+         0.44, 0.44, 0.08, 0.00, 0.00, 0.04, &
+         0.35, 0.46, 0.10, 0.03, 0.00, 0.06, &
+         0.33, 0.46, 0.10, 0.03, 0.00, 0.07, &
+         0.25, 0.43, 0.10, 0.05, 0.01, 0.16, &
+         0.22, 0.38, 0.09, 0.06, 0.05, 0.20, &
+         0.22, 0.38, 0.09, 0.06, 0.05, 0.20, &
+         0.20, 0.33, 0.07, 0.03, 0.10, 0.26, &
+         0.20, 0.36, 0.07, 0.04, 0.09, 0.24, &
+         0.19, 0.27, 0.07, 0.04, 0.12, 0.31, &
+         0.18, 0.21, 0.07, 0.04, 0.15, 0.35, &
+         0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
+         0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
+         0.17, 0.18, 0.07, 0.04, 0.17, 0.36/
+    DATA ((PROBN2(K,L),K=1,6),L=53,59) &
+         / 0.17, 0.18, 0.07, 0.04, 0.17, 0.36, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96, &
+         0.02, 0.02, 0.00, 0.00, 0.00, 0.96/
+    !
+    ! NB - absorption and ionization cross sections are multiplied by 1.E-18
+    ! on first call.
+    !
+    DATA SIGAO /  18 * 0.00, &
+         0.00, 0.00, 1.66, 3.85, 4.06, 4.08, &
+         4.08, 4.08, 4.08, 7.06, 8.52, 8.98, &
+         13.10,13.19,13.30,12.88,13.20,12.44, &
+         12.23,12.00,11.18,11.04, 9.64, 9.79, &
+         8.68, 7.69, 7.68, 6.63, 7.13, 6.04, &
+         5.22, 2.95, 1.73, 0.61, 0.16, 0.05, &
+         0.51, 0.07, .012, .002, .0002/
+    !
+    DATA SIGAO2/ 0.50, 1.50, 3.40, 6.00,10.00,13.00, &
+         15.00,12.00, 2.20, 0.40,13.00, 0.01, &
+         1.40, 0.40, 1.00, 1.23, 1.15, 1.63, &
+         22.15, 4.00,12.12, 8.54,16.63,24.32, &
+         26.66,18.91,20.82,28.55,27.48,21.49, &
+         25.97,27.33,25.19,26.64,22.81,25.95, &
+         24.56,22.84,21.79,20.13,18.19,18.40, &
+         17.35,16.64,16.61,14.74,15.69,13.54, &
+         11.04, 7.11, 3.76, 1.21, 0.32, 0.10, &
+         1.02, 0.14, .024, .004, .0004/
+    !
+    DATA SIGAN2/  18 * 0.00, &
+         38.40, 0.70,19.43,34.88,15.06,16.91, &
+         16.50,21.19,35.46,24.26,21.82,26.42, &
+         23.36,23.37,22.80,22.78,22.40,24.13, &
+         24.63,23.47,23.17,21.64,16.44,16.91, &
+         13.79,11.70,11.67,10.57,10.90,10.21, &
+         8.52, 4.80, 2.29, 0.72, 0.24, 1.16, &
+         0.48, 0.09, .015, .003, .0003/
+    !
+    DATA SIGIO /  18 * 0.00, &
+         0.00, 0.00, 1.66, 3.85, 4.06, 4.08, &
+         4.08, 4.08, 4.08, 7.06, 8.52, 8.98, &
+         13.10,13.19,13.30,12.88,13.20,12.44, &
+         12.23,12.00,11.18,11.04, 9.64, 9.79, &
+         8.68, 7.69, 7.68, 6.63, 7.13, 6.04, &
+         5.22, 2.95, 1.73, 0.61, 0.16, 0.05, &
+         0.51, 0.07, .012, .002, .0002/
+    !
+    DATA SIGIO2/ 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 0.00, 0.00, 0.00, &
+         0.00, 0.00, 0.00, 0.19, 0.00, 1.00, &
+         16.36, 2.50, 7.94, 5.17, 6.24,12.02, &
+         12.86,10.87,11.21,23.58,23.95,20.80, &
+         25.95,27.33,25.19,26.64,22.81,25.95, &
+         24.56,22.84,21.79,20.13,18.19,18.40, &
+         17.35,16.64,16.61,14.74,15.69,13.54, &
+         11.04, 7.11, 3.76, 1.21, 0.32, 0.10, &
+         1.02, 0.14, .024, .004, .0004/
+    !
+    DATA SIGIN2/  18 * 0.00, &
+         0.00, 0.00, 0.00, 0.00, 0.00, 9.90, &
+         8.67,11.89,23.77,21.03,21.02,25.06, &
+         23.36,23.37,22.80,22.78,22.40,24.13, &
+         24.63,23.47,23.17,21.64,16.44,16.91, &
+         13.79,11.70,11.67,10.57,10.90,10.21, &
+         8.52, 4.80, 2.29, 0.72, 0.24, 1.16, &
+         0.48, 0.09, .015, .003, .0003/
+   
+
+
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       ! Earth
+       ! set the neutral parameters
+       nNeutral=3
+       ! allocate array to hold neutral mass
+       if (.not.allocated(NeutralMassAMU_I))allocate(NeutralMassAMU_I(nNeutral))
+       NeutralMassAMU_I = (/16.0,32.0,28.0/)
+       
+       ! set the surface gravity
+       gSurface = 978.1
+       
+       ! set number of states per species
+       if (.not.allocated(nStatesPerSpecies_I)) &
+            allocate(nStatesPerSpecies_I(nNeutral))
+       nStatesPerSpecies_I=(/5,4,6/)
+
+       nStatesMax = max(nStatesPerSpecies)
+
+       if (.not.allocated(TPOT)) &
+            allocate(TPOT(nStatesMax,nNeutral))
+
+       TPOT(:,O_) = (/13.61, 16.93, 18.63, 28.50, 40.00,  0.00/)
+       TPOT(:,O2_)= (/12.07, 16.10, 18.20, 20.00,  0.00,  0.00/) 
+       TPOT(:,N2_)= (/15.60, 16.70, 18.80, 30.00, 34.80, 25.00/)
+
+       !set branching ratios and crossections
+       DO  L=1,LMAX
+          DO  K=1,nStatesMax
+             PROB(K,1,L) = PROBO(K,L)
+             PROB(K,2,L) = PROBO2(K,L)
+             PROB(K,3,L) = PROBN2(K,L)
+          end do
+       end DO
+       
+       DO  L=1,LMAX
+          SIGABS(1,L) = SIGAO(L)  * 1.E-18
+          SIGABS(2,L) = SIGAO2(L) * 1.E-18
+          SIGABS(3,L) = SIGAN2(L) * 1.E-18
+          SIGION(1,L) = SIGIO(L)  * 1.E-18
+          SIGION(2,L) = SIGIO2(L) * 1.E-18
+          SIGION(3,L) = SIGIN2(L) * 1.E-18
+       end DO
+       
+       
+    case('JUPITER')
+       ! Jupiter
+       ! set the neutral parameters
+       nNeutral=3
+       ! allocate array to hold neutral mass
+       if (.not.allocated(NeutralMassAMU_I))allocate(NeutralMassAMU_I(nNeutral))
+       NeutralMassAMU_I = (/2.0,1.0,16.0,4.0/)
+
+       ! set number of states per species
+       if (.not.allocated(nStatesPerSpecies_I)) &
+            allocate(nStatesPerSpecies_I(nNeutral))
+       nStatesPerSpecies_I=(/2,1,5,1/)
+
+       nStatesMax = max(nStatesPerSpecies)
+
+       ! set the surface gravity
+       gSurface = 2479.0
+
+       if (.not.allocated(TPOT)) &
+            allocate(TPOT(nStatesMax,nNeutral))
+
+       TPOT(:,H2_) = (/0.00, 0.00, 0.00, 0.00, 0.00/)
+       TPOT(:,H_)  = (/13.5, 0.00, 0.00, 0.00, 0.00/) 
+       TPOT(:,CH4_)= (/18.0, 20.0, 15.0, 19.0, 12.1/)
+       TPOT(:,He_) = (/0.00, 0.00, 0.00, 0.00, 0.00/) 
+
+       !set branching ratios and crossections
+       DO  L=1,LMAX
+          DO  K=1,nStatesMax
+             PROB(K,1,L) = PROBH2(K,L)
+             PROB(K,2,L) = PROBH(K,L)
+             PROB(K,3,L) = PROBCH4(K,L)
+             PROB(K,4,L) = PROBHe(K,L)
+          end do
+       end DO
+       
+       DO  L=1,LMAX
+          SIGABS(1,L) = SIGAH2(L)  * 1.E-18
+          SIGABS(2,L) = SIGAH(L) * 1.E-18
+          SIGABS(3,L) = SIGACH4(L) * 1.E-18
+          SIGABS(4,L) = SIGAHe(L) * 1.E-18
+          SIGION(1,L) = SIGIH2(L)  * 1.E-18
+          SIGION(2,L) = SIGIH(L) * 1.E-18
+          SIGION(3,L) = SIGICH4(L) * 1.E-18
+          SIGION(4,L) = SIGIHe(L) * 1.E-18
+       end DO
+
+    end select
+
+
+  end subroutine init_production
 
 
 end Module ModSeProduction
