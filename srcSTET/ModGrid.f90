@@ -108,7 +108,7 @@ Module ModSeGrid
   public :: set_grid_pot
   public :: update_grid
 
-  real :: rPlanetCM
+  real,public :: rPlanetCM
 contains
   !============================================================================
   subroutine init_se_grid(iLine)
