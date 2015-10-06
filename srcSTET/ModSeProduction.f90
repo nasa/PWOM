@@ -26,10 +26,14 @@ Module ModSeProduction
   ! Store the crosseections
   real :: SIGION(nNeutral,LMAX),SIGABS(nNeutral,LMAX)
 
-  real :: PROB(nStatesMax,nNeutral,LMAX),
+  ! Branching ratios
+  real :: PROB(nStatesMax,nNeutral,LMAX)
   
   !atomic mass of neutrals
   real,allocatable :: NeutralMassAMU_I(:)
+
+  !Auger e- energies and thresholds
+  real,allocatable :: AugEnergy_I(:), AugThreshold_I(:)
 
   !surface gravity in cm/2^2
   real :: gSurface = 0.0
@@ -64,7 +68,7 @@ contains
   ! >> CHI should be in radians
   !
   SUBROUTINE RCOLUM (CHI, ZZ, ZMAJ, TN, IONO)
-    !
+    ! *** planet specific
 !    INCLUDE 'numbers.h'
     PARAMETER (NM=3) 
     PARAMETER (NU=4) !heights in us standard model
@@ -155,7 +159,6 @@ contains
   FUNCTION CHAP (CHI, Z, T, I)
     use ModSeGrid,      ONLY: rPlanetCM
     use ModNumConst,    ONLY: cPi
-    ! masses of neutral species. needs to be more general
     GR=gSurface*(rPlanetCM/(rPlanetCM+Z))**2
     HN=1.38E-16*T/(NeutralMassAMU_I(I)*1.662E-24*GR)
     HG=(rPlanetCM+Z)/HN
@@ -169,6 +172,8 @@ contains
   !
   !
   FUNCTION SPERFC(DUMMY)
+! error function erfc(y) = 1 - erf(y) 
+! from Smith & Smith [1972], eq 12
     IF (DUMMY .LE. 8.) THEN
        SPERFC = (1.0606963+0.55643831*DUMMY) / &
             (1.0619896+1.7245609*DUMMY+DUMMY*DUMMY)
@@ -208,17 +213,18 @@ contains
 ! This subroutine calculates photoionization, rates, certain
 ! photodissociative excitation rates, and the photoelectron production
 ! spectrum as a function of altitude.  Uses continuously variable energy
-! grid.  3 major species: O, O2, N2; NO is treated as a minor (non-
-! absorbing) specie.
+! grid.
+! For Earth - 3 major neutral species : O, O2, N2
+! NO is no longer tracked
+! For Jupiter/Saturn - 4 major neutral species : H2, H, CH4, He
 !
 ! Supplied by calling routine:
 ! WAVE1   wavelength array, upper bound; Angstroms
 ! WAVE2   wavelength array, lower bound; Angstroms
 ! SFLUX   solar flux array; photons cm-2 sec-1
-! ZZ      altitude array; cm above earth
-! ZMAJ    density array for species O, O2, N2, altitude; cm-3
-! ZNO     density of NO at each altitude; cm-3
-! ZCOL    slant column density for species O, O2, N2, altitude; cm-2
+! ZZ      altitude array; cm above planet surface
+! ZMAJ    density array per species, altitude; cm-3
+! ZCOL    slant column density per species, altitude; cm-2
 ! ENER    energy grid for photoelectrons; eV
 ! DEL     array of energy grid increments; eV
 !
@@ -226,15 +232,17 @@ contains
 ! PESPEC  photoelectron production spectrum for each altitude; cm-3 s-1
 ! PHOTOI  photoionization rates for state, species, altitude; cm-3 s-1
 ! PHOTOD  photodissoc./exc. rates for state, species, alt.; cm-3 s-1
-! PHONO   photoionization/dissoc./exc. rates for NO; cm-3 s-1
 !
 ! Other definitions:
 ! DSPECT  ionization rate in particular wavelength bin; cm-3 s-1
 ! TAU     optical depth, dimensionless
 ! FLUX    solar flux at altitude; cm-2 s-1
-! SIGABS  photoabsorption cross sections, O, O2, N2; cm2
-! SIGION  photoionization cross sections, O, O2, N2; cm2
-! SIGAO, SIGAO2, SIGAN2, SIGIO, SIGIO2, SIGIN2; cross sect. data arrays
+! SIGABS  photoabsorption cross sections per species; cm2
+! SIGION  photoionization cross sections per species; cm2
+! cross section data arrays now moved to init_production
+!   Earth -> SIGAO, SIGAO2, SIGAN2, SIGIO, SIGIO2, SIGIN2
+!   J/S   -> SIGAH2, SIGAH, SIGACH4, SIGAHe
+!            SIGIH2, SIGIH, SIGICH4, SIGIHe
 ! nStatesPerSpecies     number of states for each species
 ! TPOT    ionization potentials for each species, state; eV
 ! PROB    branching ratios for each state, species, and wavelength bin:
@@ -252,18 +260,20 @@ contains
 ! BSO2    yield of O(1S) from dissociation of O2
 ! EPSIL1  energy loss lower bound for state, species, wavelength; eV
 ! EPSIL2  energy loss upper bound for state, species, wavelength; eV
-! SIGNO   NO photoionization xsect at Ly-alpha
 ! AUGE    Mean energy of Auger electrons for each species; eV
 ! AUGL    Wavelength threshold for Auger electrons; Angstroms
 !
 ! Array dimensions:
-! JMAX    number of altitude levels (actually I am now just using IONO)
 ! Elen    number of energetic electron energy bins
 ! LMAX    number of wavelength intervals for solar flux
 ! nNeutral    number of major species
 ! nStatesMax     number of states produced by photoionization/dissociation
 
   !following not used!
+! JMAX    number of altitude levels (actually I am now just using IONO)
+! ZNO     density of NO at each altitude; cm-3 
+! PHONO   photoionization/dissoc./exc. rates for NO; cm-3 s-1
+! SIGNO   NO photoionization xsect at Ly-alpha
 ! NEX     number of ionized/excited species
 ! NW      number of airglow emission wavelengths
 ! NC      number of component production terms for each emission
@@ -277,10 +287,10 @@ contains
     
     !INCLUDE 'numbers.h'
     use ModSeGrid,only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I,Emin=>EnergyMin
-    PARAMETER (NEX=20)
-    PARAMETER (NW=20)
-    PARAMETER (NC=10)
-    PARAMETER (NF=4)
+!    PARAMETER (NEX=20)
+!    PARAMETER (NW=20)
+!    PARAMETER (NC=10)
+!    PARAMETER (NF=4)
     !
 !    COMMON /CGLOW/ &
 !         ZCOL(nNeutral,IONO),WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
@@ -292,7 +302,7 @@ contains
          ZMAJ(nNeutral,IONO), &
          EPSIL1(nStatesMax,nNeutral,LMAX), EPSIL2(nStatesMax,nNeutral,LMAX), &
          PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
-         BSO2(LMAX), AUGE(nNeutral), AUGL(nNeutral), TAU(LMAX), LAUG(nNeutral), &
+         BSO2(LMAX), TAU(LMAX), LAUG(nNeutral), &
          EPA(nStatesMax,nStatesMax,nNeutral,LMAX),EPB1(nNeutral,LMAX),EPB2(nNeutral,LMAX)
     !
     SAVE SIGION, SIGABS, PROB, EPSIL1, EPSIL2, EPA, EPB1, EPB2
@@ -304,8 +314,6 @@ contains
     !
     DATA BSO2/12*0.,.01,.03,.10,.09,.10,.09,.07,.07,.03,.01,37*0./
     !
-    !      DATA AUGE/500., 500., 360./, AUGL/24., 24., 33./
-    DATA AUGE/533., 533., 402./, AUGL/23., 23., 32./, LAUG/54,54,53/
     !
     DATA C1/12397.7/               ! Converting wavelengths to energie
     !
@@ -323,12 +331,12 @@ contains
        DO  L=1,LMAX
           DO  I=1,nNeutral
     
-             IF (WAVE1(L).LE.AUGL(I)) THEN
-                EPB1(I,L)=C1/WAVE1(L)-AUGE(I)
-                EPB2(I,L)=C1/WAVE2(L)-AUGE(I)
+             IF (WAVE1(L).LE.AugThreshold_I(I)) THEN
+                EPB1(I,L)=C1/WAVE1(L)-AugEnergy_I(I)
+                EPB2(I,L)=C1/WAVE2(L)-AugEnergy_I(I)
                 DO  K1=1,nStatesPerSpecies_I(I)
                    DO  K2=1,nStatesPerSpecies_I(I)
-                      EPA(K1,K2,I,L)=AUGE(I)-TPOT(K1,I)-TPOT(K2,I)
+                      EPA(K1,K2,I,L)=AugEnergy_I(I)-TPOT(K1,I)-TPOT(K2,I)
                    end do
                 end do
              ELSE
@@ -381,7 +389,7 @@ contains
           ! Calculate SRC photodissociation of O2, dissociative excitation of
           ! O(1S), photodissociation of N2, and photoionization of NO by solar
           ! Ly-alpha:
-          !
+          ! *** planet specific, but doesn't seem to be used currently
           IF (WAVE1(L) .LT. 1751 .AND. WAVE2(L) .GT. 1349.) &
                PHOTOD(1,2,J) = PHOTOD(1,2,J)+ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J)
           PHOTOD(2,2,J) = PHOTOD(2,2,J) + ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J) &
@@ -409,7 +417,7 @@ contains
           !
           ! Choose between ionization possibilities
           !
-          IF (WAVE1(L).GT.AUGL(I)) THEN      ! No Auger electron production
+          IF (WAVE1(L).GT.AugThreshold_I(I)) THEN      ! No Auger electron production
              !
              ! Loop over altitude:
              !
@@ -473,7 +481,7 @@ contains
                 J1=ABS(Ioff-J)
                 !
                 !
-                ! Calculate the electron with energy AUGE-TPOT(K1)-TPOT(K2)
+                ! Calculate the electron with energy AugEnergy_I-TPOT(K1)-TPOT(K2)
                 !
                 DO  K1=1,nStatesPerSpecies_I(I)! Excited state of ion for initial e-
                    !
@@ -493,7 +501,7 @@ contains
                    enddo            ! End of ion states loops
                 enddo
                 !
-                ! Calculate the electron with energy C1/WAVE-AUGE
+                ! Calculate the electron with energy C1/WAVE-AugEnergy_I
                 !
                 E1= EPB1(I,L)
                 E2= EPB2(I,L)
@@ -1290,25 +1298,32 @@ contains
     select case(NamePlanet_I(Planet_))
     case('EARTH')
        ! Earth
-       ! set the neutral parameters
-       nNeutral=3
-       ! allocate array to hold neutral mass
-       if (.not.allocated(NeutralMassAMU_I))allocate(NeutralMassAMU_I(nNeutral))
-       NeutralMassAMU_I = (/16.0,32.0,28.0/)
-       
        ! set the surface gravity
        gSurface = 978.1
+
+       ! set the neutral parameters
+       nNeutral=3
        
+       call allocate_arrays
+
+       ! set the neutral mass per species
+       NeutralMassAMU_I = (/16.0,32.0,28.0/)
+
+       ! set auger e- mean energies and wavelength thresholds
+       AugEnergy_I = (/533., 533., 402./)
+       AugThreshold_I = (/23., 23., 32./)
+! ***something else Auger e- related that seems to belong here
+!    index of wavelength bin?
+       LAUG = (/54,54,53/)
+
        ! set number of states per species
-       if (.not.allocated(nStatesPerSpecies_I)) &
-            allocate(nStatesPerSpecies_I(nNeutral))
        nStatesPerSpecies_I=(/5,4,6/)
 
        nStatesMax = max(nStatesPerSpecies)
 
+       ! allocate & set ionization potentials per state, per species
        if (.not.allocated(TPOT)) &
             allocate(TPOT(nStatesMax,nNeutral))
-
        TPOT(:,O_) = (/13.61, 16.93, 18.63, 28.50, 40.00,  0.00/)
        TPOT(:,O2_)= (/12.07, 16.10, 18.20, 20.00,  0.00,  0.00/) 
        TPOT(:,N2_)= (/15.60, 16.70, 18.80, 30.00, 34.80, 25.00/)
@@ -1334,25 +1349,31 @@ contains
        
     case('JUPITER')
        ! Jupiter
+       ! set the surface gravity
+       gSurface = 2479.0
+
        ! set the neutral parameters
        nNeutral=3
-       ! allocate array to hold neutral mass
-       if (.not.allocated(NeutralMassAMU_I))allocate(NeutralMassAMU_I(nNeutral))
+
+       call allocate_arrays
+
+       ! set the neutral mass per species
        NeutralMassAMU_I = (/2.0,1.0,16.0,4.0/)
 
+       ! set auger e- mean energies and wavelength thresholds
+       ! both set to zero for no Auger production
+       AugEnergy_I = (/0.0, 0.0, 0.0, 0.0/)
+       AugThreshold_I = (/0.0, 0.0, 0.0, 0.0/)
+       ! *** set LAUG here?
+
        ! set number of states per species
-       if (.not.allocated(nStatesPerSpecies_I)) &
-            allocate(nStatesPerSpecies_I(nNeutral))
        nStatesPerSpecies_I=(/2,1,5,1/)
 
        nStatesMax = max(nStatesPerSpecies)
 
-       ! set the surface gravity
-       gSurface = 2479.0
-
+       ! allocate & set ionization potentials per state, per species
        if (.not.allocated(TPOT)) &
             allocate(TPOT(nStatesMax,nNeutral))
-
        TPOT(:,H2_) = (/0.00, 0.00, 0.00, 0.00, 0.00/)
        TPOT(:,H_)  = (/13.5, 0.00, 0.00, 0.00, 0.00/) 
        TPOT(:,CH4_)= (/18.0, 20.0, 15.0, 19.0, 12.1/)
@@ -1384,5 +1405,25 @@ contains
 
   end subroutine init_production
 
+
+  subroutine allocate_arrays
+    ! array to hold neutral mass
+    if (.not.allocated(NeutralMassAMU_I)) &
+         allocate(NeutralMassAMU_I(nNeutral))
+    ! states per species
+    if (.not.allocated(nStatesPerSpecies_I)) &
+         allocate(nStatesPerSpecies_I(nNeutral))
+    ! auger e- mean energy per species
+    if (.not.allocated(AugEnergy_I)) &
+         allocate(AugEnergy_I(nNeutral))
+    ! auger e- wavelength threshold per species
+    if (.not.allocated(AugThreshold_I)) &
+         allocate(AugThreshold_I(nNeutral))
+    ! auger something
+    if (.not.allocated(LAUG)) &
+         allocate(LAUG(nNeutral))
+
+    
+  end subroutine allocate_arrays
 
 end Module ModSeProduction
