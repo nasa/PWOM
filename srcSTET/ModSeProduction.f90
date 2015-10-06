@@ -33,7 +33,8 @@ Module ModSeProduction
   real,allocatable :: NeutralMassAMU_I(:)
 
   !Auger e- energies and thresholds
-  real,allocatable :: AugEnergy_I(:), AugThreshold_I(:)
+  real,    allocatable :: AugEnergy_I(:), AugThreshold_I(:)
+  integer, allocatable :: iAugWaveBin_I(:)
 
   !surface gravity in cm/2^2
   real :: gSurface = 0.0
@@ -68,16 +69,21 @@ contains
   ! >> CHI should be in radians
   !
   SUBROUTINE RCOLUM (CHI, ZZ, ZMAJ, TN, IONO)
-    ! *** planet specific
+
 !    INCLUDE 'numbers.h'
+    use ModSeGrid,      ONLY: rPlanetCM
+    use ModNumConst,    ONLY: cPi
     PARAMETER (NM=3) 
     PARAMETER (NU=4) !heights in us standard model
     !
-    DIMENSION ZZ(IONO), TN(IONO), &
-          ZCG(NM), ZUS(NU), TNUS(NU), ZCUS(NM,NU)
-    real, allocatable :: ZMAJ(:,:),ZVCD(:,:)
+    DIMENSION ZZ(IONO), TN(IONO)
+    real, allocatable :: ZMAJ(:,:),ZVCD(:,:),ZCG(:)
+    
+    ! *** planet specific
+    DIMENSION  ZUS(NU), TNUS(NU), ZCUS(NM,NU)
+
     !
-    DATA PI/3.1415926535/, RE/6.37E8/
+
     ! These are the heights, temperatures and densities for US standard model
     DATA ZUS/0., 1.5E6, 5.E6, 9.E6/, TNUS/288., 217., 271., 187./
     DATA ZCUS/8.00E17, 4.54E24, 1.69E25, &
@@ -88,6 +94,7 @@ contains
     !
     if (.not.allocated(ZMAJ)) allocate(ZMAJ(nNeutral,IONO))
     if (.not.allocated(ZVCD)) allocate(ZVCD(nNeutral,IONO))
+    if (.not.allocated(ZCG)) allocate(ZCG(nNeutral))
 
     if (.not.allocated(ZCOL)) allocate(ZCOL(nNeutral,IONO))
     CALL VCD (ZZ, ZMAJ, ZVCD, IONO, nNeutral)
@@ -101,7 +108,7 @@ contains
        RETURN
     ENDIF
     !
-    IF (CHI .LE. PI/2.) THEN
+    IF (CHI .LE. cPi/2.) THEN
        DO I=1,nNeutral
           DO J=1,IONO
              ZCOL(I,J) = ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
@@ -109,8 +116,8 @@ contains
        enddo
     ELSE
        do J=1,IONO
-          GHRG=(RE+ZZ(J))*SIN(CHI)
-          GHZ=GHRG-RE
+          GHRG=(rPlanetCM+ZZ(J))*SIN(CHI)
+          GHZ=GHRG-rPlanetCM
           IF (GHZ .LE. 0.) THEN
              do I=1,nNeutral
                 ZCOL(I,J) = 1.0E30
@@ -143,7 +150,7 @@ contains
              end do
           ENDIF
           do I=1,nNeutral
-             ZCOL(I,J) = 2. * ZCG(I) * CHAP(PI/2.,GHZ,TNG,I) &
+             ZCOL(I,J) = 2. * ZCG(I) * CHAP(CPI/2.,GHZ,TNG,I) &
                   - ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
           end do
        end do
@@ -302,7 +309,7 @@ contains
          ZMAJ(nNeutral,IONO), &
          EPSIL1(nStatesMax,nNeutral,LMAX), EPSIL2(nStatesMax,nNeutral,LMAX), &
          PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
-         BSO2(LMAX), TAU(LMAX), LAUG(nNeutral), &
+         BSO2(LMAX), TAU(LMAX),  &
          EPA(nStatesMax,nStatesMax,nNeutral,LMAX),EPB1(nNeutral,LMAX),EPB2(nNeutral,LMAX)
     !
     SAVE SIGION, SIGABS, PROB, EPSIL1, EPSIL2, EPA, EPB1, EPB2
@@ -390,12 +397,12 @@ contains
           ! O(1S), photodissociation of N2, and photoionization of NO by solar
           ! Ly-alpha:
           ! *** planet specific, but doesn't seem to be used currently
-          IF (WAVE1(L) .LT. 1751 .AND. WAVE2(L) .GT. 1349.) &
-               PHOTOD(1,2,J) = PHOTOD(1,2,J)+ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J)
-          PHOTOD(2,2,J) = PHOTOD(2,2,J) + ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J) &
-               * BSO2(L)
-          PHOTOD(1,3,J) = PHOTOD(1,3,J) + &
-               ZMAJ(3,J)*(SIGABS(3,L)-SIGION(3,L))*FLUX(L,J)
+!          IF (WAVE1(L) .LT. 1751 .AND. WAVE2(L) .GT. 1349.) &
+!               PHOTOD(1,2,J) = PHOTOD(1,2,J)+ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J)
+!          PHOTOD(2,2,J) = PHOTOD(2,2,J) + ZMAJ(2,J)*SIGABS(2,L)*FLUX(L,J) &
+!               * BSO2(L)
+!          PHOTOD(1,3,J) = PHOTOD(1,3,J) + &
+!               ZMAJ(3,J)*(SIGABS(3,L)-SIGION(3,L))*FLUX(L,J)
        end do
     end do
     !
@@ -492,7 +499,7 @@ contains
                       IF (E1.LT.Emin .OR. E1.GT.Emax) cycle
                       DSPECT = &
                            ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)&
-                           *PROB(K1,I,L)*PROB(K2,I,LAUG(I))
+                           *PROB(K1,I,L)*PROB(K2,I,iAugWaveBin_I(I))
                       PHOTOI(K1,I,J) = PHOTOI(K1,I,J) + DSPECT      ! Technically, it's
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
@@ -1303,7 +1310,8 @@ contains
 
        ! set the neutral parameters
        nNeutral=3
-       
+
+       ! now that nNeutral is set allocate arrays       
        call allocate_arrays
 
        ! set the neutral mass per species
@@ -1312,9 +1320,8 @@ contains
        ! set auger e- mean energies and wavelength thresholds
        AugEnergy_I = (/533., 533., 402./)
        AugThreshold_I = (/23., 23., 32./)
-! ***something else Auger e- related that seems to belong here
-!    index of wavelength bin?
-       LAUG = (/54,54,53/)
+       ! set wave length bins associated with Auger production
+       iAugWaveBin_I = (/54,54,53/)
 
        ! set number of states per species
        nStatesPerSpecies_I=(/5,4,6/)
@@ -1355,6 +1362,7 @@ contains
        ! set the neutral parameters
        nNeutral=3
 
+       ! now that nNeutral is set allocate arrays
        call allocate_arrays
 
        ! set the neutral mass per species
@@ -1364,7 +1372,8 @@ contains
        ! both set to zero for no Auger production
        AugEnergy_I = (/0.0, 0.0, 0.0, 0.0/)
        AugThreshold_I = (/0.0, 0.0, 0.0, 0.0/)
-       ! *** set LAUG here?
+       ! set iAugWaveBin_I to zero since we have no Auger production for now
+       iAugWaveBin_I = (/0.0, 0.0, 0.0, 0.0/)
 
        ! set number of states per species
        nStatesPerSpecies_I=(/2,1,5,1/)
@@ -1420,8 +1429,8 @@ contains
     if (.not.allocated(AugThreshold_I)) &
          allocate(AugThreshold_I(nNeutral))
     ! auger something
-    if (.not.allocated(LAUG)) &
-         allocate(LAUG(nNeutral))
+    if (.not.allocated(iAugWaveBin_I)) &
+         allocate(iAugWaveBin_I(nNeutral))
 
     
   end subroutine allocate_arrays
