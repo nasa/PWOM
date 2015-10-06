@@ -258,7 +258,7 @@ contains
 !           O2+ states: X, a+A, b, dissoc.
 !           N2+ states: X, A, B, C, F, dissoc.
 !         Jupiter:
-!           H2+ states: 
+!           H2+ states: H2+, H+ + H
 !           H+  states: H+, 
 !           CH4+states: H+ + CH3, CH+ +H2 +H, CH2+ + H2,CH3+ +H, CH4+
 !           He+ states: 
@@ -1383,7 +1383,7 @@ contains
        ! allocate & set ionization potentials per state, per species
        if (.not.allocated(TPOT)) &
             allocate(TPOT(nStatesMax,nNeutral))
-       TPOT(:,H2_) = (/0.00, 0.00, 0.00, 0.00, 0.00/)
+       TPOT(:,H2_) = (/15.4, 17.7, 0.00, 0.00, 0.00/)
        TPOT(:,H_)  = (/13.5, 0.00, 0.00, 0.00, 0.00/) 
        TPOT(:,CH4_)= (/18.0, 20.0, 15.0, 19.0, 12.1/)
        TPOT(:,He_) = (/0.00, 0.00, 0.00, 0.00, 0.00/) 
