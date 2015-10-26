@@ -23,11 +23,11 @@ Module ModSeProduction
   ! store the slant column density
   real, allocatable ::ZCOL(:,:)
 
-  ! Store the crosseections
-  real :: SIGION(nNeutral,LMAX),SIGABS(nNeutral,LMAX)
+  ! Store the crossections
+  real, allocatable :: SIGION(:,:),SIGABS(:,:)
 
   ! Branching ratios
-  real :: PROB(nStatesMax,nNeutral,LMAX)
+  real, allocatable :: PROB(:,:,:)
   
   !atomic mass of neutrals
   real,allocatable :: NeutralMassAMU_I(:)
@@ -258,10 +258,10 @@ contains
 !           O2+ states: X, a+A, b, dissoc.
 !           N2+ states: X, A, B, C, F, dissoc.
 !         Jupiter:
-!           H2+ states: H2+, H+ + H
-!           H+  states: H+, 
-!           CH4+states: H+ + CH3, CH+ +H2 +H, CH2+ + H2,CH3+ +H, CH4+
-!           He+ states: 
+!           H2+ states: H2+ + e-
+!           H+  states: H+ + e-
+!           CH4+states: X, A, MET
+!           He+ states: He+ + e-
 
 ! PROBO, PROBO2, PROBN2; branching ratio data arrays
 ! BSO2    yield of O(1S) from dissociation of O2
@@ -1093,14 +1093,12 @@ contains
     !\
     ! Jupiter/Saturn
     !/
-    ! branching ratios (H2,H,CH4,He)
-    real,allocatable :: PROBH2(:,:), PROBH(:,:),PROBCH4(:,:),PROBHe(:,:)
-    ! absorption crossections (O,O2,N2)
-    real :: SIGAH2(LMAX), SIGAH(LMAX), SIGACH4(LMAX),SIGAHe(LMAX)
-    ! ionization crossections (O,O2,N2)
-    real :: SIGIH2(LMAX), SIGIH(LMAX), SIGICH4(LMAX), SIGIHe(LMAX)
+    ! branching ratios
+    real,allocatable :: ProbSpecies(:,:)
+    ! ionization and absorption crossections
+    real :: SigIonSpecies(LMAX),SigAbsSpecies(LMAX)
     ! named parameters for neutral species
-    integer, parameter :: H2_=1, H_=2, CH4_=3, He_=4
+    integer, parameter :: H2_=1, He_=2, H_=3, CH4_=4
 
   DATA ((PROBO(K,L),K=1,6),L=1,38) &
          / 120 * 0.00, &
@@ -1312,7 +1310,7 @@ contains
        nNeutral=3
 
        ! now that nNeutral is set allocate arrays       
-       call allocate_arrays
+       call allocate_neutral_arrays
 
        ! set the neutral mass per species
        NeutralMassAMU_I = (/16.0,32.0,28.0/)
@@ -1328,9 +1326,9 @@ contains
 
        nStatesMax = max(nStatesPerSpecies)
 
-       ! allocate & set ionization potentials per state, per species
-       if (.not.allocated(TPOT)) &
-            allocate(TPOT(nStatesMax,nNeutral))
+       call allocate_state_arrays(ProbSpecies)
+
+       ! set ionization potentials per state, per species
        TPOT(:,O_) = (/13.61, 16.93, 18.63, 28.50, 40.00,  0.00/)
        TPOT(:,O2_)= (/12.07, 16.10, 18.20, 20.00,  0.00,  0.00/) 
        TPOT(:,N2_)= (/15.60, 16.70, 18.80, 30.00, 34.80, 25.00/)
@@ -1363,51 +1361,72 @@ contains
        nNeutral=3
 
        ! now that nNeutral is set allocate arrays
-       call allocate_arrays
+       call allocate_neutral_arrays
 
        ! set the neutral mass per species
-       NeutralMassAMU_I = (/2.0,1.0,16.0,4.0/)
+       NeutralMassAMU_I = (/2.0,4.0,1.0,16.0/)
 
        ! set auger e- mean energies and wavelength thresholds
        ! both set to zero for no Auger production
        AugEnergy_I = (/0.0, 0.0, 0.0, 0.0/)
        AugThreshold_I = (/0.0, 0.0, 0.0, 0.0/)
        ! set iAugWaveBin_I to zero since we have no Auger production for now
-       iAugWaveBin_I = (/0.0, 0.0, 0.0, 0.0/)
+       iAugWaveBin_I = (/0, 0, 0, 0/)
 
        ! set number of states per species
-       nStatesPerSpecies_I=(/2,1,5,1/)
+       nStatesPerSpecies_I=(/1,1,1,3/)
 
        nStatesMax = max(nStatesPerSpecies)
 
-       ! allocate & set ionization potentials per state, per species
-       if (.not.allocated(TPOT)) &
-            allocate(TPOT(nStatesMax,nNeutral))
-       TPOT(:,H2_) = (/15.4, 17.7, 0.00, 0.00, 0.00/)
-       TPOT(:,H_)  = (/13.5, 0.00, 0.00, 0.00, 0.00/) 
-       TPOT(:,CH4_)= (/18.0, 20.0, 15.0, 19.0, 12.1/)
-       TPOT(:,He_) = (/0.00, 0.00, 0.00, 0.00, 0.00/) 
+       call allocate_state_arrays(ProbSpecies)
+
+       ! set ionization potentials per state, per species
+       TPOT(:,H2_) = (/15.42589, 0.00, 0.00/)
+       TPOT(:,He_) = (/24.6, 0.00, 0.00/) 
+       TPOT(:,H_)  = (/13.5, 0.00, 0.00/) 
+       TPOT(:,CH4_)= (/12.98, 24.0, 27.55/)
+
+       call read_data_array('PhotoH2.dat',2,ProbSpecies,SigAbsSpecies, &
+            SigIonSpecies)
+       PROB(:,1,:) = ProbSpecies(:,:)
+       SIGABS(1,:) = SigAbsSpecies(:) * 1.e-18
+       SIGION(1,:) = SigIonSpecies(:) * 1.e-18
+       call read_data_array('PhotoHe.dat',1,ProbSpecies,SigAbsSpecies, &
+            SigIonSpecies)
+       PROB(:,2,:) = ProbSpecies(:,:)
+       SIGABS(2,:) = SigAbsSpecies(:) * 1.e-18
+       SIGION(2,:) = SigIonSpecies(:) * 1.e-18
+       call read_data_array('PhotoH.dat',1,ProbSpecies,SigAbsSpecies, &
+            SigIonSpecies)
+       PROB(:,3,:) = ProbSpecies(:,:)
+       SIGABS(3,:) = SigAbsSpecies(:) * 1.e-18
+       SIGION(3,:) = SigIonSpecies(:) * 1.e-18
+       call read_data_array('PhotoCH4.dat',2,ProbSpecies,SigAbsSpecies, &
+            SigIonSpecies)
+       PROB(:,4,:) = ProbSpecies(:,:)
+       SIGABS(4,:) = SigAbsSpecies(:) * 1.e-18
+       SIGION(4,:) = SigIonSpecies(:) * 1.e-18
 
        !set branching ratios and crossections
-       DO  L=1,LMAX
-          DO  K=1,nStatesMax
-             PROB(K,1,L) = PROBH2(K,L)
-             PROB(K,2,L) = PROBH(K,L)
-             PROB(K,3,L) = PROBCH4(K,L)
-             PROB(K,4,L) = PROBHe(K,L)
-          end do
-       end DO
+!       DO  L=1,LMAX
+!          DO  K=1,nStatesMax
+!             PROB(K,1,L) = PROBH2(K,L)
+!             PROB(K,2,L) = PROBH(K,L)
+!             PROB(K,3,L) = PROBCH4(K,L)
+!             PROB(K,4,L) = PROBHe(K,L)
+!          end do
+!       end DO
        
-       DO  L=1,LMAX
-          SIGABS(1,L) = SIGAH2(L)  * 1.E-18
-          SIGABS(2,L) = SIGAH(L) * 1.E-18
-          SIGABS(3,L) = SIGACH4(L) * 1.E-18
-          SIGABS(4,L) = SIGAHe(L) * 1.E-18
-          SIGION(1,L) = SIGIH2(L)  * 1.E-18
-          SIGION(2,L) = SIGIH(L) * 1.E-18
-          SIGION(3,L) = SIGICH4(L) * 1.E-18
-          SIGION(4,L) = SIGIHe(L) * 1.E-18
-       end DO
+!       DO  L=1,LMAX
+!          SIGABS(1,L) = SIGAH2(L)  * 1.E-18
+!          SIGABS(2,L) = SIGAH(L) * 1.E-18
+!          SIGABS(3,L) = SIGACH4(L) * 1.E-18
+!          SIGABS(4,L) = SIGAHe(L) * 1.E-18
+!          SIGION(1,L) = SIGIH2(L)  * 1.E-18
+!          SIGION(2,L) = SIGIH(L) * 1.E-18
+!          SIGION(3,L) = SIGICH4(L) * 1.E-18
+!          SIGION(4,L) = SIGIHe(L) * 1.E-18
+!       end DO
 
     end select
 
@@ -1415,7 +1434,7 @@ contains
   end subroutine init_production
 
 
-  subroutine allocate_arrays
+  subroutine allocate_neutral_arrays
     ! array to hold neutral mass
     if (.not.allocated(NeutralMassAMU_I)) &
          allocate(NeutralMassAMU_I(nNeutral))
@@ -1428,11 +1447,94 @@ contains
     ! auger e- wavelength threshold per species
     if (.not.allocated(AugThreshold_I)) &
          allocate(AugThreshold_I(nNeutral))
-    ! auger something
     if (.not.allocated(iAugWaveBin_I)) &
          allocate(iAugWaveBin_I(nNeutral))
-
+    ! ionization and absorption crossections
+    if (.not.allocated(SigIon)) &
+         allocate(SigIon(nNeutral,LMAX))
+    if (.not.allocated(SigAbs)) &
+         allocate(SigAbs(nNeutral,LMAX))
     
-  end subroutine allocate_arrays
+  end subroutine allocate_neutral_arrays
+=======
+
+  subroutine allocate_state_arrays(ProbSpecies)
+
+    real :: ProbSpecies(:)
+
+    ! allocate ionization potentials per state, per species
+    if (.not.allocated(TPOT)) &
+         allocate(TPOT(nStatesMax,nNeutral))
+    ! allocate generic species branching probability array
+    if (.not.allocated(ProbSpecies)) &
+         allocate(ProbSpecies(nStatesMax,LMAX))
+    ! allocate global branching probability array
+    if (.not.allocated(Prob)) &
+         allocate(Prob(nStatesMax,nNeutral,LMAX))
+
+  end subroutine allocate_state_arrays
+
+  subroutine read_data_array(DatafileName,nStates,GridType, &
+       ProbSpecies,SigAbsSpecies,SigIonSpecies)
+    character (len=*), intent(in) :: DatafileName
+    integer, intent(in) :: nStates
+    integer, intent(in) :: GridType !  (1 for points, 2 for bins)
+
+    real, intent(out) :: ProbSpecies(nStatesMax,LMAX), &
+         SigAbsSpecies(LMAX),SigIonSpecies(LMAX)
+
+    integer :: nLines
+    real :: StandardWaveGrid(LMAX)
+    real, allocatable :: SigAbsIn(:),SigIonIn(:),ProbIn(:,:),WaveGrid(:,:)
+    real, allocatable :: WaveGridCenters(:)
+
+    open(1,FILE=DatafileName,STATUS='OLD')
+
+    read(1,*) nLines
+    
+    allocate(SigAbsIn(nLines))
+    allocate(SigIonIn(nLines))
+    allocate(ProbIn(nStates,nLines))
+    allocate(WaveGrid(GridType,nLines))
+    allocate(WaveGridCenters(GridType,nLines))
+
+    print *,'GridType: ',GridType,'nLines: ',nLines
+
+    DO i=1,nLines
+       read(1,5001) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
+            SigIonIn(i)
+5001   format((2+nStates+GridType)E10.6)
+    close(1)
+
+    print *,WaveGrid(:,nLines),SigAbsIn(nLines),ProbIn(:,nLines), &
+         SigIonIn(nLines)
+
+    if (GridType == 2) then
+       WaveGridCenters = (WaveGrid(1,:) + WaveGrid(2,:))/2.
+    else
+       WaveGridCenters = WaveGrid
+    endif
+
+    StandardWaveGrid = (WAVE1 + WAVE2)/2.
+
+    ! interpolate all variables to new wavelength grid
+    do i=1,LMAX
+       SigAbsSpecies(i) = linear_scalar(SigAbsIn,0,nLines, &
+            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+       SigIonSpecies(i) = linear_scalar(SigIonIn,0,nLines, &
+            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+       do l=1,nStates
+          ProbSpecies(l,i) = linear_scalar(ProbIn(l,:),0,nLines, &
+            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+       enddo
+    enddo
+
+    deallocate(SigAbsIn)
+    deallocate(SigIonIn)
+    deallocate(ProbIn)
+    deallocate(WaveGrid)
+    deallocate(WaveGridCenters)
+
+  end subroutine read_data_array
 
 end Module ModSeProduction
