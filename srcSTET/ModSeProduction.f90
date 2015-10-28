@@ -39,7 +39,8 @@ Module ModSeProduction
   !surface gravity in cm/2^2
   real :: gSurface = 0.0
   
-  integer :: nStatesPerSpecies_I(:), nStatesMax 
+  integer, allocatable :: nStatesPerSpecies_I(:)
+  integer :: nStatesMax 
 
   ! Store the ionization potentials
   real,allocatable :: TPOT(:,:)
@@ -250,7 +251,7 @@ contains
 !   Earth -> SIGAO, SIGAO2, SIGAN2, SIGIO, SIGIO2, SIGIN2
 !   J/S   -> SIGAH2, SIGAH, SIGACH4, SIGAHe
 !            SIGIH2, SIGIH, SIGICH4, SIGIHe
-! nStatesPerSpecies     number of states for each species
+! nStatesPerSpecies_I     number of states for each species
 ! TPOT    ionization potentials for each species, state; eV
 ! PROB    branching ratios for each state, species, and wavelength bin:
 !         EARTH:
@@ -307,12 +308,13 @@ contains
     DIMENSION FLUX(LMAX,IONO), &
          PESPEC(NEnergy,IONO), &
          ZMAJ(nNeutral,IONO), &
-         EPSIL1(nStatesMax,nNeutral,LMAX), EPSIL2(nStatesMax,nNeutral,LMAX), &
          PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
-         BSO2(LMAX), TAU(LMAX),  &
-         EPA(nStatesMax,nStatesMax,nNeutral,LMAX),EPB1(nNeutral,LMAX),EPB2(nNeutral,LMAX)
+         BSO2(LMAX), TAU(LMAX)
+
+    real, allocatable :: EPSIL1(:,:,:), EPSIL2(:,:,:)
+    real, allocatable :: EPA(:,:,:,:), EPB1(:,:), EPB2(:,:)
     !
-    SAVE SIGION, SIGABS, PROB, EPSIL1, EPSIL2, EPA, EPB1, EPB2
+    SAVE EPSIL1, EPSIL2, EPA, EPB1, EPB2
     !
     DATA  IFIRST/1/, LIMIN/16/ ! No PROBs below L=16
     !
@@ -334,7 +336,14 @@ contains
 
     IF (IFIRST .EQ. 1) THEN
        IFIRST = 0
-          !
+
+       if (.not.allocated(EPA)) &
+            allocate(EPA(nStatesMax,nStatesMax,nNeutral,LMAX))
+       if (.not.allocated(EPB1)) allocate(EPB1(nNeutral,LMAX))
+       if (.not.allocated(EPB2)) allocate(EPB2(nNeutral,LMAX))
+       if (.not.allocated(EPSIL1)) allocate(EPSIL1(nStatesMax,nNeutral,LMAX))
+       if (.not.allocated(EPSIL2)) allocate(EPSIL2(nStatesMax,nNeutral,LMAX))
+
        DO  L=1,LMAX
           DO  I=1,nNeutral
     
@@ -1074,7 +1083,7 @@ contains
 
   !============================================================================
   subroutine init_production
-    use ModPlanetConst, ONLY: Planet_, rPlanet_I
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I, rPlanet_I
 
     !\
     ! Earth
@@ -1324,7 +1333,7 @@ contains
        ! set number of states per species
        nStatesPerSpecies_I=(/5,4,6/)
 
-       nStatesMax = max(nStatesPerSpecies)
+       nStatesMax = maxval(nStatesPerSpecies_I)
 
        call allocate_state_arrays(ProbSpecies)
 
@@ -1376,7 +1385,7 @@ contains
        ! set number of states per species
        nStatesPerSpecies_I=(/1,1,1,3/)
 
-       nStatesMax = max(nStatesPerSpecies)
+       nStatesMax = maxval(nStatesPerSpecies_I)
 
        call allocate_state_arrays(ProbSpecies)
 
@@ -1386,23 +1395,23 @@ contains
        TPOT(:,H_)  = (/13.5, 0.00, 0.00/) 
        TPOT(:,CH4_)= (/12.98, 24.0, 27.55/)
 
-       call read_data_array('PhotoH2.dat',2,ProbSpecies,SigAbsSpecies, &
-            SigIonSpecies)
+       call read_data_array('PhotoH2.dat',nStatesPerSpecies_I(1),2, &
+            ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,1,:) = ProbSpecies(:,:)
        SIGABS(1,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(1,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoHe.dat',1,ProbSpecies,SigAbsSpecies, &
-            SigIonSpecies)
+       call read_data_array('PhotoHe.dat',nStatesPerSpecies_I(2),1, &
+            ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,2,:) = ProbSpecies(:,:)
        SIGABS(2,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(2,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoH.dat',1,ProbSpecies,SigAbsSpecies, &
-            SigIonSpecies)
+       call read_data_array('PhotoH.dat',nStatesPerSpecies_I(3),1, &
+            ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,3,:) = ProbSpecies(:,:)
        SIGABS(3,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(3,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoCH4.dat',2,ProbSpecies,SigAbsSpecies, &
-            SigIonSpecies)
+       call read_data_array('PhotoCH4.dat',nStatesPerSpecies_I(4),2, &
+            ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,4,:) = ProbSpecies(:,:)
        SIGABS(4,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(4,:) = SigIonSpecies(:) * 1.e-18
@@ -1456,11 +1465,11 @@ contains
          allocate(SigAbs(nNeutral,LMAX))
     
   end subroutine allocate_neutral_arrays
-=======
+!=======
 
   subroutine allocate_state_arrays(ProbSpecies)
 
-    real :: ProbSpecies(:)
+    real, allocatable :: ProbSpecies(:,:)
 
     ! allocate ionization potentials per state, per species
     if (.not.allocated(TPOT)) &
@@ -1483,6 +1492,7 @@ contains
     real, intent(out) :: ProbSpecies(nStatesMax,LMAX), &
          SigAbsSpecies(LMAX),SigIonSpecies(LMAX)
 
+    character (len=8) :: inputfmt ! e.g. (8E10.6)
     integer :: nLines
     real :: StandardWaveGrid(LMAX)
     real, allocatable :: SigAbsIn(:),SigIonIn(:),ProbIn(:,:),WaveGrid(:,:)
@@ -1496,36 +1506,39 @@ contains
     allocate(SigIonIn(nLines))
     allocate(ProbIn(nStates,nLines))
     allocate(WaveGrid(GridType,nLines))
-    allocate(WaveGridCenters(GridType,nLines))
+    allocate(WaveGridCenters(nLines))
 
     print *,'GridType: ',GridType,'nLines: ',nLines
 
-    DO i=1,nLines
-       read(1,5001) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
+    do i=1,nLines
+       write(inputfmt,'("(", I0, "E10.6)")') 2+nStates+GridType
+       read(1,inputfmt) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
             SigIonIn(i)
-5001   format((2+nStates+GridType)E10.6)
+!5001   format(<2+nStates+GridType>E10.6)
+    enddo
     close(1)
 
     print *,WaveGrid(:,nLines),SigAbsIn(nLines),ProbIn(:,nLines), &
          SigIonIn(nLines)
 
     if (GridType == 2) then
-       WaveGridCenters = (WaveGrid(1,:) + WaveGrid(2,:))/2.
+       WaveGridCenters(:) = (WaveGrid(1,:) + WaveGrid(2,:))/2.
     else
-       WaveGridCenters = WaveGrid
+       WaveGridCenters(:) = WaveGrid(1,:)
     endif
 
     StandardWaveGrid = (WAVE1 + WAVE2)/2.
 
     ! interpolate all variables to new wavelength grid
+    ! extrapolate set to true
     do i=1,LMAX
        SigAbsSpecies(i) = linear_scalar(SigAbsIn,0,nLines, &
-            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+            StandardWaveGrid(i),WaveGridCenters, .true.)
        SigIonSpecies(i) = linear_scalar(SigIonIn,0,nLines, &
-            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+            StandardWaveGrid(i),WaveGridCenters, .true.)
        do l=1,nStates
           ProbSpecies(l,i) = linear_scalar(ProbIn(l,:),0,nLines, &
-            StandardWaveGrid(i),x_I=WaveGridCenters, DoExtrapolate=.true.)
+            StandardWaveGrid(i),WaveGridCenters, .true.)
        enddo
     enddo
 
