@@ -224,7 +224,7 @@ contains
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
     use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC
-    use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX
+    use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX,init_production
     use ModSeCross,     only: cross
     use EUA_ModMsis90,  only: GTD6,TSELEC
     use ModNumConst,    only: cDegToRad
@@ -243,8 +243,15 @@ contains
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
     real :: SW(25),DN(8),TN(2)
     DATA sw/8*1.,-1.,16*1./
+
+    logical,save :: IsFirstCall = .true.
     !--------------------------------------------------------------------------
- 
+    ! on first call initialize the production parameters
+    if(IsFirstCall) then
+       call init_production
+       IsFirstCall = .false.
+    endif
+
     !set the solar flux
     CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
     
