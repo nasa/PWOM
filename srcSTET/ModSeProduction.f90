@@ -6,7 +6,7 @@ Module ModSeProduction
   public :: espec
   public :: SOLZEN
   public :: SSFLUX
-  
+  public :: init_production
   !number of wavelengthincrements
   integer, parameter :: LMAX=59
   !number of excited states
@@ -76,9 +76,11 @@ contains
     use ModNumConst,    ONLY: cPi
     PARAMETER (NM=3) 
     PARAMETER (NU=4) !heights in us standard model
+    integer, intent(in) :: IONO
+    real,    intent(in) :: CHI, ZMAJ(nNeutral,IONO)
     !
     DIMENSION ZZ(IONO), TN(IONO)
-    real, allocatable :: ZMAJ(:,:),ZVCD(:,:),ZCG(:)
+    real, allocatable :: ZVCD(:,:),ZCG(:)
     
     ! *** planet specific
     DIMENSION  ZUS(NU), TNUS(NU), ZCUS(NM,NU)
@@ -93,7 +95,6 @@ contains
          7.80E17, 8.48E18, 3.16E19/
     !
     !
-    if (.not.allocated(ZMAJ)) allocate(ZMAJ(nNeutral,IONO))
     if (.not.allocated(ZVCD)) allocate(ZVCD(nNeutral,IONO))
     if (.not.allocated(ZCG)) allocate(ZCG(nNeutral))
 
@@ -802,6 +803,7 @@ contains
   !
   SUBROUTINE SSFLUX (ISCALE, F107, F107A, HLYBR, FEXVIR, HLYA, &
        HEIEW, XUVFAC)
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
     !
 !    PARAMETER (LMAX=59)
     !
@@ -1076,6 +1078,13 @@ contains
     end do
     !
 
+    ! Fluxes assumed for Earth, but should be scaled for other planets
+    select case(NamePlanet_I(Planet_))
+    case('JUPITER')
+       SFLUX(:) = SFLUX(:) * (1.0/5.2)**2
+    case('SATURN')
+       SFLUX(:) = SFLUX(:) * (1.0/9.5)**2
+    end select
 
     RETURN
     
