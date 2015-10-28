@@ -108,7 +108,7 @@ Module ModSeGrid
   public :: set_grid_pot
   public :: update_grid
 
-  real,public :: rPlanetCM
+  real, public :: rPlanetCM
 contains
   !============================================================================
   subroutine init_se_grid(iLine)
@@ -131,7 +131,7 @@ contains
     
     rPlanetCM=rPlanet_I(Planet_)*cMtoCM
     ! Set field line info
-    !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
+    write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine), DipoleStrengthPlanet_I(Planet_)
     PhiBasePlas=&
          ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
     SphiO=SIN(PhiBasePlas)
@@ -392,6 +392,7 @@ contains
     
     Q=SQRT(1+3*(SIN(phi))**2)
     lQ=SQRT(1+3*(SIN(lphi))**2)
+    write (*,*) 'delta S: ',rPlanetCM
     h=ABS(.5*L*rPlanetCM*(lQ*SIN(lphi)-Q*SIN(phi)+1/SQRT(3.)*LOG((SQRT(3.) &
          *SIN(lphi)+lQ)/(SQRT(3.)*SIN(phi)+Q))))
 !    B=0.31*Q/(L**3*(COS(phi))**6)
@@ -798,7 +799,8 @@ contains
        !Set Coordinates along field line and PA
           do iPoint=1,nPoint
              do iAngle=1,nAngle
-             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+!             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/rPlanetCM
              Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
              if (iAngle <= nThetaAlt_II(iLine,iPoint) )then
                 PlotState_IIV(iPoint,iAngle,B_) = Bfield_IC(iLine,iPoint)
