@@ -1367,7 +1367,7 @@ contains
        gSurface = 2479.0
 
        ! set the neutral parameters
-       nNeutral=3
+       nNeutral=4
 
        ! now that nNeutral is set allocate arrays
        call allocate_neutral_arrays
