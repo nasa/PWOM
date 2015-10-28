@@ -1485,6 +1485,7 @@ contains
 
   subroutine read_data_array(DatafileName,nStates,GridType, &
        ProbSpecies,SigAbsSpecies,SigIonSpecies)
+    use ModIoUnit,     ONLY: UnitTmp_
     character (len=*), intent(in) :: DatafileName
     integer, intent(in) :: nStates
     integer, intent(in) :: GridType !  (1 for points, 2 for bins)
@@ -1498,9 +1499,9 @@ contains
     real, allocatable :: SigAbsIn(:),SigIonIn(:),ProbIn(:,:),WaveGrid(:,:)
     real, allocatable :: WaveGridCenters(:)
 
-    open(1,FILE=DatafileName,STATUS='OLD')
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
 
-    read(1,*) nLines
+    read(UnitTmp_,*) nLines
     
     allocate(SigAbsIn(nLines))
     allocate(SigIonIn(nLines))
@@ -1512,11 +1513,11 @@ contains
 
     do i=1,nLines
        write(inputfmt,'("(", I0, "E10.6)")') 2+nStates+GridType
-       read(1,inputfmt) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
+       read(UnitTmp_,inputfmt) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
             SigIonIn(i)
 !5001   format(<2+nStates+GridType>E10.6)
     enddo
-    close(1)
+    close(UnitTmp_)
 
     print *,WaveGrid(:,nLines),SigAbsIn(nLines),ProbIn(:,nLines), &
          SigIonIn(nLines)
