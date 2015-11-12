@@ -26,10 +26,10 @@ Module ModSeBackground
   real,public :: ZEP=1
 
   ! Neutral Atmosphere arrays and variables
-  integer, parameter,public :: nNeutralSpecies = 3
+  integer, parameter,public :: nNeutralSpecies = 3 ! ***
   real, allocatable,public  :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
   real, allocatable  :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
-  integer,parameter  :: O_=1, O2_=2, N2_=3
+  integer,parameter  :: O_=1, O2_=2, N2_=3 ! ***
 
   ! Logical variables for if we are calculating photo e spectrum in iono 1 or 2
   logical :: DoCalcPeIono1=.true., DoCalcPeIono2=.true.
@@ -75,43 +75,51 @@ contains
     integer :: iIono,iIono2,iPlas,nTopIono1,nTopIono2
     real    :: factor
 
-    !  Use IRI to fill the thermal plasma
-    IF (facn.GE.0. .OR. t.EQ.0) THEN
-       write(*,*) 'calling get_iri'
-       CALL get_iri(iLine,F107A)
-       write(*,*) 'finish get_iri'
-       !  The next few lines are for thinning the topside ionosphere densities
-       IF (ABS(facn).GT.0.) THEN
-          do iIono=nIono1+nIono2+1,nIono
-             iIono2=nPoint-iIono+1
-             factor= (FieldLineGrid_IC(iLine,iIono) &
-                  - FieldLineGrid_IC(iLine,nIono1+nIono2))&
-                  /(FieldLineGrid_IC(iLine,nIono) &
-                  - FieldLineGrid_IC(iLine,nIono1+nIono2))
-             factor=10**(ALOG10(ABS(facn))*factor)
-             eThermalDensity_IC(iLine,iIono)=eThermalDensity_IC(iLine,iIono) &
-                  /factor
-             eThermalDensity_IC(iLine,iIono2)=&
-                  eThermalDensity_IC(iLine,iIono2)/factor
-          end do
-       END IF
-
-       ! Alter the topside ionospheric thermal temperatures
-       IF (fact.NE.0.) THEN
-          do iIono=nIono1+nIono2+1,nIono
-             iIono2=nPoint-iIono+1
-             factor= (FieldLineGrid_IC(iLine,iIono) &
-                  - FieldLineGrid_IC(iLine,nIono1+nIono2))&
-                  /(FieldLineGrid_IC(iLine,nIono) &
-                  - FieldLineGrid_IC(iLine,nIono1+nIono2))
-
-             eThermalTemp_IC(iLine,iIono) = eThermalTemp_IC(iLine,iIono) &
-                  + factor*(fact-eThermalTemp_IC(iLine,iIono))
-             eThermalTemp_IC(iLine,iIono2) = eThermalTemp_IC(iLine,iIono2) &
-                  + factor*(fact-eThermalTemp_IC(iLine,iIono2))
-          end do
-       END IF
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       !  Use IRI to fill the thermal plasma
+       IF (facn.GE.0. .OR. t.EQ.0) THEN
+          write(*,*) 'calling get_iri'
+          CALL get_iri(iLine,F107A)
+          write(*,*) 'finish get_iri'
+          ! The next few lines are for thinning the topside ionosphere densities
+          IF (ABS(facn).GT.0.) THEN
+             do iIono=nIono1+nIono2+1,nIono
+                iIono2=nPoint-iIono+1
+                factor= (FieldLineGrid_IC(iLine,iIono) &
+                     - FieldLineGrid_IC(iLine,nIono1+nIono2))&
+                     /(FieldLineGrid_IC(iLine,nIono) &
+                     - FieldLineGrid_IC(iLine,nIono1+nIono2))
+                factor=10**(ALOG10(ABS(facn))*factor)
+                eThermalDensity_IC(iLine,iIono)=eThermalDensity_IC(iLine,iIono) &
+                     /factor
+                eThermalDensity_IC(iLine,iIono2)=&
+                     eThermalDensity_IC(iLine,iIono2)/factor
+             end do
+          END IF
+          
+          ! Alter the topside ionospheric thermal temperatures
+          IF (fact.NE.0.) THEN
+             do iIono=nIono1+nIono2+1,nIono
+                iIono2=nPoint-iIono+1
+                factor= (FieldLineGrid_IC(iLine,iIono) &
+                     - FieldLineGrid_IC(iLine,nIono1+nIono2))&
+                     /(FieldLineGrid_IC(iLine,nIono) &
+                     - FieldLineGrid_IC(iLine,nIono1+nIono2))
+                
+                eThermalTemp_IC(iLine,iIono) = eThermalTemp_IC(iLine,iIono) &
+                     + factor*(fact-eThermalTemp_IC(iLine,iIono))
+                eThermalTemp_IC(iLine,iIono2) = eThermalTemp_IC(iLine,iIono2) &
+                     + factor*(fact-eThermalTemp_IC(iLine,iIono2))
+             end do
+          END IF
        
+       case('JUPITER')
+          eThermalDensity_IC(iLine,:) = &
+               Ne_Jupiter(FieldLineGrid_IC(iLine,:))
+          eThermalTemp_IC(iLine,:) = &
+               eTemp_Jupiter(FieldLineGrid_IC(iLine,:))
+       end select
 
        ! Fill in the plasmaspheric thermal densities
        nTopIono1 = nIono		! Simplifying notation, not en. index
@@ -220,6 +228,7 @@ contains
     end do
     
   end SUBROUTINE get_iri
+
   !============================================================================
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
@@ -228,6 +237,7 @@ contains
     use ModSeCross,     only: cross
     use EUA_ModMsis90,  only: GTD6,TSELEC
     use ModNumConst,    only: cDegToRad
+    use ModPlanetConst, only: Planet_, NamePlanet_I
 
     integer, intent(in) :: iLine
     real   , intent(in) :: F107, F107A,AP(7)
@@ -263,18 +273,31 @@ contains
     IF (STL1.LT.0.) STL1=STL1+24.
     IF (STL1.GT.24.) STL1=STL1-24.
     
-    !  Call MSIS to get the neutral densities and temperature
-    CALL TSELEC(SW)
-    
-    do  iIono=1,nIono
-       CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
-            gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
-       NeutralDens1_IIC(iLine,O_ ,iIono)=DN(msisO_)
-       NeutralDens1_IIC(iLine,O2_,iIono)=DN(msisO2_)
-       NeutralDens1_IIC(iLine,N2_,iIono)=DN(msisN2_)
-       NeutralTemp1_IC (iLine,iIono)=TN(2)
-    end do
-    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       !  Call MSIS to get the neutral densities and temperature
+       CALL TSELEC(SW)
+       
+       do  iIono=1,nIono
+          CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+               gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
+          NeutralDens1_IIC(iLine,O_ ,iIono)=DN(msisO_)
+          NeutralDens1_IIC(iLine,O2_,iIono)=DN(msisO2_)
+          NeutralDens1_IIC(iLine,N2_,iIono)=DN(msisN2_)
+          NeutralTemp1_IC (iLine,iIono)=TN(2)
+       end do
+
+    case('JUPITER')
+       ! interpolate from AtmosArray(1,:) to FieldLineGrid_IC(iLine,iAlt)
+       NeutralFile = 'JGITM-1D-atmos.dat'
+       CALL get_jupiter_atmos(NeutralFile,nNeutralSpecies,NeutralArray)
+       NeutralDens1_IIC(iLine,H2_,iIono)  = NeutralArray(1,:)
+       NeutralDens1_IIC(iLine,He_,iIono)  = NeutralArray(2,:)
+       NeutralDens1_IIC(iLine,H_,iIono)   = NeutralArray(3,:)
+       NeutralDens1_IIC(iLine,CH4_,iIono) = NeutralArray(4,:)
+       NeutralTemp1_IC(iLine,iIono)       = NeutralArray(5,:)
+    end select
+
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
 !    write(*,*) 'SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)',&
@@ -306,16 +329,25 @@ contains
     IF (STL2.LT.0.) STL2=STL2+24.
     IF (STL2.GT.24.) STL2=STL2-24.
     
-    !  Call MSIS to get the neutral densities and temperature
-    CALL TSELEC(SW)
-    do  iIono=1,nIono
-       CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
-            gLat2_I(iLine),gLon2_I(iLine),STL2,F107A,F107,AP,48,DN,TN)
-       NeutralDens2_IIC(iLine,O_ ,iIono)=DN(msisO_)
-       NeutralDens2_IIC(iLine,O2_,iIono)=DN(msisO2_)
-       NeutralDens2_IIC(iLine,N2_,iIono)=DN(msisN2_)
-       NeutralTemp2_IC (iLine,iIono)=TN(2)
-    end do
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       !  Call MSIS to get the neutral densities and temperature
+       CALL TSELEC(SW)
+       do  iIono=1,nIono
+          CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+               gLat2_I(iLine),gLon2_I(iLine),STL2,F107A,F107,AP,48,DN,TN)
+          NeutralDens2_IIC(iLine,O_ ,iIono)=DN(msisO_)
+          NeutralDens2_IIC(iLine,O2_,iIono)=DN(msisO2_)
+          NeutralDens2_IIC(iLine,N2_,iIono)=DN(msisN2_)
+          NeutralTemp2_IC (iLine,iIono)=TN(2)
+       end do
+    case('JUPITER')
+       NeutralDens2_IIC(iLine,H2_,iIono)  = NeutralArray(1,:)
+       NeutralDens2_IIC(iLine,He_,iIono)  = NeutralArray(2,:)
+       NeutralDens2_IIC(iLine,H_,iIono)   = NeutralArray(3,:)
+       NeutralDens2_IIC(iLine,CH4_,iIono) = NeutralArray(4,:)
+       NeutralTemp2_IC(iLine,iIono)       = NeutralArray(5,:)
+    end select
     
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
@@ -521,7 +553,65 @@ contains
 
   end subroutine allocate_background_arrays
   
+subroutine get_jupiter_atmos(DatafileName,nSpecies)
 
+  use ModSeGrid, ONLY :: FieldLineGrid_IC, nIono
+  use ModIoUnit, ONLY:: UnitTmp_
+  character (len=20), intent(in) :: DatafileName ! 'JGITM-1D-atmos.dat'
+  integer,            intent(in) :: nSpecies     ! 4
+  real,               intent(out) :: NeutralArray(nSpecies+1,nIono)
+
+  integer, parameter :: nAltGrid= 10000
+  character (len=189) :: line1
+  real :: AtmosArray(5+nSpecies,nAltGrid)
+
+  open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+
+  read(UnitTmp_,*) line1
+  read(UnitTmp_,*) AtmosArray
+
+  close(UnitTmp_)
+
+  print *,line1.eq.filefmt
+  print *, AtmosArray(1,1),AtmosArray(2,1),AtmosArray(9,1)
+  print *, AtmosArray(1,10000),AtmosArray(2,10000),AtmosArray(9,10000)
+  
+  do iIono=1,nIono
+     NeutralArray(1,:) = linear_scalar(AtmosArray(5,:), &        ! H2
+          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+     NeutralArray(2,:) = linear_scalar(AtmosArray(6,:), &        ! He
+          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+     NeutralArray(3,:) = linear_scalar(AtmosArray(7,:), &        ! H
+          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+     NeutralArray(4,:) = linear_scalar(AtmosArray(8,:), &        ! CH4
+          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+     NeutralArray(5,:) = linear_scalar(AtmosArray(2,:), &        ! Temp
+          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+  end do
+
+end program get_jupiter_atmos
+
+function Ne_Jupiter(z)
+  use ModSeGrid, ONLY: rPlanetCM, nIono
+
+  real, parameter :: n600 = 3.5e5
+  real, parameter :: n3500 = 3.e3
+  real :: h600, alphav
+  real :: r(nIono), eqn1(nIono), eqn2(nIono)
+  real :: Ne_Jupiter(nIono)
+
+  h600 = 175.
+  alphav = 70.
+
+  r(:) = 1. + z(:)/rPlanetCM
+  eqn1(:) = n600*exp(1.01*(600.-z(:))/(r(:)*h600))
+  eqn2(:) = n3500*(r(:)/1.05)**(-alphav)
+  
+  Ne_Jupiter(:) = eqn1(:) + eqn2(:)
+
+  return
+
+end function Ne_Jupiter
 
 
   !=============================================================================
