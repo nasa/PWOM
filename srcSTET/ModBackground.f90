@@ -26,11 +26,14 @@ Module ModSeBackground
   real,public :: ZEP=1
 
   ! Neutral Atmosphere arrays and variables
-  integer, parameter,public :: nNeutralSpecies = 3 ! ***
+  integer, public :: nNeutralSpecies
   real, allocatable,public  :: NeutralDens1_IIC(:,:,:),NeutralDens2_IIC(:,:,:)
   real, allocatable  :: NeutralTemp1_IC(:,:),NeutralTemp2_IC(:,:)
-  integer,parameter  :: O_=1, O2_=2, N2_=3 ! ***
-
+  !earth
+  integer,parameter  :: O_=1, O2_=2, N2_=3 
+  !jupiter
+  integer,parameter  :: H2_=1, He_=2, H_=3, CH4_=4, T_=5 
+  
   ! Logical variables for if we are calculating photo e spectrum in iono 1 or 2
   logical :: DoCalcPeIono1=.true., DoCalcPeIono2=.true.
 
@@ -115,10 +118,17 @@ contains
           END IF
        
        case('JUPITER')
-          eThermalDensity_IC(iLine,:) = &
-               Ne_Jupiter(FieldLineGrid_IC(iLine,:))
-          eThermalTemp_IC(iLine,:) = &
-               eTemp_Jupiter(FieldLineGrid_IC(iLine,:))
+          do iIono=1,nIono
+             !fill in iono1
+             eThermalDensity_IC(iLine,iIono) = &
+                  Ne_Jupiter(FieldLineGrid_IC(iLine,iIono))
+             eThermalTemp_IC(iLine,iIono) = &
+                  eTemp_Jupiter(FieldLineGrid_IC(iLine,iIono))
+             !fill in iono2
+             iIono2=nPoint-iIono+1
+             eThermalDensity_IC(iLine,iIono2) = eThermalDensity_IC(iLine,iIono)
+             eThermalTemp_IC(iLine,iIono2)    = eThermalTemp_IC(iLine,iIono)
+          end do
        end select
 
        ! Fill in the plasmaspheric thermal densities
@@ -253,7 +263,7 @@ contains
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
     real :: SW(25),DN(8),TN(2)
     DATA sw/8*1.,-1.,16*1./
-
+    
     logical,save :: IsFirstCall = .true.
     !--------------------------------------------------------------------------
     ! on first call initialize the production parameters
@@ -290,12 +300,9 @@ contains
     case('JUPITER')
        ! interpolate from AtmosArray(1,:) to FieldLineGrid_IC(iLine,iAlt)
        NeutralFile = 'JGITM-1D-atmos.dat'
-       CALL get_jupiter_atmos(NeutralFile,nNeutralSpecies,NeutralArray)
-       NeutralDens1_IIC(iLine,H2_,iIono)  = NeutralArray(1,:)
-       NeutralDens1_IIC(iLine,He_,iIono)  = NeutralArray(2,:)
-       NeutralDens1_IIC(iLine,H_,iIono)   = NeutralArray(3,:)
-       NeutralDens1_IIC(iLine,CH4_,iIono) = NeutralArray(4,:)
-       NeutralTemp1_IC(iLine,iIono)       = NeutralArray(5,:)
+       CALL get_jupiter_atmos(NeutralFile,nNeutralSpecies, &
+            NeutralDens1_IIC(iLine,:,1:nIono),NeutralTemp1_IC(iLine,1:nIono))
+
     end select
 
     ! Calculate the solar zenith angle
@@ -342,11 +349,8 @@ contains
           NeutralTemp2_IC (iLine,iIono)=TN(2)
        end do
     case('JUPITER')
-       NeutralDens2_IIC(iLine,H2_,iIono)  = NeutralArray(1,:)
-       NeutralDens2_IIC(iLine,He_,iIono)  = NeutralArray(2,:)
-       NeutralDens2_IIC(iLine,H_,iIono)   = NeutralArray(3,:)
-       NeutralDens2_IIC(iLine,CH4_,iIono) = NeutralArray(4,:)
-       NeutralTemp2_IC(iLine,iIono)       = NeutralArray(5,:)
+       NeutralDens2_IIC(iLine,:,:)  = NeutralDens1_IIC(iLine,:,:)
+       NeutralTemp2_IC(iLine,:) = NeutralTemp1_IC(iLine,:)
     end select
     
     ! Calculate the solar zenith angle
@@ -517,7 +521,16 @@ contains
   !=============================================================================
   subroutine allocate_background_arrays
     use ModSeGrid,     ONLY: nLine, nPoint, nIono, nEnergy
-        
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+    !---------------------------------------------------------------------------
+
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       nNeutralSpecies=3
+    case('JUPITER')
+       nNeutralSpecies=4
+    end select
+
     if(.not.allocated(eThermalDensity_IC)) &
          allocate(eThermalDensity_IC(nLine,nPoint))
     if(.not.allocated(eThermalTemp_IC)) &
@@ -553,66 +566,70 @@ contains
 
   end subroutine allocate_background_arrays
   
-subroutine get_jupiter_atmos(DatafileName,nSpecies)
-
-  use ModSeGrid, ONLY :: FieldLineGrid_IC, nIono
-  use ModIoUnit, ONLY:: UnitTmp_
-  character (len=20), intent(in) :: DatafileName ! 'JGITM-1D-atmos.dat'
-  integer,            intent(in) :: nSpecies     ! 4
-  real,               intent(out) :: NeutralArray(nSpecies+1,nIono)
-
-  integer, parameter :: nAltGrid= 10000
-  character (len=189) :: line1
-  real :: AtmosArray(5+nSpecies,nAltGrid)
-
-  open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
-
-  read(UnitTmp_,*) line1
-  read(UnitTmp_,*) AtmosArray
-
-  close(UnitTmp_)
-
-  print *,line1.eq.filefmt
-  print *, AtmosArray(1,1),AtmosArray(2,1),AtmosArray(9,1)
-  print *, AtmosArray(1,10000),AtmosArray(2,10000),AtmosArray(9,10000)
-  
-  do iIono=1,nIono
-     NeutralArray(1,:) = linear_scalar(AtmosArray(5,:), &        ! H2
-          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
-     NeutralArray(2,:) = linear_scalar(AtmosArray(6,:), &        ! He
-          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
-     NeutralArray(3,:) = linear_scalar(AtmosArray(7,:), &        ! H
-          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
-     NeutralArray(4,:) = linear_scalar(AtmosArray(8,:), &        ! CH4
-          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
-     NeutralArray(5,:) = linear_scalar(AtmosArray(2,:), &        ! Temp
-          0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
-  end do
-
-end program get_jupiter_atmos
-
-function Ne_Jupiter(z)
-  use ModSeGrid, ONLY: rPlanetCM, nIono
-
-  real, parameter :: n600 = 3.5e5
-  real, parameter :: n3500 = 3.e3
-  real :: h600, alphav
-  real :: r(nIono), eqn1(nIono), eqn2(nIono)
-  real :: Ne_Jupiter(nIono)
-
-  h600 = 175.
-  alphav = 70.
-
-  r(:) = 1. + z(:)/rPlanetCM
-  eqn1(:) = n600*exp(1.01*(600.-z(:))/(r(:)*h600))
-  eqn2(:) = n3500*(r(:)/1.05)**(-alphav)
-  
-  Ne_Jupiter(:) = eqn1(:) + eqn2(:)
-
-  return
-
-end function Ne_Jupiter
-
-
+  subroutine get_jupiter_atmos(DatafileName,nSpecies,NeutralDens_IC,NeutralTemp_C)
+    
+    use ModSeGrid, ONLY :: FieldLineGrid_IC, nIono
+    use ModIoUnit, ONLY:: UnitTmp_
+    character (len=20), intent(in) :: DatafileName ! 'JGITM-1D-atmos.dat'
+    integer,            intent(in) :: nSpecies     ! 4
+    real,               intent(out) :: NeutralDens_IC(nSpecies,nIono)
+    real,               intent(out) :: NeutralTemp_C(nIono)
+    
+    integer, parameter :: nAltGrid= 10000
+    character (len=189) :: line1
+    real :: AtmosArray(5+nSpecies,nAltGrid)
+    
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+    
+    read(UnitTmp_,*) line1
+    read(UnitTmp_,*) AtmosArray
+    
+    close(UnitTmp_)
+    
+    print *,line1.eq.filefmt
+    print *, AtmosArray(1,1),AtmosArray(2,1),AtmosArray(9,1)
+    print *, AtmosArray(1,10000),AtmosArray(2,10000),AtmosArray(9,10000)
+    
+    do iIono=1,nIono
+       NeutralDens_IC(1,:) = linear_scalar(AtmosArray(5,:), &        ! H2
+            0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+       NeutralDens_IC(2,:) = linear_scalar(AtmosArray(6,:), &        ! He
+            0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+       NeutralDens_IC(3,:) = linear_scalar(AtmosArray(7,:), &        ! H
+            0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+       NeutralDens_IC(4,:) = linear_scalar(AtmosArray(8,:), &        ! CH4
+            0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+       NeutralTemp_C(:) = linear_scalar(AtmosArray(2,:), &        ! Temp
+            0,nAltSteps,FieldLineGrid_IC(iLine,iIono)/1e5,AtmosArray(1,:))
+    end do
+    
+  end program get_jupiter_atmos
   !=============================================================================
+  function Ne_Jupiter(z)
+    use ModSeGrid, ONLY: rPlanetCM
+    real, intent(in) :: z
+    ! parameters for fit choosen to match data from Yelle and Miller, [2004]
+    real, parameter :: n600 = 3.5e5
+    real, parameter :: n3500 = 3.e3
+    real :: h600, alphav
+    real :: r, eqn1, eqn2
+    real :: Ne_Jupiter
+    !-------------------------------------------------------------------------
+    h600 = 175.
+    alphav = 70.
+    
+    r = 1. + z/rPlanetCM
+    eqn1 = n600*exp(1.01*(600.-z)/(r*h600))
+    eqn2 = n3500*(r/1.05)**(-alphav)
+    
+    Ne_Jupiter = eqn1 + eqn2
+    
+    return
+    
+  end function Ne_Jupiter
+  !=============================================================================
+  function Te_Jupiter(z)
+    !placeholder just put temperature to half eV
+    Te_Jupiter = 0.05
+  end function Te_Jupiter
 end Module ModSeBackground
