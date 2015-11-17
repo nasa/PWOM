@@ -10,7 +10,7 @@ Module ModSeProduction
   !number of wavelengthincrements
   integer, parameter :: LMAX=59
   !number of excited states
-  integer, parameter :: NEI=10
+!  integer, parameter :: NEI=10
   
   !number of major neutral species
   integer,save :: nNeutral

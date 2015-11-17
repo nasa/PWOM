@@ -2,10 +2,13 @@ program unit_test_background
   use ModSeGrid
   use ModSeMpi
   use ModMPI
-  use CON_planet, ONLY: init_planet_const, set_planet_defaults
+  use CON_planet, ONLY: init_planet_const, set_planet_defaults,is_planet_init
 
   integer :: iError
-  
+  character(len=5) :: NamePlanet = 'EARTH'
+!  character(len=7) :: NamePlanet = 'JUPITER'
+  logical :: IsPlanetSet=.false.  
+
   !-----------------------------------------------------------------------------
 
   !****************************************************************************
@@ -25,11 +28,20 @@ program unit_test_background
   ! Initialize the planetary constant library and set Earth
   ! as the default planet.
   !/
-  write(*,*) 'Initiallizing Planet'
+  write(*,*) 'Initiallizing Planet ', NamePlanet
 
   call init_planet_const
-  call set_planet_defaults
 
+  if (NamePlanet == 'EARTH') then
+     call set_planet_defaults
+     IsPlanetSet = .true.
+  else
+     IsPlanetSet = is_planet_init(NamePlanet)
+  endif
+  
+  if (.not.IsPlanetSet) then
+     call CON_stop('Planet not set. Stopping STET')
+  endif
 
   call background_test
 end program unit_test_background
