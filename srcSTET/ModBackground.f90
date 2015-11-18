@@ -383,7 +383,8 @@ contains
   !============================================================================
   
   subroutine plot_background(iLine,nStep,time)
-    use ModSeGrid,     ONLY: FieldLineGrid_IC, nLine, nPoint,nIono
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nLine,nPoint,nIono,rPlanetCM
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
@@ -392,15 +393,26 @@ contains
     real,    intent(in) :: time
 
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=5, eDens_=1,eTemp_=2, &
+    integer, parameter :: nDim =1, eDens_=1,eTemp_=2, &
                           VarO_=3,VarO2_=4,VarN2_=5
-    character(len=100),parameter :: NamePlotVar='S ne te nO nO2 nN2 g r'
+    integer :: nVar,iVar
+    character(len=100) :: NamePlotVar
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='background output'
     character(len=5) :: TypePlot='ascii'
     integer :: iPoint
     logical,save :: IsFirstCall =.true.
     !--------------------------------------------------------------------------
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar='S ne te nO nO2 nN2 g r'
+       nVar = 5                 ! neutral species + 2
+    case('JUPITER')
+       NamePlotVar='S ne te nH2 nH nCH4 nHe g r'
+       nVar = 6                 ! neutral species + 2
+    end select
+
+
     allocate(Coord_I(nPoint), PlotState_IV(nPoint,nVar))
     
     PlotState_IV = 0.0
@@ -408,26 +420,33 @@ contains
     
     !Set Coordinates along field line and PA
     do iPoint=1,nPoint
-       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/rPlanetCM
        PlotState_IV(iPoint,eDens_) = eThermalDensity_IC(iLine,iPoint)
        PlotState_IV(iPoint,eTemp_) = eThermalTemp_IC(iLine,iPoint)
-       if (iPoint <= nIono) then
-          PlotState_IV(iPoint,VarO_)  = NeutralDens1_IIC(iLine,O_,iPoint)
-          PlotState_IV(iPoint,VarO2_) = NeutralDens1_IIC(iLine,O2_,iPoint)
-          PlotState_IV(iPoint,VarN2_) = NeutralDens1_IIC(iLine,N2_,iPoint)
-       elseif(iPoint>nPoint-nIono) then
-          PlotState_IV(iPoint,VarO_)  = &
-               NeutralDens2_IIC(iLine,O_,nPoint-iPoint+1)
-          PlotState_IV(iPoint,VarO2_) = &
-               NeutralDens2_IIC(iLine,O2_,nPoint-iPoint+1)
-          PlotState_IV(iPoint,VarN2_) = &
-               NeutralDens2_IIC(iLine,N2_,nPoint-iPoint+1)
-       else
+       do iVar=3,nVar
+          if (iPoint <= nIono) then
+!          PlotState_IV(iPoint,VarO_)  = NeutralDens1_IIC(iLine,O_,iPoint)
+!          PlotState_IV(iPoint,VarO2_) = NeutralDens1_IIC(iLine,O2_,iPoint)
+!          PlotState_IV(iPoint,VarN2_) = NeutralDens1_IIC(iLine,N2_,iPoint)
+             PlotState_IV(iPoint,iVar) = &
+                  NeutralDens1_IIC(iLine,iVar-2,iPoint)
+          elseif(iPoint>nPoint-nIono) then
+!          PlotState_IV(iPoint,VarO_)  = &
+!               NeutralDens2_IIC(iLine,O_,nPoint-iPoint+1)
+!          PlotState_IV(iPoint,VarO2_) = &
+!               NeutralDens2_IIC(iLine,O2_,nPoint-iPoint+1)
+!          PlotState_IV(iPoint,VarN2_) = &
+!               NeutralDens2_IIC(iLine,N2_,nPoint-iPoint+1)
+
+             PlotState_IV(iPoint,iVar)  = &
+                  NeutralDens2_IIC(iLine,iVar-2,nPoint-iPoint+1)
+          else
           !neutral atmosphere not considered in plasmaphere
-          PlotState_IV(iPoint,VarO_)  = 0.0
-          PlotState_IV(iPoint,VarO2_) = 0.0
-          PlotState_IV(iPoint,VarN2_) = 0.0
-       endif
+             PlotState_IV(iPoint,iVar)  = 0.0
+!          PlotState_IV(iPoint,VarO2_) = 0.0
+!          PlotState_IV(iPoint,VarN2_) = 0.0
+          endif
+       enddo
     enddo
     
     ! set name for plotfile
@@ -439,14 +458,14 @@ contains
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
             NameVarIn = NamePlotVar, nStepIn= nStep,TimeIn=time,     &
             nDimIn=nDim,CoordIn_I=Coord_I,                &
-            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
        IsFirstCall = .false.
     else
        call save_plot_file(NamePlot, TypePositionIn='append', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
             NameVarIn = NamePlotVar, nStepIn= nStep,TimeIn=time,     &
             nDimIn=nDim,CoordIn_I=Coord_I,                &
-            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
     end if
      
     deallocate(Coord_I, PlotState_IV)
@@ -467,7 +486,6 @@ contains
     real,    intent(in) :: time
 
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
     !grid parameters
     integer, parameter :: nDim =2, nVar=2, E_=1, S_=2
     integer, parameter :: spec1_=1, spec2_=2
@@ -508,14 +526,14 @@ contains
                TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
                NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
                nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/)) !***
           IsFirstCall = .false.
        else
           call save_plot_file(NamePlot, TypePositionIn='append', &
                TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
                NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
                nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/)) !***
        endif
     
     deallocate(Coord_DII, PlotState_IIV)
