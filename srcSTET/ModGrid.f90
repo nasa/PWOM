@@ -131,7 +131,6 @@ contains
     
     rPlanetCM=rPlanet_I(Planet_)*cMtoCM
     ! Set field line info
-    write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine), DipoleStrengthPlanet_I(Planet_)
     PhiBasePlas=&
          ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
     SphiO=SIN(PhiBasePlas)
@@ -392,7 +391,6 @@ contains
     
     Q=SQRT(1+3*(SIN(phi))**2)
     lQ=SQRT(1+3*(SIN(lphi))**2)
-    write (*,*) 'delta S: ',rPlanetCM
     h=ABS(.5*L*rPlanetCM*(lQ*SIN(lphi)-Q*SIN(phi)+1/SQRT(3.)*LOG((SQRT(3.) &
          *SIN(lphi)+lQ)/(SQRT(3.)*SIN(phi)+Q))))
 !    B=0.31*Q/(L**3*(COS(phi))**6)
@@ -936,6 +934,12 @@ contains
   ! Test Grid: This is a routine that creates the test grid for all unit tests 
   ! (since all other modules rely on the grid)
   subroutine create_se_test_grid
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
+
+    select case(NamePlanet_I(Planet_))
+
+    case('EARTH')
+
     DrIono1 = 1e6
     nIono1  = 12
     DrIono2 = 2e6
@@ -944,6 +948,22 @@ contains
     nIono3  = 10
     DrIono4 = 5e6
     nIono4  = 2    
+
+    case('JUPITER')
+
+    DrIono1 = 5.0*1e6
+    nIono1  = 12
+    DrIono2 = 5.0*2e6
+    nIono2  = 10
+    DrIono3 = 5.0*3e6
+    nIono3  = 10
+    DrIono4 = 5.0*5e6
+    nIono4  = 2    
+
+
+    end select
+
+
 
     nIono=nIono1+nIono2+nIono3+nIono4
     ! set the energy parameters for the energy grid
