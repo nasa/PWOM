@@ -202,6 +202,7 @@ contains
        ZVCD(I,IONO) =   ZMAJ(I,IONO) &
             * (ZZ(IONO)-ZZ(IONO-1)) &
             / ALOG(ZMAJ(I,IONO-1)/ZMAJ(I,IONO))
+
        DO J=IONO-1,1,-1
           RAT = ZMAJ(I,J+1) / ZMAJ(I,J)
           ZVCD(I,J) =   ZVCD(I,J+1) &
@@ -401,6 +402,7 @@ contains
           ELSE
              FLUX(L,J) = 0.0
           ENDIF
+
           !
           !
           ! Calculate SRC photodissociation of O2, dissociative excitation of
@@ -1404,22 +1406,22 @@ contains
        TPOT(:,H_)  = (/13.5, 0.00, 0.00/) 
        TPOT(:,CH4_)= (/12.98, 24.0, 27.55/)
 
-       call read_data_array('PhotoH2.dat',nStatesPerSpecies_I(1),2, &
+       call read_data_array('PW/PhotoH2.dat',nStatesPerSpecies_I(1),2, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,1,:) = ProbSpecies(:,:)
        SIGABS(1,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(1,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoHe.dat',nStatesPerSpecies_I(2),1, &
+       call read_data_array('PW/PhotoHe.dat',nStatesPerSpecies_I(2),1, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,2,:) = ProbSpecies(:,:)
        SIGABS(2,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(2,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoH.dat',nStatesPerSpecies_I(3),1, &
+       call read_data_array('PW/PhotoH.dat',nStatesPerSpecies_I(3),1, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,3,:) = ProbSpecies(:,:)
        SIGABS(3,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(3,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PhotoCH4.dat',nStatesPerSpecies_I(4),2, &
+       call read_data_array('PW/PhotoCH4.dat',nStatesPerSpecies_I(4),2, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,4,:) = ProbSpecies(:,:)
        SIGABS(4,:) = SigAbsSpecies(:) * 1.e-18
@@ -1494,7 +1496,8 @@ contains
 
   subroutine read_data_array(DatafileName,nStates,GridType, &
        ProbSpecies,SigAbsSpecies,SigIonSpecies)
-    use ModIoUnit,     ONLY: UnitTmp_
+    use ModInterpolate, ONLY: linear
+    use ModIoUnit,      ONLY: UnitTmp_
     character (len=*), intent(in) :: DatafileName
     integer, intent(in) :: nStates
     integer, intent(in) :: GridType !  (1 for points, 2 for bins)
@@ -1522,7 +1525,7 @@ contains
 
     do i=1,nLines
        write(inputfmt,'("(", I0, "E10.6)")') 2+nStates+GridType
-       read(UnitTmp_,inputfmt) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
+       read(UnitTmp_,*) WaveGrid(:,i),SigAbsIn(i),ProbIn(:,i), &
             SigIonIn(i)
 !5001   format(<2+nStates+GridType>E10.6)
     enddo
@@ -1538,20 +1541,32 @@ contains
     endif
 
     StandardWaveGrid = (WAVE1 + WAVE2)/2.
-
+    
     ! interpolate all variables to new wavelength grid
     ! extrapolate set to true
     do i=1,LMAX
-       SigAbsSpecies(i) = linear_scalar(SigAbsIn,0,nLines, &
-            StandardWaveGrid(i),WaveGridCenters, .true.)
-       SigIonSpecies(i) = linear_scalar(SigIonIn,0,nLines, &
-            StandardWaveGrid(i),WaveGridCenters, .true.)
-       do l=1,nStates
-          ProbSpecies(l,i) = linear_scalar(ProbIn(l,:),0,nLines, &
-            StandardWaveGrid(i),WaveGridCenters, .true.)
-       enddo
+       !when outside of range set to zero otherwise interpolate
+       if (StandardWaveGrid(i) > maxval(WaveGridCenters) &
+            .or. StandardWaveGrid(i) < minval(WaveGridCenters)) then
+          SigAbsSpecies(i) = 0.0
+          SigIonSpecies(i) = 0.0
+          ProbSpecies(:,i) = 0.0
+       else
+          SigAbsSpecies(i) = linear(SigAbsIn,1,nLines, &
+               StandardWaveGrid(i),WaveGridCenters)
+          SigIonSpecies(i) = linear(SigIonIn,1,nLines, &
+               StandardWaveGrid(i),WaveGridCenters)
+          do l=1,nStates
+             ProbSpecies(l,i) = linear(ProbIn(l,:),1,nLines, &
+                  StandardWaveGrid(i),WaveGridCenters)
+          end do
+       endif
     enddo
 
+    write(*,*) 'For DatafileName=',DataFileName
+    write(*,*) 'maxval(SigIonSpecies),minval(SigIonSpecies)',&
+         maxval(SigIonSpecies),minval(SigIonSpecies)
+    
     deallocate(SigAbsIn)
     deallocate(SigIonIn)
     deallocate(ProbIn)
