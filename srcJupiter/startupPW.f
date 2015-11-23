@@ -164,7 +164,7 @@ CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
 49    CONTINUE 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 
 C                                                                      C
-      CALL PlanetAtmos(NDIM,ALTD,XH2,XH,XH2O,XCH4,XTN)
+      CALL JupiterAtmos(NDIM,ALTD,XH2,XH,XH2O,XCH4,XTN)
       NDensity_CI(:,H2_) = XH2(:)
       NDensity_CI(:,H_)  = XH(:)
       NDensity_CI(:,H2O_)= XH2O(:)
@@ -304,7 +304,7 @@ C!      HeatCon_GI(0,Ion1_)=HLPion1*State_GV(0,Th3_)**2.5
 C!      HeatCon_GI(0,nIon)=HLPE*State_GV(0,Te_)**2.5
 C!      HeatCon_GI(0,Ion2_)=HLPion2*State_GV(0,Th_)**2.5
 C!      HeatCon_GI(0,Ion2_)E=HLPHE*State_GV(0,The_)**2.5
-      CALL PlanetAtmos(1,ALTMAX,XNH2,XNH,XNH2O,XNCH4,TEMP)
+      CALL JupiterAtmos(1,ALTMAX,XNH2,XNH,XNH2O,XNCH4,TEMP)
       XTNMAX=TEMP
 
       ETOP=ETOP*DRBND/1.23E-6
@@ -420,7 +420,7 @@ C     C
       State_GV(-1:0,uH_)=0.
       State_GV(-1:0,uH2_)=0.
       State_GV(-1:0,uE_)=0.
-      CALL PlanetAtmos(1,ALTMIN,XNH2,XNH,XNH2O,XNCH4,TEMP)
+      CALL JupiterAtmos(1,ALTMIN,XNH2,XNH,XNH2O,XNCH4,TEMP)
 
 CALEX I pretend that for plasma parameters, O is H3 and HE is
 CALEX chemical equilibrium value for H2+ this allow me to just
