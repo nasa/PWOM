@@ -1,10 +1,10 @@
-C                                                                      C
-C**********************************************************************C
-C                                                                      C
-C  Neutral atmosphere using JGITM 1-D output
-C                                                                      C
-C**********************************************************************C
-C
+!                                                                      C
+!**********************************************************************C
+!                                                                      C
+!  Neutral atmosphere using JGITM 1-D output
+!                                                                      C
+!**********************************************************************C
+!
 
 SUBROUTINE JupiterAtmos (nAlt,Alt,nH2,nH,nH2O,nCH4,Temp)
       
@@ -24,7 +24,6 @@ SUBROUTINE JupiterAtmos (nAlt,Alt,nH2,nH,nH2O,nCH4,Temp)
   real :: AtmosArray(5+nSpecies,nFileAlt)
   real :: nHe(nAlt)
   integer iAlt
-! from subroutine get_jupiter_atmos(DatafileName,nSpecies,iLine,NeutralDens_IC,NeutralTemp_C)
     
   open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
   
@@ -47,4 +46,4 @@ SUBROUTINE JupiterAtmos (nAlt,Alt,nH2,nH,nH2O,nCH4,Temp)
      nH2O(iAlt) = 0.0
   end do
 
-END SUBROUTINE InitJupiterAtmos
+END SUBROUTINE JupiterAtmos
