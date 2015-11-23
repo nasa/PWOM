@@ -58,6 +58,7 @@ MPIRUN = mpirun -np 2
 
 test:
 	-@(make test_saturn)
+	-@(make test_jupiter)
 	-@(make test_restart)
 	-@(make test_earth)
 	-@(make test_restart)
@@ -82,6 +83,17 @@ test_saturn:
 	@echo "test_run..." >> test_Saturn.diff
 	make test_run
 	@echo "test_check..." >> test_Saturn.diff
+	make test_check
+
+test_jupiter:
+	@echo "starting..." > test_Jupiter_plots.diff
+	@echo "test_compile..." > test_Jupiter.diff
+	make test_compile PLANET=Jupiter
+	@echo "test_rundir..." >> test_Jupiter.diff
+	make test_rundir
+	@echo "test_run..." >> test_Jupiter.diff
+	make test_run
+	@echo "test_check..." >> test_Jupiter.diff
 	make test_check
 
 test_compile:
