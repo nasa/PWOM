@@ -1,5 +1,3 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
 !******************************************************************************
 ! Use Newton's method to find chemical equilibrium for lower boundary
 !******************************************************************************
@@ -16,10 +14,8 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
   real :: InitialGuess,kr1T,kr2T
   integer :: i
   
-! *** insert planet switch here
-!  call PlanetAtmos(1400.0e5,DensityH2, DensityH, DensityH2O, DensityCH4,Temperature)  ! Saturn
-  call PlanetAtmos(1, 1400.0e5, DensityH2,DensityH,DensityH2O, &
-       DensityCH4,Temperature)  !Jupiter
+  call modatm(1400.0e5,DensityH2, DensityH, DensityH2O, DensityCH4,Temperature)  ! Saturn
+
 
 ! set source - loss to zero for chemical equilibrium
 

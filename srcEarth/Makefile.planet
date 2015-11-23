@@ -1,5 +1,5 @@
 MODULES_PLANET = \
-	ModGlow.o
+	ModGlow_planet.o
 
 OBJECTS_PLANET = \
 	PhotoElectronPW_planet.o\

@@ -5,8 +5,8 @@ program unit_test_background
   use CON_planet, ONLY: init_planet_const, set_planet_defaults,is_planet_init
 
   integer :: iError
-  character(len=5) :: NamePlanet = 'EARTH'
-!  character(len=7) :: NamePlanet = 'JUPITER'
+!  character(len=5) :: NamePlanet = 'EARTH'
+  character(len=7) :: NamePlanet = 'JUPITER'
   logical :: IsPlanetSet=.false.  
 
   !-----------------------------------------------------------------------------
