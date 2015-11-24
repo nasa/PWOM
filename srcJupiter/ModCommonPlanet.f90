@@ -7,7 +7,7 @@ Module ModCommonPlanet
   
   integer,parameter :: nVar=16  !***
  !***what should lower boundary be?
-  real,   parameter :: rLowerBoundary  = 72000.e5 
+  real,   parameter :: rLowerBoundary  = 72492.e5 
   real,   parameter :: rPlanet = 71492.0e+5
 
   REAL XH2(MaxGrid),XH(MaxGrid),XH2O(MaxGrid),XCH4(MaxGrid), &

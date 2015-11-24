@@ -10,6 +10,7 @@ C
 C
       use ModCommonVariables
       use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPE,HLPE0
+      use ModNumConst, ONLY:cTwoPi
 C
       NPT1=14
       NPT2=16
@@ -73,12 +74,10 @@ C kB/m_e
       CVion3=RGAS_I(Ion3_)/GMIN1
       CVE=RGAS_I(nIon)/GMIN1
 
-CALEX Set the planet radius and surface gravity, rotation freq
-      RE=60268.E5
-      GSURF=980.*.916
+
 c      Omega=1./37800.
 
-      Omega=0.
+      Omega=1.0/35280.0 * cTwoPi
 C                                                                      C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
@@ -571,7 +570,7 @@ C KGS make sure I should be using Maxwell Molecule Collisions here
 CALEX electron H, e H2 done in collis
          CLELH(I)=4.5E-9*XH(I)
 
-         GRAVTY(I)=-3.79E22/RAD(I)**2
+         GRAVTY(I)=-1.2657786e23/RAD(I)**2
          Centrifugal(I)=RAD(I)*((sin((90.-GLAT)*3.14159/180.))**2)*Omega**2
          
  20   CONTINUE
