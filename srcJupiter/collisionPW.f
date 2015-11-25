@@ -4,7 +4,6 @@ CALEX then calculates the momentum and energy collision terms
       SUBROUTINE COLLIS(N,StateIn_GV)
       use ModCommonVariables
       use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPion3,HLPE
-
       integer, intent(in) :: N
       real,    intent(in) :: StateIn_GV(-1:N+2,nVar)
       

@@ -10,8 +10,8 @@ Module ModCommonPlanet
   real,   parameter :: rLowerBoundary  = 72492.e5 
   real,   parameter :: rPlanet = 71492.0e+5
 
-  REAL XH2(MaxGrid),XH(MaxGrid),XH2O(MaxGrid),XCH4(MaxGrid), &
-       XTN(MAXGRID)
+  REAL XH2(0:MaxGrid+1),XH(0:maxGrid+1),XH2O(0:maxGrid+1),XCH4(0:maxGrid+1), &
+       XTN(0:MaxGrid+1)
   
   REAL CLHpH3p(MaxGrid),CLELHp(MaxGrid),CLELH3p(MaxGrid), &
        CLHpH(MaxGrid),CLELH(MaxGrid),CLH2pH3p(MaxGrid), &

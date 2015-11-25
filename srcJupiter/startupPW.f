@@ -9,7 +9,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
       use ModCommonVariables
-      use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPE,HLPE0
+      use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPE,HLPE0,NDensity_CI
       use ModNumConst, ONLY:cTwoPi
 C
       NPT1=14
@@ -163,11 +163,11 @@ CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
 49    CONTINUE 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 
 C                                                                      C
-      CALL JupiterAtmos(NDIM,ALTD,XH2,XH,XH2O,XCH4,XTN)
-      NDensity_CI(:,H2_) = XH2(:)
-      NDensity_CI(:,H_)  = XH(:)
-      NDensity_CI(:,H2O_)= XH2O(:)
-      NDensity_CI(:,CH4_)= XCH4(:)
+      CALL JupiterAtmos(XH2,XH,XH2O,XCH4,XTN)
+      NDensity_CI(:,H2_) = XH2(1:NDIM)
+      NDensity_CI(:,H_)  = XH(1:NDIM)
+      NDensity_CI(:,H2O_)= XH2O(1:NDIM)
+      NDensity_CI(:,CH4_)= XCH4(1:NDIM)
 
 CALEX I am not calling glowex now but in the future 
 CALEX we might need to use this for radiative transfer etc      
@@ -303,8 +303,8 @@ C!      HeatCon_GI(0,Ion1_)=HLPion1*State_GV(0,Th3_)**2.5
 C!      HeatCon_GI(0,nIon)=HLPE*State_GV(0,Te_)**2.5
 C!      HeatCon_GI(0,Ion2_)=HLPion2*State_GV(0,Th_)**2.5
 C!      HeatCon_GI(0,Ion2_)E=HLPHE*State_GV(0,The_)**2.5
-      CALL JupiterAtmos(1,ALTMAX,XNH2,XNH,XNH2O,XNCH4,TEMP)
-      XTNMAX=TEMP
+!*remove      CALL JupiterAtmos(1,ALTMAX,XNH2,XNH,XNH2O,XNCH4,TEMP)
+      XTNMAX=XTN(NDIM+1)
 
       ETOP=ETOP*DRBND/1.23E-6
       CALL PW_set_upper_bc
@@ -419,15 +419,15 @@ C     C
       State_GV(-1:0,uH_)=0.
       State_GV(-1:0,uH2_)=0.
       State_GV(-1:0,uE_)=0.
-      CALL JupiterAtmos(1,ALTMIN,XNH2,XNH,XNH2O,XNCH4,TEMP)
+! *remove      CALL JupiterAtmos(1,ALTMIN,XNH2,XNH,XNH2O,XNCH4,TEMP)
 
 CALEX I pretend that for plasma parameters, O is H3 and HE is
 CALEX chemical equilibrium value for H2+ this allow me to just
 CALEX change the chemistry but leave the rest of the code the same  
-      State_GV(-1:0,Th3_)=TEMP
-      State_GV(-1:0,Th_)=TEMP
-      State_GV(-1:0,Th2_)=TEMP
-      State_GV(-1:0,Te_)=TEMP
+      State_GV(-1:0,Th3_)=XTN(0)
+      State_GV(-1:0,Th_)=XTN(0)
+      State_GV(-1:0,Th2_)=XTN(0)
+      State_GV(-1:0,Te_)=XTN(0)
 
 C KGS this subroutine needs to be modified
       call calc_chemical_equilibrium(DensityHp,DensityH3p,DensityH2p)
@@ -570,7 +570,8 @@ C KGS make sure I should be using Maxwell Molecule Collisions here
 CALEX electron H, e H2 done in collis
          CLELH(I)=4.5E-9*XH(I)
 
-         GRAVTY(I)=-1.2657786e23/RAD(I)**2
+         ! Jupiter-specific
+         GRAVTY(I)=-1.2657786e23/RAD(I)**2  ! accel in cm/s^2, w/ Rad in cm
          Centrifugal(I)=RAD(I)*((sin((90.-GLAT)*3.14159/180.))**2)*Omega**2
          
  20   CONTINUE
@@ -689,6 +690,7 @@ C     TRY SETTING THE PLASMA PARAMETERS HERE TO THE SURFACE VALUES
 
       if(IsRestart) RETURN
       IsRestart = .true.
+      ! this needs to be changed
       do K=1,NDIM
          State_GV(K,uH3_)=0
          State_GV(K,pH3_)=State_GV(0,pH3_)*exp(-(ALTD(k)-1400.E5)/5000.E5)

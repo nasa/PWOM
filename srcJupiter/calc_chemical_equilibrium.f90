@@ -15,8 +15,11 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
   real :: InitialGuess,kr1T,kr2T
   integer :: i
   
-  call JupiterAtmos(1, 1400.0e5, DensityH2,DensityH,DensityH2O, &
-       DensityCH4,Temperature)  !Jupiter
+  DensityH2 = XH2(0)
+  DensityH  = XH(0)
+  DensityH2O = XH2O(0)
+  DensityCH4 = XCH4(0)
+  Temperature = XTN(0)
 
 ! set source - loss to zero for chemical equilibrium
 
