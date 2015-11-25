@@ -89,6 +89,13 @@ C                                                                      C
 C      READ (5,2) CURR(1)
 
       call set_vertical_grid
+
+! Jupiter-specific
+      do I=1,nDim
+         GRAVTY(I)=-1.2657786e23/RAD(I)**2 ! accel in cm/s^2, w/ Rad in cm
+         Centrifugal(I)=RAD(I)*((sin((90.-GLAT)*3.14159/180.))**2)*Omega**2
+      enddo
+
       CURR(1)=2.998E2*CURR(1)
 !      CURTIM=150.
 !      CURTIM0=500.
@@ -164,10 +171,10 @@ CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 
 C                                                                      C
       CALL JupiterAtmos(XH2,XH,XH2O,XCH4,XTN)
-      NDensity_CI(:,H2_) = XH2(1:NDIM)
-      NDensity_CI(:,H_)  = XH(1:NDIM)
-      NDensity_CI(:,H2O_)= XH2O(1:NDIM)
-      NDensity_CI(:,CH4_)= XCH4(1:NDIM)
+      NDensity_CI(1:nDim,H2_) = XH2(1:NDIM)
+      NDensity_CI(1:nDim,H_)  = XH(1:NDIM)
+      NDensity_CI(1:nDim,H2O_)= XH2O(1:NDIM)
+      NDensity_CI(1:nDim,CH4_)= XCH4(1:NDIM)
 
 CALEX I am not calling glowex now but in the future 
 CALEX we might need to use this for radiative transfer etc      
@@ -348,17 +355,18 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     ALEX define the reaction rates, label by reaction number
 C     ALEX j is for photochemistry, k is for regular chemistry
       
+      !multiply all saturn photoproduction rates by 3.389 (Rsatfromsun/Rjupfromsun)**2
 c     ! H2+hnu     --> H+ + H + e
-      jp1=1.9E-11
+      jp1=1.9E-11*3.389
 !      jp1=9.5E-11
       !             --> H2+ + e
-      jp2=9.9E-10
+      jp2=9.9E-10*3.389
       !jp2=5.4E-10
       ! H+hnu      --> H+
-      jp3=1.0E-9
+      jp3=1.0E-9*3.389
       !jp3=7.3E-10
       ! H2O+hnu    --> H+ + OH +e
-      jp4=4.2E-10
+      jp4=4.2E-10*3.389
       !jp4=1.3E-10
 
       ! H2+ + H2    --> H3+ +H
@@ -570,9 +578,6 @@ C KGS make sure I should be using Maxwell Molecule Collisions here
 CALEX electron H, e H2 done in collis
          CLELH(I)=4.5E-9*XH(I)
 
-         ! Jupiter-specific
-         GRAVTY(I)=-1.2657786e23/RAD(I)**2  ! accel in cm/s^2, w/ Rad in cm
-         Centrifugal(I)=RAD(I)*((sin((90.-GLAT)*3.14159/180.))**2)*Omega**2
          
  20   CONTINUE
 c      GRAVTY(nDim)=GRAVTY(nDim)*0.0
