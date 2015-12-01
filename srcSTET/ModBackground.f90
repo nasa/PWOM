@@ -244,7 +244,7 @@ contains
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
     use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC
     use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX,init_production
-    use ModSeCross,     only: cross
+    use ModSeCross,     only: cross,cross_jupiter
     use EUA_ModMsis90,  only: GTD6,TSELEC
     use ModNumConst,    only: cDegToRad
     use ModPlanetConst, only: Planet_, NamePlanet_I
@@ -378,7 +378,15 @@ contains
     END IF
 
     ! set the cross sections (perhaps this should only be called once?)
-    call cross
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       call cross
+    case('JUPITER')
+       call cross_jupiter(nNeutralSpecies)
+    end select
+    
+
+
   end subroutine get_neutrals_and_pe_spectrum
   !============================================================================
   

@@ -3,7 +3,7 @@ Module ModSeCross
   private !except
   
   public :: cross
-
+  public :: cross_jupiter
   !number of excited states
   integer, parameter :: NEI=10
   
@@ -435,4 +435,22 @@ contains
     RETURN
   END FUNCTION INV
 
+  !=============================================================================
+  subroutine cross_jupiter(nNeutralSpecies)
+    
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I, &
+         EnergyMin, BINNUM
+    
+    
+    !allocate sig arrays if not already done
+    if (.not.allocated(SIGS)) allocate(SIGS(nNeutralSpecies,nEnergy)) 
+    if (.not.allocated(SIGI)) allocate(SIGI(nNeutralSpecies,nEnergy,nEnergy)) 
+    if (.not.allocated(SIGA)) allocate(SIGA(nNeutralSpecies,nEnergy,nEnergy)) 
+    
+    ! currently just set crossections to zero. 
+    SIGS(:,:)=0.0
+    SIGI(:,:,:)=0.0
+    SIGA(:,:,:)=0.0
+    
+  end subroutine cross_jupiter
 end Module ModSeCross
