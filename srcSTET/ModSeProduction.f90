@@ -1394,23 +1394,40 @@ contains
        iAugWaveBin_I = (/0, 0, 0, 0/)
 
        ! set number of states per species
-       nStatesPerSpecies_I=(/1,1,1,3/)
+!       nStatesPerSpecies_I=(/1,1,1,3/)
+       nStatesPerSpecies_I=(/2,1,1,5/)
 
        nStatesMax = maxval(nStatesPerSpecies_I)
 
        call allocate_state_arrays(ProbSpecies)
 
        ! set ionization potentials per state, per species
-       TPOT(:,H2_) = (/15.42589, 0.00, 0.00/)
-       TPOT(:,He_) = (/24.6, 0.00, 0.00/) 
-       TPOT(:,H_)  = (/13.5, 0.00, 0.00/) 
-       TPOT(:,CH4_)= (/12.98, 24.0, 27.55/)
+       !H2+      H+ H  
+       TPOT(:,H2_) = (/15.427, 18.08, 0.00, 0.00, 0.00/) 
+       !He+
+       TPOT(:,He_) = (/24.6, 0.00, 0.00, 0.00, 0.00/) 
+       !H
+       TPOT(:,H_)  = (/13.5, 0.00, 0.00, 0.00, 0.00/) 
+       !CH4+     CH3+H    CH2+H2   CH+H2/H  H+CH3
+       TPOT(:,CH4_)= (/13.12, 14.23, 14.99, 19.70, 18.08/) 
 
-       call read_data_array('PW/PhotoH2.dat',nStatesPerSpecies_I(1),2, &
+!       TPOT(:,H2_) = (/15.42589, 0.00, 0.00/) 
+!       TPOT(:,He_) = (/24.6, 0.00, 0.00/) 
+!       TPOT(:,H_)  = (/13.5, 0.00, 0.00/) 
+!       TPOT(:,CH4_)= (/12.98, 24.0, 27.55/)
+
+!       call read_data_array('PW/PhotoH2.dat',nStatesPerSpecies_I(1),2, &
+!            ProbSpecies,SigAbsSpecies,SigIonSpecies)
+!       PROB(:,1,:) = ProbSpecies(:,:)
+!       SIGABS(1,:) = SigAbsSpecies(:) * 1.e-18
+!       SIGION(1,:) = SigIonSpecies(:) * 1.e-18
+
+       call read_phidrates('H2',nStatesPerSpecies_I(1), &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,1,:) = ProbSpecies(:,:)
-       SIGABS(1,:) = SigAbsSpecies(:) * 1.e-18
-       SIGION(1,:) = SigIonSpecies(:) * 1.e-18
+       SIGABS(1,:) = SigAbsSpecies(:)
+       SIGION(1,:) = SigIonSpecies(:)
+
        call read_data_array('PW/PhotoHe.dat',nStatesPerSpecies_I(2),1, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,2,:) = ProbSpecies(:,:)
@@ -1421,11 +1438,18 @@ contains
        PROB(:,3,:) = ProbSpecies(:,:)
        SIGABS(3,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(3,:) = SigIonSpecies(:) * 1.e-18
-       call read_data_array('PW/PhotoCH4.dat',nStatesPerSpecies_I(4),2, &
+!       call read_data_array('PW/PhotoCH4.dat',nStatesPerSpecies_I(4),2, &
+!            ProbSpecies,SigAbsSpecies,SigIonSpecies)
+!       PROB(:,4,:) = ProbSpecies(:,:)
+!       SIGABS(4,:) = SigAbsSpecies(:) * 1.e-18
+!       SIGION(4,:) = SigIonSpecies(:) * 1.e-18
+
+       call read_phidrates('CH4',nStatesPerSpecies_I(4), &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,4,:) = ProbSpecies(:,:)
-       SIGABS(4,:) = SigAbsSpecies(:) * 1.e-18
-       SIGION(4,:) = SigIonSpecies(:) * 1.e-18
+       SIGABS(4,:) = SigAbsSpecies(:)
+       SIGION(4,:) = SigIonSpecies(:)
+
 
        !set branching ratios and crossections
 !       DO  L=1,LMAX
@@ -1493,7 +1517,7 @@ contains
          allocate(Prob(nStatesMax,nNeutral,LMAX))
 
   end subroutine allocate_state_arrays
-
+  !=============================================================================
   subroutine read_data_array(DatafileName,nStates,GridType, &
        ProbSpecies,SigAbsSpecies,SigIonSpecies)
     use ModInterpolate, ONLY: linear
@@ -1574,5 +1598,103 @@ contains
     deallocate(WaveGridCenters)
 
   end subroutine read_data_array
+
+  !=============================================================================
+  subroutine read_phidrates(NameNeutral,nStates, &
+       ProbSpecies,SigAbsSpecies,SigIonSpecies)
+    use ModInterpolate, ONLY: linear
+    use ModIoUnit,      ONLY: UnitTmp_
+    character (len=*), intent(in) :: NameNeutral
+    integer, intent(in) :: nStates
+
+    real, intent(out) :: ProbSpecies(nStatesMax,LMAX), &
+         SigAbsSpecies(LMAX),SigIonSpecies(LMAX)
+
+    integer :: nLines
+    real :: StandardWaveGrid(LMAX)
+    real, allocatable :: SigAbsIn(:),SigIonIn(:),ProbIn(:,:),WaveGrid(:,:)
+    real, allocatable :: WaveGridCenters(:)
+    character(len=100) :: junk
+    real :: junk1,junk2,junk3,junk4,cross1,cross2,cross3,cross4,cross5
+    
+    if(NameNeutral == 'H2') then
+       open(UnitTmp_,FILE='PW/phidratesH2.dat',STATUS='OLD')
+       !read and discard header
+       do iLine=1,2
+          read(UnitTmp_,*) junk
+       enddo
+       nLines=102
+    elseif(NameNeutral == 'CH4') then
+       open(UnitTmp_,FILE='PW/phidratesCH4.dat',STATUS='OLD')
+        do iLine=1,2
+          read(UnitTmp_,*) junk
+       enddo
+       nLines=137
+    else
+       call con_stop(NameNeutral//' not available')
+    endif
+
+    allocate(SigAbsIn(nLines))
+    allocate(SigIonIn(nLines))
+    allocate(ProbIn(nStates,nLines))
+    allocate(WaveGridCenters(nLines))
+
+    do i=1,nLines
+       if(NameNeutral == 'H2') then
+          read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,&
+               cross1,cross2
+          SigIonIn(i) = cross1+cross2
+          ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
+          ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
+          
+       elseif(NameNeutral == 'CH4') then
+          read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,junk3,&
+               cross1,cross2,cross3,cross4,cross5,junk4
+          SigIonIn(i) = 100.0*cross1+cross2+cross3+cross4+cross5
+          ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
+          ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
+          ProbIn(3,i) = 100.0*cross3/SigIonIn(i)
+          ProbIn(4,i) = 100.0*cross4/SigIonIn(i)
+          ProbIn(5,i) = 100.0*cross5/SigIonIn(i)
+       endif
+       write(*,*) i,WaveGridCenters(i)
+              
+!5001   format(<2+nStates+GridType>E10.6)
+    enddo
+    close(UnitTmp_)
+
+    StandardWaveGrid = (WAVE1 + WAVE2)/2.
+    
+    ! interpolate all variables to new wavelength grid
+    ! extrapolate set to true
+    do i=1,LMAX
+       !when outside of range set to zero otherwise interpolate
+       if (StandardWaveGrid(i) > maxval(WaveGridCenters) &
+            .or. StandardWaveGrid(i) < minval(WaveGridCenters)) then
+          SigAbsSpecies(i) = 0.0
+          SigIonSpecies(i) = 0.0
+          ProbSpecies(:,i) = 0.0
+       else
+          SigAbsSpecies(i) = linear(SigAbsIn,1,nLines, &
+               StandardWaveGrid(i),WaveGridCenters)
+          SigIonSpecies(i) = linear(SigIonIn,1,nLines, &
+               StandardWaveGrid(i),WaveGridCenters)
+          do l=1,nStates
+             ProbSpecies(l,i) = linear(ProbIn(l,:),1,nLines, &
+                  StandardWaveGrid(i),WaveGridCenters)
+          end do
+       endif
+    enddo
+
+    write(*,*) 'For NameNeutral=',NameNeutral
+    write(*,*) 'maxval(SigIonSpecies),minval(SigIonSpecies)',&
+         maxval(SigIonSpecies),minval(SigIonSpecies)
+    
+    deallocate(SigAbsIn)
+    deallocate(SigIonIn)
+    deallocate(ProbIn)
+    deallocate(WaveGridCenters)
+
+  end subroutine read_phidrates
 
 end Module ModSeProduction
