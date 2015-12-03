@@ -39,6 +39,10 @@ Module ModSeBackground
 
   ! Arrays that hold the photo electron production spectrum in iono 1 or 2
   real, allocatable,public :: ePhotoProdSpec1_IIC(:,:,:),ePhotoProdSpec2_IIC(:,:,:)
+  real, allocatable,public :: PhotoIonRate1_IIC(:,:,:),PhotoIonRate2_IIC(:,:,:)
+
+  !number of ions for ionization rate array
+  integer :: nIons
 
   public :: allocate_background_arrays
   public :: fill_thermal_plasma_empirical
@@ -46,6 +50,7 @@ Module ModSeBackground
   public :: get_neutrals_and_pe_spectrum
   public :: plot_background
   public :: plot_ephoto_prod
+  public :: plot_ionization_rate
 contains
   !subroutines to fill in the neutral atmosphere and thermal plasma
   !=============================================================================
@@ -272,12 +277,14 @@ contains
     !set the solar flux
     CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
 
+
     ! on first call initialize the production parameters
     if(IsFirstCall) then
        call init_production
        IsFirstCall = .false.
     endif
-    
+
+
     !\
     ! Work on ionosphere 1
     !/
@@ -313,6 +320,7 @@ contains
 !    write(*,*) 'SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)',&
 !         SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)
 !    call con_stop('')
+
     SZA1=SZA1*cDegToRad
     
     !  Set the slant path column densities for O,O2 and N2
@@ -322,7 +330,7 @@ contains
     !  Calculate the photoelectron production spectrum
     IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
-            nIono,0)
+            nIono,0,nIons,PhotoIonRate1_IIC(iLine,:,:))
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
@@ -368,7 +376,7 @@ contains
     !  Calculate the photoelectron production spectrum
     IF ((SZA2.LT.2.).AND.(DoCalcPeIono2)) THEN
        CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
-            nIono,nPoint)
+            nIono,nPoint,nIons,PhotoIonRate1_IIC(iLine,:,:))
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
@@ -546,6 +554,110 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_ephoto_prod
+  !============================================================================
+  ! save state plot for verification
+  subroutine plot_ionization_rate(iLine,nStep,time)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    integer, intent(in) :: iLine, nStep
+    real,    intent(in) :: time
+
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+    !grid parameters
+    integer, parameter :: nDim =1,S_=1
+    integer :: nVar
+
+    !Jupiter
+    integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+         CH3plus_=5,CH2plus_=6,CHplus_=7
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'Alt[km] O+[cm-3s-1] g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'Alt[km] H2+[cm-3s-1] He+[cm-3s-1] H+[cm-3s-1] CH4+[cm-3s-1] CH3+[cm-3s-1] CH2+[cm-3s-1] CH+[cm-3s-1] g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='Photoionization Rates'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iIono
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+    nVar=nIons!+2
+    allocate(Coord_I(nIono),PlotState_IV(nIono,nVar))
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+              NamePlotVar=NamePlotVarJupiter
+    end select
+       
+
+    !Set Coordinates along field line and PA
+    do iIono=1,nIono
+       Coord_I(iIono) = FieldLineGrid_IC(iLine,iIono)/1e5
+
+       select case(NamePlanet_I(Planet_))
+       case('EARTH')
+          PlotState_IV(iIono,Oplus_)  = &
+               PhotoIonRate1_IIC(iLine,Oplus_,iIono)
+       case('JUPITER')
+          PlotState_IV(iIono,H2plus_)  = &
+               PhotoIonRate1_IIC(iLine,H2plus_,iIono)
+          PlotState_IV(iIono,Heplus_)  = &
+               PhotoIonRate1_IIC(iLine,Heplus_,iIono)
+          PlotState_IV(iIono,Hplus_)  = &
+               PhotoIonRate1_IIC(iLine,Hplus_,iIono)
+          PlotState_IV(iIono,CH4plus_)  = &
+               PhotoIonRate1_IIC(iLine,CH4plus_,iIono)
+          PlotState_IV(iIono,CH3plus_)  = &
+               PhotoIonRate1_IIC(iLine,CH3plus_,iIono)
+          PlotState_IV(iIono,CH2plus_)  = &
+               PhotoIonRate1_IIC(iLine,CH2plus_,iIono)
+          PlotState_IV(iIono,CHplus_)  = &
+               PhotoIonRate1_IIC(iLine,CHplus_,iIono)
+!          PlotState_IV(iIono,8)  = &
+!               NeutralDens1_IIC(iLine,H2_,iIono)
+!          PlotState_IV(iIono,9)  = &
+!               NeutralDens1_IIC(iLine,H_,iIono)
+       end select
+       
+       
+    enddo
+
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'PhotoIonization_iLine',iLine,'.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_I, PlotState_IV)
+  end subroutine plot_ionization_rate
   
   !=============================================================================
   subroutine allocate_background_arrays
@@ -556,8 +668,10 @@ contains
     select case(NamePlanet_I(Planet_))
     case('EARTH')
        nNeutralSpecies=3
+       nIons=1
     case('JUPITER')
        nNeutralSpecies=4
+       nIons=7
     end select
 
     if(.not.allocated(eThermalDensity_IC)) &
@@ -591,6 +705,11 @@ contains
          allocate(ePhotoProdSpec1_IIC(nLine,nEnergy,nIono))
     if(.not.allocated(ePhotoProdSpec2_IIC)) &
          allocate(ePhotoProdSpec2_IIC(nLine,nEnergy,nIono))
+
+    if(.not.allocated(PhotoIonRate1_IIC)) &
+         allocate(PhotoIonRate1_IIC(nLine,nIons,nIono))
+    if(.not.allocated(PhotoIonRate2_IIC)) &
+         allocate(PhotoIonRate2_IIC(nLine,nIons,nIono))
 
 
   end subroutine allocate_background_arrays
