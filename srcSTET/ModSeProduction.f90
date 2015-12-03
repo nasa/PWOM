@@ -44,6 +44,17 @@ Module ModSeProduction
 
   ! Store the ionization potentials
   real,allocatable :: TPOT(:,:)
+
+  ! named constants for ion indicies in photoionrate array
+  !Jupiter
+  integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+                        CH3plus_=5,CH2plus_=6,CHplus_=7
+  
+  !named constants for neutrals
+  !Earth
+  integer, parameter :: O_=1, O2_=2, N2_=3
+  !Jupiter
+  integer, parameter :: H2_=1, He_=2, H_=3, CH4_=4
   
 contains
   
@@ -291,12 +302,15 @@ contains
 ! NF      number of available types of auroral fluxes
 !
 !
-  SUBROUTINE ESPEC(ZMAJ,PESPEC,Iono,Ioff)
+  SUBROUTINE ESPEC(ZMAJ,PESPEC,Iono,Ioff,nIons,PhotoIonRate_IC)
     !
     !
     
     !INCLUDE 'numbers.h'
-    use ModSeGrid,only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I,Emin=>EnergyMin
+    use ModSeGrid,   only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I,Emin=>EnergyMin
+    use ModMath,     only:midpnt_int
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
+    use ModNumConst, only:cPi
 !    PARAMETER (NEX=20)
 !    PARAMETER (NW=20)
 !    PARAMETER (NC=10)
@@ -308,13 +322,15 @@ contains
     !      COMMON /CENERGY/ ener(Elen),del(Elen),Emin,Jo
     !
     DIMENSION FLUX(LMAX,IONO), &
-         PESPEC(NEnergy,IONO), &
-         ZMAJ(nNeutral,IONO), &
+         PESPEC(NEnergy,IONO), PeSpectrumSpecies_IIIC(nStatesMax,nNeutral,NEnergy,IONO), &
+         ZMAJ(nNeutral,IONO), PhotoIonRate_IC(nIons,Iono),&
          PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
          BSO2(LMAX), TAU(LMAX)
 
     real, allocatable :: EPSIL1(:,:,:), EPSIL2(:,:,:)
     real, allocatable :: EPA(:,:,:,:), EPB1(:,:), EPB2(:,:)
+    integer :: iIono
+
     !
     SAVE EPSIL1, EPSIL2, EPA, EPB1, EPB2
     !
@@ -365,7 +381,7 @@ contains
              END IF
           end do
        end do
-       write(*,*) 'test2'
+       
 
 !
     ENDIF
@@ -383,6 +399,7 @@ contains
        end do
        DO  M=1,nEnergy
           PESPEC(M,J) = 0.
+          PeSpectrumSpecies_IIIC(:,:,M,J)=0.
        end do
     end do
 
@@ -485,6 +502,7 @@ contains
                          ENDIF
                       ENDIF
                       PESPEC(N,J) = PESPEC(N,J) + DSPECT * FAC
+                      PeSpectrumSpecies_IIIC(K,I,N,J)=PESPEC(N,J) + DSPECT * FAC
                    enddo
                    !
                 enddo   ! End of ion state loop
@@ -516,6 +534,8 @@ contains
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
                       PESPEC(M1,J) = PESPEC(M1,J) + DSPECT
+                      PeSpectrumSpecies_IIIC(K1,I,M1,J)=PESPEC(M1,J) + DSPECT
+                      PeSpectrumSpecies_IIIC(K2,I,M1,J)=PESPEC(M1,J) + DSPECT
                       !
                    enddo            ! End of ion states loops
                 enddo
@@ -560,9 +580,9 @@ contains
                       PESPEC(N,J) = PESPEC(N,J) + DSPECT * FAC
                    end do
                    
-                   
                 endif            ! "Out of our E range" skip
                 !
+
              enddo            ! End of altitude loop
              !
           END IF            ! End of second branch
@@ -571,7 +591,70 @@ contains
 !
     end DO            ! End of wavelength loop
 !
-!
+
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       !for now just set rate for Earth to zero
+       PhotoIonRate_IC(1,:) = 0.0
+    case('JUPITER')
+       do iIono=1,Iono
+          !
+          !integrate to get production rate for each species as a function of altitude
+          !H2+
+          CALL midpnt_int(PhotoIonRate_IC(H2plus_,iIono),&
+               PeSpectrumSpecies_IIIC(1,H2_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(H2plus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(H2plus_,iIono)
+          
+          !He+
+          CALL midpnt_int(PhotoIonRate_IC(Heplus_,iIono),&
+               PeSpectrumSpecies_IIIC(1,He_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(H2plus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(Heplus_,iIono)
+          
+          !H+
+          CALL midpnt_int(PhotoIonRate_IC(Hplus_,iIono),&
+               PeSpectrumSpecies_IIIC(2,H2_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(Hplus_,iIono) = &
+               PhotoIonRate_IC(Hplus_,iIono)
+          
+          CALL midpnt_int(temp,&
+               PeSpectrumSpecies_IIIC(1,H_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(Hplus_,iIono) = &
+               (PhotoIonRate_IC(Hplus_,iIono)+temp)
+          
+          CALL midpnt_int(temp,&
+               PeSpectrumSpecies_IIIC(5,CH4_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(Hplus_,iIono) = &
+               4.0*cPi*(PhotoIonRate_IC(Hplus_,iIono)+temp)
+          
+          !CH4+
+          CALL midpnt_int(PhotoIonRate_IC(CH4plus_,iIono),&
+               PeSpectrumSpecies_IIIC(1,CH4_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(CH4plus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(CH4plus_,iIono)
+          
+          !CH3+
+          CALL midpnt_int(PhotoIonRate_IC(CH3plus_,iIono),&
+               PeSpectrumSpecies_IIIC(2,CH4_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(CH3plus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(CH3plus_,iIono)
+          
+          !CH2+
+          CALL midpnt_int(PhotoIonRate_IC(CH2plus_,iIono),&
+               PeSpectrumSpecies_IIIC(3,CH4_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(CH2plus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(CH2plus_,iIono)
+          
+          !CH+
+          CALL midpnt_int(PhotoIonRate_IC(CHplus_,iIono),&
+               PeSpectrumSpecies_IIIC(4,CH4_,:,iIono),del,1,nEnergy,nEnergy,2)
+          PhotoIonRate_IC(CHplus_,iIono) = &
+               4.0*cPi*PhotoIonRate_IC(CHplus_,iIono)
+       enddo
+    end select
+       
+
     RETURN
     !
   END SUBROUTINE ESPEC
@@ -1107,8 +1190,6 @@ contains
     real :: SIGAO(LMAX), SIGAO2(LMAX), SIGAN2(LMAX)
     ! ionization crossections (O,O2,N2)
     real :: SIGIO(LMAX), SIGIO2(LMAX), SIGIN2(LMAX)
-    ! named parameters for neutral species
-    integer, parameter :: O_=1, O2_=2, N2_=3
     
     !\
     ! Jupiter/Saturn
@@ -1117,8 +1198,8 @@ contains
     real,allocatable :: ProbSpecies(:,:)
     ! ionization and absorption crossections
     real :: SigIonSpecies(LMAX),SigAbsSpecies(LMAX)
-    ! named parameters for neutral species
-    integer, parameter :: H2_=1, He_=2, H_=3, CH4_=4
+
+
 
   DATA ((PROBO(K,L),K=1,6),L=1,38) &
          / 120 * 0.00, &
@@ -1318,7 +1399,6 @@ contains
          8.52, 4.80, 2.29, 0.72, 0.24, 1.16, &
          0.48, 0.09, .015, .003, .0003/
    
-
 
     select case(NamePlanet_I(Planet_))
     case('EARTH')
@@ -1644,18 +1724,32 @@ contains
           read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,&
                cross1,cross2
           SigIonIn(i) = cross1+cross2
-          ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
-          ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
-          
+          if (SigIonIn(i) == 0.0 ) then
+             ProbIn(1,i) = 0.0
+             ProbIn(2,i) = 0.0
+          else
+             ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
+             ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
+          endif
+          write(*,*) 'test1'
        elseif(NameNeutral == 'CH4') then
           read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,junk3,&
                cross1,cross2,cross3,cross4,cross5,junk4
-          SigIonIn(i) = 100.0*cross1+cross2+cross3+cross4+cross5
-          ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
-          ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
-          ProbIn(3,i) = 100.0*cross3/SigIonIn(i)
-          ProbIn(4,i) = 100.0*cross4/SigIonIn(i)
-          ProbIn(5,i) = 100.0*cross5/SigIonIn(i)
+          SigIonIn(i) = cross1+cross2+cross3+cross4+cross5
+          if (SigIonIn(i) == 0.0 ) then
+             ProbIn(1,i) = 0.0
+             ProbIn(2,i) = 0.0
+             ProbIn(3,i) = 0.0
+             ProbIn(4,i) = 0.0
+             ProbIn(5,i) = 0.0
+          else
+             ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
+             ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
+             ProbIn(3,i) = 100.0*cross3/SigIonIn(i)
+             ProbIn(4,i) = 100.0*cross4/SigIonIn(i)
+             ProbIn(5,i) = 100.0*cross5/SigIonIn(i)
+          endif
+          
        endif
        write(*,*) i,WaveGridCenters(i)
               
