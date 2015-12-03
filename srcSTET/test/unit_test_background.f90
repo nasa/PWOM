@@ -52,7 +52,8 @@ end program unit_test_background
     use ModSeGrid, only:create_se_test_grid,nLine,nPoint,nIono,nPlas
     use ModSeBackground,only: allocate_background_arrays,mLat_I,mLon_I, &
          set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
-         plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum
+         plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum,&
+         plot_ionization_rate
     
     integer :: iLine=1, flag=1, nStep=0
     real    :: time=0
@@ -86,13 +87,20 @@ end program unit_test_background
     
     ! Get the neutral atmosphere and photo e production spectrum
     AP(:)=4.0
+    write(*,*) 'get_neutrals_and_pe_spectrum'
     call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
 
+    write(*,*) 'plot_background'
     ! plot initial state
     call plot_background(iLine,nStep,time)
     
+    write(*,*) 'plot_ephoto_prod'
     ! plot ephoto production
     call plot_ephoto_prod(iLine,nStep,time)
+
+    write(*,*) 'plot_ionization_rate'
+    ! plot ionization rate
+    call plot_ionization_rate(iLine,nStep,time)
 
   end subroutine background_test
 
