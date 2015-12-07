@@ -502,7 +502,7 @@ contains
                          ENDIF
                       ENDIF
                       PESPEC(N,J) = PESPEC(N,J) + DSPECT * FAC
-                      PeSpectrumSpecies_IIIC(K,I,N,J)=PESPEC(N,J) + DSPECT * FAC
+                      PeSpectrumSpecies_IIIC(K,I,N,J)=DSPECT * FAC
                    enddo
                    !
                 enddo   ! End of ion state loop
@@ -534,8 +534,8 @@ contains
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
                       PESPEC(M1,J) = PESPEC(M1,J) + DSPECT
-                      PeSpectrumSpecies_IIIC(K1,I,M1,J)=PESPEC(M1,J) + DSPECT
-                      PeSpectrumSpecies_IIIC(K2,I,M1,J)=PESPEC(M1,J) + DSPECT
+                      PeSpectrumSpecies_IIIC(K1,I,M1,J)=DSPECT
+                      PeSpectrumSpecies_IIIC(K2,I,M1,J)=DSPECT
                       !
                    enddo            ! End of ion states loops
                 enddo
