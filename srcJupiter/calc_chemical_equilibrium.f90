@@ -29,12 +29,15 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
 
 
 ! source & loss for H+
-  alpha1= jp1*DensityH2 + jp3*DensityH + jp4*DensityH2O  ! s
+!  alpha1= jp1*DensityH2 + jp3*DensityH + jp4*DensityH2O  ! s
+  alpha1=  PhotoIonRate_IC(Ion2_,1)! s
+  
   alpha2= -kc2*DensityH2**2. - kc3*DensityCH4 - kc8*DensityH2O & ! l
           - kc9(1)*DensityH2
   
 ! source & loss for H3+
-  beta1 = kc1*(jp2/kc1)*DensityH2 ! s
+!  beta1 = kc1*(jp2/kc1)*DensityH2 ! s
+  beta1 = PhotoIonRate_IC(Ion3_,1)! s
   beta2 = kc2*DensityH2**2.+ kc9(1)*DensityH2 ! l
   beta3 =-kc6*DensityCH4-kc7*DensityH2O  ! l
   
@@ -69,7 +72,7 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
 
   DensityH3p=(-zeta1-(zeta1**2.0-4.0*zeta2*zeta0)**0.5)/(2.0*zeta2)
 
-  DensityH2p= jp2/kc1
+  DensityH2p= PhotoIonRate_IC(Ion3_,1)/(kc1*DensityH2)
 
   return
 end subroutine calc_chemical_equilibrium

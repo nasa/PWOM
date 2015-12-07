@@ -2,8 +2,8 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 Module ModCommonPlanet
   use ModParameters
-  character(6) NamePlanet
-  parameter (NamePlanet = 'Jupiter')
+!  character(6) NamePlanet
+  character(len=100),parameter :: NamePlanet = 'JUPITER'
   
   integer,parameter :: nVar=16  !***
  !***what should lower boundary be?
@@ -37,6 +37,7 @@ Module ModCommonPlanet
        Neutral3_= 7, & !Saturn:H2O
        Neutral4_= 8    !Saturn:CH4
   
+  real, allocatable :: PhotoIonRate_IC(:,:)
   ! named state variables
   integer, parameter :: RhoH3_=1, uH3_=2,  pH3_=3,  Th3_=4, &
        RhoH_=5, uH_=6,  pH_=7,  Th_=8, &

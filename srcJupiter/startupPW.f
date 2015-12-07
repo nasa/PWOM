@@ -11,6 +11,9 @@ C
       use ModCommonVariables
       use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPE,HLPE0,NDensity_CI
       use ModNumConst, ONLY:cTwoPi
+      use ModPhotoElectron
+      use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine
+      use ModCouplePWOMtoSTET, only: get_stet_for_pwom
 C
       NPT1=14
       NPT2=16
@@ -144,7 +147,7 @@ C      STL=12.
 C      GMLAT=80.
 C      GMLONG=0.
 C      IART=1
-      GLAT=80.
+C      GLAT=80.
 C      GLONG=0.
 C      IART=0
 C FEB 20, 1990
@@ -170,19 +173,47 @@ CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
 49    CONTINUE 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 
 C                                                                      C
+      !assum GMlat and GMlong is same in glat and glon and smlat smlon
+      gmLat=SmLat
+      gmLon=SmLon
+      gLat=SmLat
+      gLon=SmLon
+      
       CALL JupiterAtmos(XH2,XH,XH2O,XCH4,XTN)
       NDensity_CI(1:nDim,H2_) = XH2(1:NDIM)
       NDensity_CI(1:nDim,H_)  = XH(1:NDIM)
       NDensity_CI(1:nDim,H2O_)= XH2O(1:NDIM)
       NDensity_CI(1:nDim,CH4_)= XCH4(1:NDIM)
 
-CALEX I am not calling glowex now but in the future 
-CALEX we might need to use this for radiative transfer etc      
-CALEX      CALL GLOWEX
-CALEX      DO 1099 J = 1,40
-CALEX         WRITE (iUnitOutput,9999) ALTD(J),PHOTOTF(J+1) 
-CALEX 9999    FORMAT(2X,1PE15.3,2X,1PE15.3)
-CALEX 1099 CONTINUE
+
+      !get the SE fluxes from STET first (call here to get Ionization rate
+      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
+      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
+      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
+      if (.not.allocated(PhotoIonRate_IC)) 
+     &     allocate(PhotoIonRate_IC(nIon-1,nDim))
+      
+      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
+     &     .and.DoCoupleSTET) then 
+         call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
+     &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
+     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
+     &        PhotoIonRatePW_IC=PhotoIonRate_IC)
+         ! Divide the Ionization rate from STET by oxygen density to get
+         ! production in units of ions/cc/s rather than ions/s
+         !IonRateO_C(1:nDim)=IonRateO_C(1:nDim)/XO(1:nDim)
+      endif
+!      write(*,*) 'PhotoIonRate_IC'
+!      write(*,*) PhotoIonRate_IC(1:3,1)
+!      write(*,*) PhotoIonRate_IC(1:3,2)
+!      write(*,*) PhotoIonRate_IC(1:3,3)
+!      stop
+      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
+         SeDens_C(:)=0.0
+         SeFlux_C(:)=0.0
+         SeHeat_C(:)=0.0
+      endif
 C
       CALL STRT1
 C                                                                      C
@@ -198,7 +229,8 @@ CALEX I don't know how to fix this heat input for Saturn.
 CALEX In Dee's thesis she says you need electon heat flux to be a minimum
 CALEX of 20E-3 ergs cm^2 /s.      
 C      ETOP=1.0E-3
-      ETOP=20.0E-3
+C      ETOP=20.0E-3
+      ETOP=0.0
 c      ETOP=25.0E-3
       ELFXIN=0.
 C
@@ -357,16 +389,16 @@ C     ALEX j is for photochemistry, k is for regular chemistry
       
       !multiply all saturn photoproduction rates by 3.389 (Rsatfromsun/Rjupfromsun)**2
 c     ! H2+hnu     --> H+ + H + e
-      jp1=1.9E-11*3.389
+!!!      jp1=1.9E-11*3.389
 !      jp1=9.5E-11
       !             --> H2+ + e
-      jp2=9.9E-10*3.389
+!!!      jp2=9.9E-10*3.389
       !jp2=5.4E-10
       ! H+hnu      --> H+
-      jp3=1.0E-9*3.389
+!!!      jp3=1.0E-9*3.389
       !jp3=7.3E-10
       ! H2O+hnu    --> H+ + OH +e
-      jp4=4.2E-10*3.389
+!!!      jp4=4.2E-10*3.389
       !jp4=1.3E-10
 
       ! H2+ + H2    --> H3+ +H
