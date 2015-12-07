@@ -6,7 +6,12 @@ Module ModCouplePWOMtoSTET
   integer :: nAltPw
   real,allocatable :: AltPw_C(:)
   real :: dAltPw
-  
+  integer :: nIonPW
+  !named parameters for photoelectron coupling back to PWOM
+  !earth
+  integer :: OplusPW_=1
+  !jupiter
+  integer :: H3plusPW_=1,HplusPW_=2,H2plusPW_=3
   !public methods
   public :: init_pwom_stet_coupling
   public :: get_stet_for_pwom
@@ -23,6 +28,7 @@ contains
                               DoUsePWOM
     use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
          PrecipEmean,PrecipEflux,UsePrecipitation
+    use ModPlanetConst, only: Planet_, NamePlanet_I
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
     real,    intent(in) :: AltPwIn_C(nAltPwIn)
     real, optional, intent(in)::PrecipEminPwIn,PrecipEmaxPwIn, &
@@ -43,7 +49,6 @@ contains
     
     ! Set the global line number
     iLineGlobal_I=iLineGlobalPw_I
-
 
     ! Allocate the background arrays
     write(*,*) 'allocating background arrays'
@@ -79,14 +84,21 @@ contains
          .or.present(PrecipEmeanPwIn).or.present(PrecipEfluxPwIn)) then
        call con_stop('PW_error: STET precip update values incomplete')
     endif
-       
+
+    !set number of ions based on planet
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       nIonPW=1
+    case('JUPITER')
+       nIonPW=3
+    end select
   end subroutine init_pwom_stet_coupling
   
   !=============================================================================
   ! input the pwom grid, thermal e density, and Efield. run stet for iLine
   subroutine get_stet_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
-       SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C)
+       SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C, PhotoIonRatePW_IC)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I
     use ModSeBackground,only: mLat_I,mLon_I, gLat1_I,gLat2_I,gLon1_I,gLon2_I,&
          Idate, UT,set_footpoint_locations,fill_thermal_plasma_empirical,&
@@ -110,6 +122,8 @@ contains
     real,  intent(out)::SeDensPW_C(nAltPw),SeFluxPW_C(nAltPw),SeHeatPW_C(nAltPw)
     ! Ionization rate from STET(interpolated to PWOM grid)
     real,optional,  intent(out):: IonRatePW_C(nAltPw)
+    ! Photo Ionization rate from STET for each ion(interpolated to PWOM grid)
+    real,optional,  intent(out):: PhotoIonRatePW_IC(nIonPW,nAltPw)
     ! named parameters for coordinates
     integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
     ! Is line open, for now always assume yes, but this could be passed
@@ -153,13 +167,13 @@ contains
 
     ! Get the neutral atmosphere and photo e production spectrum
     call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP_I)
-    
+
     ! Fill the background arrays
     call fill_thermal_plasma_empirical(iLine,F107,F107A,Time)
-    
+        
     ! plot background before. interp
     call plot_background(iLine,1,time)
-    
+
     ! Interpolate the PW values onto SE. This overwrites the thermal plasma 
     ! in the overlap region of the grids
     call interpolate_pwom_to_stet(iLine,eDensPW_C,eTempPW_C,&
@@ -178,9 +192,15 @@ contains
     call stet_run(iLine,IsOpen,.true.)
     
     ! Interpolate the output back to PWOM grid
-    if (present(IonRatePW_C)) then
+    if (present(IonRatePW_C) .and. present(PhotoIonRatePW_IC)) then
+       call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
+            IonRatePW_C=IonRatePW_C,PhotoIonRatePW_IC=PhotoIonRatePW_IC)
+    elseif(present(IonRatePW_C).and. .not.present(PhotoIonRatePW_IC)) then
        call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
             IonRatePW_C=IonRatePW_C)
+    elseif(.not.present(IonRatePW_C) .and. present(PhotoIonRatePW_IC)) then
+       call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
+            PhotoIonRatePW_IC=PhotoIonRatePW_IC)
     else
        call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)
     endif
@@ -197,10 +217,12 @@ contains
   ! interpolate PWOM thermal electron density and temperature onto STET grid
 
   subroutine interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C,&
-       IonRatePW_C)
-    use ModSeGrid,      only: FieldLineGrid_IC,nPoint
+       IonRatePW_C, PhotoIonRatePW_IC)
+    use ModSeGrid,      only: FieldLineGrid_IC,nPoint,nIono
     use ModSeState,     only: NumberDens_IC,NumberFlux_IC,HeatingRate_IC, &
                               TotalIonizationRate_IC
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+    use ModSeBackground,  only: PhotoIonRate1_IIC
     use ModInterpolate, only: linear
     implicit none
     ! index of line we are working on
@@ -208,10 +230,14 @@ contains
     ! thermal e dens [/cc], temp [k] and E|| [V/m] from PWOM
     real,  intent(out)::SeDensPW_C(nAltPw),SeFluxPW_C(nAltPw),SeHeatPW_C(nAltPw)
     real,  optional, intent(out)::IonRatePW_C(nAltPw)
+    real,  optional, intent(out)::PhotoIonRatePW_IC(nIonPw,nAltPw)
     
     real :: Coord ! coordinate for interpolation
     integer :: iAlt
-    real, parameter :: cEVtoErg=1.60217657e-12 
+    real, parameter :: cEVtoErg=1.60217657e-12
+    !named parameters for referencing STET photoionization array
+    integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+         CH3plus_=5,CH2plus_=6,CHplus_=7
     !--------------------------------------------------------------------------
     
     !loop over each point on PWOM grid STET outputs to PWOM grid
@@ -230,6 +256,26 @@ contains
           IonRatePW_C(iAlt) = &
                linear(TotalIonizationRate_IC(iLine,:),1,nPoint,Coord,&
                FieldLineGrid_IC(iLine,:))
+       endif
+       if (present(PhotoIonRatePW_IC)) then
+          select case(NamePlanet_I(Planet_))
+          case('EARTH')
+             !not working for Earth yet
+             PhotoIonRatePW_IC(OplusPW_,iAlt) = 0
+          case('JUPITER')
+             If (Coord>FieldLineGrid_IC(iLine,nIono)) then
+                ! when pw above iono set photoionization rate to zero
+                PhotoIonRatePW_IC(:,iAlt) = 0.0
+             else
+                PhotoIonRatePW_IC(H2plusPW_,iAlt) = &
+                     linear(PhotoIonRate1_IIC(iLine,H2plus_,1:nIono),1,nIono,&
+                     Coord,FieldLineGrid_IC(iLine,1:nIono))
+                PhotoIonRatePW_IC(HplusPW_,iAlt) = &
+                     linear(PhotoIonRate1_IIC(iLine,Hplus_, 1:nIono),1,nIono, &
+                     Coord,FieldLineGrid_IC(iLine,1:nIono))
+                PhotoIonRatePW_IC(H3plusPW_,iAlt) = 0.0
+             end If
+          end select
        endif
        !write(*,*) AltPw_C(iAlt)/1e5,SeDensPW_C(iAlt),SeFluxPW_C(iAlt),SeHeatPW_C(iAlt)
     enddo ALONG_LINE
@@ -262,7 +308,8 @@ contains
        if (FieldLineGrid_IC(iLine,iPoint) < AltPw_C(nAltPw)) then
           if (FieldLineGrid_IC(iLine,iPoint) > AltPw_C(1))then
              NormCoord=&
-                  (FieldLineGrid_IC(iLine,iPoint)-AltPw_C(1))/dAltPw
+                  (FieldLineGrid_IC(iLine,iPoint)-AltPw_C(1))/dAltPw+1
+
              eThermalDensity_IC(iLine,iPoint)=&
                   linear(eDensPW_C,1,nAltPw,NormCoord)
              eThermalTemp_IC(iLine,iPoint)=&
@@ -281,6 +328,7 @@ contains
           exit ALONG_LINE
        endif
     enddo ALONG_LINE
+
   end subroutine interpolate_pwom_to_stet
   
 end Module ModCouplePWOMtoSTET
