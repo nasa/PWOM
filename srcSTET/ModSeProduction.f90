@@ -1731,7 +1731,6 @@ contains
              ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
              ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
           endif
-          write(*,*) 'test1'
        elseif(NameNeutral == 'CH4') then
           read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,junk3,&
                cross1,cross2,cross3,cross4,cross5,junk4
@@ -1751,7 +1750,6 @@ contains
           endif
           
        endif
-       write(*,*) i,WaveGridCenters(i)
               
 !5001   format(<2+nStates+GridType>E10.6)
     enddo
