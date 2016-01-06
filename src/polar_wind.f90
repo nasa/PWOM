@@ -192,7 +192,7 @@ contains
 
        call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),&
             (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
-            State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),&
+            State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
             Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
     endif
 
