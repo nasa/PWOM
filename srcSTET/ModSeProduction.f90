@@ -609,7 +609,7 @@ contains
           !He+
           CALL midpnt_int(PhotoIonRate_IC(Heplus_,iIono),&
                PeSpectrumSpecies_IIIC(1,He_,:,iIono),del,1,nEnergy,nEnergy,2)
-          PhotoIonRate_IC(H2plus_,iIono) = &
+          PhotoIonRate_IC(Heplus_,iIono) = &
                4.0*cPi*PhotoIonRate_IC(Heplus_,iIono)
           
           !H+
@@ -1167,9 +1167,11 @@ contains
     select case(NamePlanet_I(Planet_))
     case('JUPITER')
        SFLUX(:) = SFLUX(:) * (1.0/5.2)**2
+
     case('SATURN')
        SFLUX(:) = SFLUX(:) * (1.0/9.5)**2
     end select
+
 
     RETURN
     
