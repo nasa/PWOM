@@ -424,7 +424,7 @@ contains
        NamePlotVar='S ne te nO nO2 nN2 g r'
        nVar = 5                 ! neutral species + 2
     case('JUPITER')
-       NamePlotVar='S ne te nH2 nH nCH4 nHe g r'
+       NamePlotVar='S ne te nH2 nHe nH nCH4 g r'
        nVar = 6                 ! neutral species + 2
     end select
 
