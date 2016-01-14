@@ -165,8 +165,8 @@ CALEX GGM determines geomagnetic lat. from geographic lat and lon
 CALEX since the dipole on Saturn is aligned with the rotation axis
 CALEX I have set GMLONG=GLONG
 CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
-!      GMLONG=GLONG
-!      GMLAT=GLAT
+      GMLONG=GLONG
+      GMLAT=GLAT
 
       DO 49 I=1,7
       AP(I)=50.
@@ -229,9 +229,9 @@ CALEX I don't know how to fix this heat input for Saturn.
 CALEX In Dee's thesis she says you need electon heat flux to be a minimum
 CALEX of 20E-3 ergs cm^2 /s.      
 C      ETOP=1.0E-3
-C      ETOP=20.0E-3
-      ETOP=0.0
-c      ETOP=25.0E-3
+C      ETOP=20.0E-3   ! original value
+C      ETOP=1.0E-3    ! previously used
+      ETOP=0.0        ! set to zero for STET coupling
       ELFXIN=0.
 C
 C      ELFXIN=9.
