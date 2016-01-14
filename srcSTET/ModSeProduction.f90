@@ -325,10 +325,11 @@ contains
          PESPEC(NEnergy,IONO), PeSpectrumSpecies_IIIC(nStatesMax,nNeutral,NEnergy,IONO), &
          ZMAJ(nNeutral,IONO), PhotoIonRate_IC(nIons,Iono),&
          PHOTOI(nStatesMax,nNeutral,IONO), PHOTOD(nStatesMax,nNeutral,IONO), &
-         BSO2(LMAX), TAU(LMAX)
+         BSO2(LMAX)
 
     real, allocatable :: EPSIL1(:,:,:), EPSIL2(:,:,:)
     real, allocatable :: EPA(:,:,:,:), EPB1(:,:), EPB2(:,:)
+    real    :: TAU
     integer :: iIono
 
     !
@@ -410,12 +411,12 @@ contains
     !
     DO  L=1,LMAX
        DO  J=1,Iono
-          TAU(L)=0.
+          TAU=0.
           DO  I=1,nNeutral
-             TAU(L)=TAU(L)+SIGABS(I,L)*ZCOL(I,J)
+             TAU=TAU+SIGABS(I,L)*ZCOL(I,J)
           end do
-          IF (TAU(L) .LT. 20.) THEN
-             FLUX(L,J)=SFLUX(L)*EXP(-TAU(L))
+          IF (TAU .LT. 20.) THEN
+             FLUX(L,J)=SFLUX(L)*EXP(-TAU)
           ELSE
              FLUX(L,J) = 0.0
           ENDIF
@@ -474,7 +475,7 @@ contains
                    !
                    ! Calculate ionization rates:
                    !
-                   DSPECT = ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)*PROB(K,I,L)
+                   DSPECT = ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)*PROB(K,I,L)/100.0
                    PHOTOI(K,I,J) = PHOTOI(K,I,J) + DSPECT
                    !
                    !
@@ -529,7 +530,8 @@ contains
                       IF (E1.LT.Emin .OR. E1.GT.Emax) cycle
                       DSPECT = &
                            ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)&
-                           *PROB(K1,I,L)*PROB(K2,I,iAugWaveBin_I(I))
+                           *PROB(K1,I,L)/100.0&
+                           *PROB(K2,I,iAugWaveBin_I(I))/100.0
                       PHOTOI(K1,I,J) = PHOTOI(K1,I,J) + DSPECT      ! Technically, it's
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
@@ -597,6 +599,10 @@ contains
        !for now just set rate for Earth to zero
        PhotoIonRate_IC(1,:) = 0.0
     case('JUPITER')
+       CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)
+       CALL plot_flux(FLUX)
+       CALL plot_crossec(SIGION,PROB)
+
        do iIono=1,Iono
           !
           !integrate to get production rate for each species as a function of altitude
@@ -658,6 +664,266 @@ contains
     RETURN
     !
   END SUBROUTINE ESPEC
+
+  ! save ion production plot for verification
+  ! doesn't work for Earth yet
+  subroutine plot_pespecspecies(PeSpectrumSpecies_IIIC)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    real, intent(in) :: PeSpectrumSpecies_IIIC(nStatesMax,nNeutral,NEnergy,nIONO)
+
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+    !grid parameters
+    integer, parameter :: nDim =2,E_=1, S_=2
+    integer :: nVar
+
+    !Jupiter
+    integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+         CH3plus_=5,CH2plus_=6,CHplus_=7
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'Alt[km] O+[cm-3s-1] g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'E[eV] Alt[km] He+[cm-3s-1] g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='Photoionization Rates'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iIono
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+!    nVar=nIons!+2
+    nVar=1
+    allocate(Coord_DII(nDim,nEnergy,nIono),PlotState_IIV(nEnergy,nIono,nVar))
+
+    PlotState_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+              NamePlotVar=NamePlotVarJupiter
+    end select
+       
+
+       !Set Coordinates along field line and PA
+       do iEnergy=1,nEnergy
+          do iIono=1,nIono
+             Coord_DII(E_,iEnergy,iIono) = EnergyGrid_I(iEnergy)             
+             Coord_DII(S_,iEnergy,iIono) = FieldLineGrid_IC(iLine,iIono)/1e5
+             PlotState_IIV(iEnergy,iIono,1)  = &
+                  PeSpectrumSpecies_IIIC(1,He_,iEnergy,iIono)
+          enddo
+       enddo       
+
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'PeSpecHe_iLine',iLine,'.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_pespecspecies
+
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  ! save solar flux plot for verification
+  !     currently plots only the lower wavelength of each bin
+  !     doesn't treat lines appropriately
+  !--------------------------------------------------------------------------
+  subroutine plot_flux(FLUX)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    real, intent(in) :: FLUX(LMAX,nIONO)
+
+    real, parameter :: C1=12397.7       ! Converting wavelengths to energy
+
+    real, allocatable   :: Coord_DII(:,:,:), PlotFlux_IIV(:,:,:)
+    !grid parameters
+    integer, parameter :: nDim =2,E_=1, S_=2
+    integer :: nVar
+
+    !Jupiter
+    integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+         CH3plus_=5,CH2plus_=6,CHplus_=7
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'Alt[km] O+[cm-3s-1] g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'Energy[eV] Alt[km] PhotonFlux g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='Solar Flux'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iIono
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+    nVar=1
+    allocate(Coord_DII(nDim,LMAX,nIono),PlotFlux_IIV(LMAX,nIono,nVar))
+
+    PlotFlux_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+       NamePlotVar=NamePlotVarJupiter
+    end select
+       
+       !Set Flux Coordinates along field line and wavelength converted to eV
+       do iLambda=1,LMAX
+          do iIono=1,nIono
+             Coord_DII(E_,iLambda,iIono) = C1/Wave1(iLambda)
+             Coord_DII(S_,iLambda,iIono) = FieldLineGrid_IC(iLine,iIono)/1e5
+             PlotFlux_IIV(iLambda,iIono,1)  = FLUX(iLambda,iIono)
+          enddo
+       enddo       
+       
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'Flux_iLine',iLine,'.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotFlux_IIV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotFlux_IIV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_DII, PlotFlux_IIV)
+  end subroutine plot_flux
+
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  ! save crossection plot for verification
+  ! doesn't work for Earth yet
+  !--------------------------------------------------------------------------
+  subroutine plot_crossec(SIGION,PROB)
+    use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
+         DeltaE_I,EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    real, intent(in) :: SIGION(nNeutral,LMAX),PROB(nStatesMax,nNeutral,LMAX)
+
+    real, parameter :: C1=12397.7       ! Converting wavelengths to energy
+
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+    !grid parameters
+    integer, parameter :: nDim =1
+    integer :: nVar
+
+    !Jupiter
+    integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
+         CH3plus_=5,CH2plus_=6,CHplus_=7
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'E[eV] Var g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'E[eV] SigmaIon Prob g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='He+ Cross Section'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iIono
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+!    nVar=nIons!+2
+    nVar=2
+    allocate(Coord_I(LMAX),PlotState_IV(LMAX,nVar))
+
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+       NamePlotVar=NamePlotVarJupiter
+    end select
+       
+       !Set Flux Coordinates along field line and wavelength converted to eV
+       do iLambda=1,LMAX
+             Coord_I(iLambda) = C1/Wave1(iLambda)
+             PlotState_IV(iLambda,1) = SIGION(He_,iLambda)
+             PlotState_IV(iLambda,2) = PROB(1,He_,iLambda)
+       enddo       
+       
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'CrossSec_iLine',iLine,'.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_I, PlotState_IV)
+  end subroutine plot_crossec
+
+
   !
   !
   !
