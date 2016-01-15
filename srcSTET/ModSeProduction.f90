@@ -599,9 +599,10 @@ contains
        !for now just set rate for Earth to zero
        PhotoIonRate_IC(1,:) = 0.0
     case('JUPITER')
-       CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)
-       CALL plot_flux(FLUX)
-       CALL plot_crossec(SIGION,PROB)
+       !uncomment for debugging
+       !CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)
+       !CALL plot_flux(FLUX)
+       !CALL plot_crossec(SIGION,PROB)
 
        do iIono=1,Iono
           !
@@ -664,9 +665,10 @@ contains
     RETURN
     !
   END SUBROUTINE ESPEC
-
+  !==================================================================================
   ! save ion production plot for verification
   ! doesn't work for Earth yet
+  ! debugging subroutines to plot epec params. only for one fieldline
   subroutine plot_pespecspecies(PeSpectrumSpecies_IIIC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
          DeltaE_I,EnergyGrid_I
@@ -681,6 +683,7 @@ contains
     !grid parameters
     integer, parameter :: nDim =2,E_=1, S_=2
     integer :: nVar
+    integer, parameter ::iLine=1
 
     !Jupiter
     integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
@@ -755,6 +758,7 @@ contains
   ! save solar flux plot for verification
   !     currently plots only the lower wavelength of each bin
   !     doesn't treat lines appropriately
+  !     only for one line and debugging
   !--------------------------------------------------------------------------
   subroutine plot_flux(FLUX)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
@@ -772,7 +776,7 @@ contains
     !grid parameters
     integer, parameter :: nDim =2,E_=1, S_=2
     integer :: nVar
-
+    integer, parameter ::iLine=1
     !Jupiter
     integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
          CH3plus_=5,CH2plus_=6,CHplus_=7
@@ -842,6 +846,7 @@ contains
   !--------------------------------------------------------------------------
   ! save crossection plot for verification
   ! doesn't work for Earth yet
+  ! for debugging only one line
   !--------------------------------------------------------------------------
   subroutine plot_crossec(SIGION,PROB)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,nIono,nEnergy, nPoint, &
@@ -859,7 +864,7 @@ contains
     !grid parameters
     integer, parameter :: nDim =1
     integer :: nVar
-
+    integer, parameter ::iLine=1
     !Jupiter
     integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
          CH3plus_=5,CH2plus_=6,CHplus_=7

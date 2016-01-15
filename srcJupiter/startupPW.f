@@ -165,8 +165,6 @@ CALEX GGM determines geomagnetic lat. from geographic lat and lon
 CALEX since the dipole on Saturn is aligned with the rotation axis
 CALEX I have set GMLONG=GLONG
 CALEX      CALL GGM(IART,GLONG,GLAT,GMLONG,GMLAT)
-      GMLONG=GLONG
-      GMLAT=GLAT
 
       DO 49 I=1,7
       AP(I)=50.
@@ -197,7 +195,7 @@ C                                                                      C
      &     .and.DoCoupleSTET) then 
          call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
      &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
-     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
      &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
      &        PhotoIonRatePW_IC=PhotoIonRate_IC)
          ! Divide the Ionization rate from STET by oxygen density to get

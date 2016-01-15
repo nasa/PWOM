@@ -33,7 +33,7 @@ SUBROUTINE PW_print_plot
   Me=State_GV(0,uE_)/sqrt(gamma*State_GV(0,pE_)/State_GV(0,RhoE_))
                     
   WRITE (iUnitGraphics,"(100(1pe18.10))") &
-       AltMin,GmLat, GmLong,QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
+       AltMin,GmLat, GmLon,QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
        State_GV(0,To_),0.0,State_GV(0,Th_),State_GV(0,Te_),&
        MO,MH,MHe,Me,Efield(1),State_GV(0,pE_)
     
@@ -58,7 +58,7 @@ SUBROUTINE PW_print_plot
      
      
      WRITE (iUnitGraphics,"(100(1pe18.10))")& 
-          ALTD(K),GmLat, GmLong,QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
+          ALTD(K),GmLat, GmLon,QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
           State_GV(K,To_),0.0,State_GV(K,Th_),State_GV(K,Te_),&
           MO,MH,MHe,Me,Efield(k),State_GV(K,pE_)
   enddo
@@ -83,7 +83,7 @@ SUBROUTINE PW_print_plot
   Me=State_GV(nDim+1,uE_)/sqrt(gamma*State_GV(nDim+1,pE_)/State_GV(nDim+1,RhoE_))
     
   WRITE (iUnitGraphics,"(100(1pe18.10))")& 
-       AltMax,GmLat, GmLong, QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
+       AltMax,GmLat, GmLon, QS1,QS2,QS3,QS4,QS5,QS6,QS7,QS8,&
        State_GV(nDim+1,To_),0.0,State_GV(nDim+1,Th_),&
        State_GV(nDim+1,Te_), MO,MH,MHe,Me,Efield(nDim),State_GV(nDim+1,pE_)
     
