@@ -452,5 +452,74 @@ contains
     SIGI(:,:,:)=0.0
     SIGA(:,:,:)=0.0
     
+    do iNeutral = 1, nNeutralSpecies
+    
+    end do
+
   end subroutine cross_jupiter
+
+  !=============================================================================
+  subroutine get_crossection_diffion(NameNeutralSpecies,
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I, &
+    character(len=100), intent(in) :: NameNeutralSpecies
+    real :: Ethreshold,Ebar
+    real, allocatable :: SigTotalI(:)
+    integer :: iEnergy,iEnergySec
+    !use the paper by Opal et al 1971 to set the differential ionization crossection
+    
+    !allocate array to hold the total ionization crossection
+    if(.not.allocated(SigTotalI))allocate(SigTotalI(nEnergy))
+    select case(NameNeutralSpecies)
+    case('O')
+       !placeholder set to 0 
+       SigTotalI(:)=0.0
+       Ebar=1
+       Ethreshold=0.0
+    case('N2')
+       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       Ethreshold = 15.6
+       Ebar = 13.0
+    case('O2')
+       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       Ethreshold = 12.2
+       Ebar = 17.4
+    case('H2')
+       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       Ethreshold = 15.4
+       Ebar = 8.2
+    case('H')
+       !placeholder set to 0 
+       SigTotalI(:)=0.0
+       Ebar=1
+       Ethreshold=0.0
+    case('CH4')
+       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       Ethreshold = 13.0
+       Ebar = 7.3
+    case('He')
+       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       Ethreshold = 24.6
+       Ebar = 15.8
+    else
+       write(*,*) 'WARNING: Species',NameNeutralSpecies&
+            ,' not yet supported using 0 for crossection' 
+       SigTotalI(:)=0.0
+       Ebar=1
+       Ethreshold=0.0
+    end select
+    
+    !loop over primary and secondary energies to fill diff crossection
+    do iEnergy = 1,nEnergy
+       !set the Opal coef
+       OpalCoef = SigTotalI(iEnergy)&
+            /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
+       do iEnergySec=1,nEnergy
+          SigmaI(iEnergy,iEnergySec) = &
+               OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
+       end do
+    end do
+    
+    !deallocate to save memory
+    deallocate(SigTotalI)
+  end subroutine get_crossection_diffion
 end Module ModSeCross
