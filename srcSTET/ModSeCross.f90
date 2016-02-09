@@ -440,7 +440,8 @@ contains
     
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I, &
          EnergyMin, BINNUM
-    
+    !jupiter
+    integer,parameter  :: H2_=1, He_=2, H_=3, CH4_=4
     
     !allocate sig arrays if not already done
     if (.not.allocated(SIGS)) allocate(SIGS(nNeutralSpecies,nEnergy)) 
@@ -464,14 +465,16 @@ contains
        call get_crossection_diffion('CH4',SIGI(CH4_,:,:))
        
     end do
-
+    
+    ! plot the differential ion crossection (for testing)
+    call plot_diffion_cross
   end subroutine cross_jupiter
 
   !=============================================================================
   subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
     character(len=*), intent(in) :: NameNeutralSpecies
-    real :: SigDiffI(:,:)
+    real, intent(out) :: SigDiffI(nEnergy,nEnergy)
     real :: Ethreshold,Ebar,OpalCoef
     real, allocatable :: SigTotalI(:)
     integer :: iEnergy,iEnergySec
@@ -579,13 +582,88 @@ contains
          EnergyArray(1),EnergyArray(DataLen)
     
     do iEnergy = 1,nEnergy
-       SigTotalI(iEnergy) = linear(CrossSecArray(:),1,DataLen, &
-            EnergyGrid_I(iEnergy),EnergyArray(:))
+       if (EnergyGrid_I(iEnergy) < EnergyArray(1) &
+            .or. EnergyGrid_I(iEnergy) > EnergyArray(DataLen)) then
+          ! if outside of data range set crossection to 0
+          SigTotalI(iEnergy)=0.0
+       else
+          ! when inside of data range interpolate
+          SigTotalI(iEnergy) = linear(CrossSecArray(:),1,DataLen, &
+               EnergyGrid_I(iEnergy),EnergyArray(:))
+       end if
     end do
     
     deallocate(EnergyArray)
     deallocate(CrossSecArray)
 
   end subroutine read_total_ionization_crossection
+  !============================================================================
+  ! plot differential ionization crossection
+  subroutine plot_diffion_cross
+    use ModSeGrid,     ONLY: nEnergy, EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+
+    real    :: time=0
+    integer :: nStep =0
+
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=4, E1_=1, E2_=2
     
+    integer :: iNeutral, nNeutral=4
+    
+    character(len=100),parameter :: &
+         NamePlotVar='Ep[eV] Es[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
+
+    character(len=100) :: NamePlot = 'DiffIonCross.out'
+    
+    character(len=*),parameter :: NameHeader='SE output iono'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iEnergyPrimary,iEnergySecondary
+
+    logical :: IsFirstCall=.true.
+    
+    !--------------------------------------------------------------------------
+    
+    allocate(Coord_DII(nDim,nEnergy,nEnergy),PlotState_IIV(nEnergy,nEnergy,nVar))
+    
+    !    do iLine=1,nLine
+    PlotState_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    !Set values
+    do iEnergySecondary=1,nEnergy
+       do iEnergyPrimary=1,nEnergy
+          Coord_DII(E1_,iEnergyPrimary,iEnergySecondary) = EnergyGrid_I(iEnergyPrimary)             
+          Coord_DII(E2_,iEnergyPrimary,iEnergySecondary) = EnergyGrid_I(iEnergySecondary)             
+          ! set plot state
+          do iNeutral=1,nNeutral
+             PlotState_IIV(iEnergyPrimary,iEnergySecondary,iNeutral) = &
+                  SIGI(iNeutral,iEnergyPrimary,iEnergySecondary)
+          enddo
+       enddo
+    enddo
+    
+    !Plot crossection
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+    endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_diffion_cross
+    
+
 end Module ModSeCross
