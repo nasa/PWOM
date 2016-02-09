@@ -453,22 +453,39 @@ contains
     SIGA(:,:,:)=0.0
     
     do iNeutral = 1, nNeutralSpecies
-    
+
+       write(*,*) 'getting H2 cross'
+       call get_crossection_diffion('H2', SIGI(H2_,:,:))
+       write(*,*) 'getting He cross'
+       call get_crossection_diffion('He', SIGI(He_,:,:))
+       write(*,*) 'getting H cross'
+       call get_crossection_diffion('H',  SIGI(H_,:,:))
+       write(*,*) 'getting CH4 cross'
+       call get_crossection_diffion('CH4',SIGI(CH4_,:,:))
+       
     end do
 
   end subroutine cross_jupiter
 
   !=============================================================================
-  subroutine get_crossection_diffion(NameNeutralSpecies,
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I, &
-    character(len=100), intent(in) :: NameNeutralSpecies
-    real :: Ethreshold,Ebar
+  subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    character(len=*), intent(in) :: NameNeutralSpecies
+    real :: SigDiffI(:,:)
+    real :: Ethreshold,Ebar,OpalCoef
     real, allocatable :: SigTotalI(:)
     integer :: iEnergy,iEnergySec
     !use the paper by Opal et al 1971 to set the differential ionization crossection
     
-    !allocate array to hold the total ionization crossection
-    if(.not.allocated(SigTotalI))allocate(SigTotalI(nEnergy))
+    !allocate arrays to hold the total and differential ionization crossection
+    if(.not.allocated(SigTotalI)) allocate(SigTotalI(nEnergy))
+!    if(.not.allocated(SigDiffI)) allocate(SigDiffI(nEnergy,nEnergy))
+
+    !for testing
+    SigTotalI(:) = 0.0
+
+    write(*,*) 'Getting ',NameNeutralSpecies
+    
     select case(NameNeutralSpecies)
     case('O')
        !placeholder set to 0 
@@ -476,33 +493,33 @@ contains
        Ebar=1
        Ethreshold=0.0
     case('N2')
-       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 15.6
        Ebar = 13.0
     case('O2')
-       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 12.2
        Ebar = 17.4
     case('H2')
-       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 15.4
-       Ebar = 8.2
+       Ebar = 8.3
     case('H')
        !placeholder set to 0 
        SigTotalI(:)=0.0
        Ebar=1
        Ethreshold=0.0
     case('CH4')
-       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 13.0
        Ebar = 7.3
     case('He')
-       call read_total_ionization_crossection(NameNeutralSepcies,SigTotalI)
+       call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 24.6
        Ebar = 15.8
-    else
-       write(*,*) 'WARNING: Species',NameNeutralSpecies&
-            ,' not yet supported using 0 for crossection' 
+    case default
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
        SigTotalI(:)=0.0
        Ebar=1
        Ethreshold=0.0
@@ -514,12 +531,61 @@ contains
        OpalCoef = SigTotalI(iEnergy)&
             /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
        do iEnergySec=1,nEnergy
-          SigmaI(iEnergy,iEnergySec) = &
+          SigDiffI(iEnergy,iEnergySec) = &
                OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
        end do
     end do
     
     !deallocate to save memory
     deallocate(SigTotalI)
+    
   end subroutine get_crossection_diffion
+
+  !=============================================================================
+  subroutine read_total_ionization_crossection(NameSpecies,SigTotalI)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModIoUnit, ONLY : UnitTmp_
+    use ModInterpolate, ONLY: linear
+    
+    character(len=*), intent(in) :: NameSpecies
+    real :: SigTotalI(:)  ! should be allocated and passed in
+    character(len=100) :: DatafileName
+    integer :: DataLen
+    real, allocatable :: EnergyArray(:),CrossSecArray(:)
+    
+    write(*,*) 'getting total ionization crossection for species ', &
+         NameSpecies
+
+    write(DatafileName,"(3a)") 'PW/IonCross',NameSpecies,'.dat'
+
+    write(*,*) 'from file ',DatafileName
+    
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+    
+    read(UnitTmp_,*) DataLen
+
+    if(.not.allocated(EnergyArray)) allocate(EnergyArray(DataLen))
+    if(.not.allocated(CrossSecArray)) allocate(CrossSecArray(DataLen))
+    
+    ! Input energy array in eV and total crossections in cm2
+    read(UnitTmp_,*) EnergyArray
+    read(UnitTmp_,*) CrossSecArray
+    
+    close(UnitTmp_)
+
+    SigTotalI(:) = 0.0
+
+    write(*,*) nEnergy,DataLen,EnergyGrid_I(1),EnergyGrid_I(nEnergy), &
+         EnergyArray(1),EnergyArray(DataLen)
+    
+    do iEnergy = 1,nEnergy
+       SigTotalI(iEnergy) = linear(CrossSecArray(:),1,DataLen, &
+            EnergyGrid_I(iEnergy),EnergyArray(:))
+    end do
+    
+    deallocate(EnergyArray)
+    deallocate(CrossSecArray)
+
+  end subroutine read_total_ionization_crossection
+    
 end Module ModSeCross
