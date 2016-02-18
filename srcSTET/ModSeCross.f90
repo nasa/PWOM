@@ -537,7 +537,7 @@ contains
           OpalCoef = SigTotalI(iEnergy)&
                /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
           do iEnergySec=1,nEnergy
-             SigDiffI(iEnergy,iEnergySec) = &
+             SigDiffI(iEnergySec,iEnergy) = &
                   OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
           end do
        end do
@@ -596,10 +596,10 @@ contains
                .or. EnergyGrid_I(iEnergy2) < Energy2Array(1,1)  &
                .or. EnergyGrid_I(iEnergy2) > Energy2Array(1,nE2)) then
              ! if outside of data range set crossection to 0
-             SigDiffI(iEnergy1,iEnergy2)=0.0
+             SigDiffI(iEnergy2,iEnergy1)=0.0
           else
              ! when inside of data range interpolate
-             SigDiffI(iEnergy1,iEnergy2) = &
+             SigDiffI(iEnergy2,iEnergy1) = &
                   bilinear(CrossSecArray(:,:),1,nE1,1,nE2, &
                   [EnergyGrid_I(iEnergy1),EnergyGrid_I(iEnergy2)], &
                   Energy1Array(:,1),Energy2Array(1,:))
@@ -679,7 +679,7 @@ contains
     integer :: iNeutral, nNeutral=4
     
     character(len=100),parameter :: &
-         NamePlotVar='Ep[eV] Es[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
+         NamePlotVar='Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
 
     character(len=100) :: NamePlot = 'DiffIonCross.out'
     
@@ -698,14 +698,14 @@ contains
     Coord_DII     = 0.0
     
     !Set values
-    do iEnergySecondary=1,nEnergy
-       do iEnergyPrimary=1,nEnergy
-          Coord_DII(E1_,iEnergyPrimary,iEnergySecondary) = EnergyGrid_I(iEnergyPrimary)             
-          Coord_DII(E2_,iEnergyPrimary,iEnergySecondary) = EnergyGrid_I(iEnergySecondary)             
+    do iEnergyPrimary=1,nEnergy
+       do iEnergySecondary=1,nEnergy
+          Coord_DII(E1_,iEnergySecondary,iEnergyPrimary) = EnergyGrid_I(iEnergySecondary)             
+          Coord_DII(E2_,iEnergySecondary,iEnergyPrimary) = EnergyGrid_I(iEnergyPrimary)             
           ! set plot state
           do iNeutral=1,nNeutral
-             PlotState_IIV(iEnergyPrimary,iEnergySecondary,iNeutral) = &
-                  SIGI(iNeutral,iEnergyPrimary,iEnergySecondary)
+             PlotState_IIV(iEnergySecondary,iEnergyPrimary,iNeutral) = &
+                  SIGI(iNeutral,iEnergySecondary,iEnergyPrimary)
           enddo
        enddo
     enddo
