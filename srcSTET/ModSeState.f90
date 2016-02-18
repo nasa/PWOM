@@ -1741,6 +1741,11 @@ contains
        IF (2*EnergyGrid_I(iEnergyIn)+Eplus &
             < EnergyGrid_I(nEnergy)+.5*DeltaE_I(nEnergy)) THEN
           LL=BINNUM(2*EnergyGrid_I(iEnergyIn)+Eplus)
+          if (n==3) then
+             if (maxval(SIGI(3,iEnergyIn,LL:nEnergy)) > 0) &
+                  write(*,*) iEnergyIn,LL,' max: ', &
+                  maxval(SIGI(3,iEnergyIn,LL:nEnergy)),maxloc(SIGI(3,iEnergyIn,LL:nEnergy))
+          endif
           DO jj=LL,nEnergy
              NetFlux=OmniDirFluxUp_I(jj)-OmniDirFluxDn_I(jj)
              SecProd(jj)=SecProd(jj)+NeutralDens_I(n)*SIGI(n,iEnergyIn,jj)*NetFlux

@@ -452,6 +452,8 @@ contains
     SIGS(:,:)=0.0
     SIGI(:,:,:)=0.0
     SIGA(:,:,:)=0.0
+
+    write(*,*) 'Neutrals: ',nNeutralSpecies
     
     do iNeutral = 1, nNeutralSpecies
 
@@ -476,6 +478,7 @@ contains
     character(len=*), intent(in) :: NameNeutralSpecies
     real, intent(out) :: SigDiffI(nEnergy,nEnergy)
     real :: Ethreshold,Ebar,OpalCoef
+    real :: S_kr,t_kr,coef_kr,coef2_kr,w_kr,dfdw_kr,Term1_kr,Term2_kr,Term3_kr
     real, allocatable :: SigTotalI(:)
     integer :: iEnergy,iEnergySec
     !use the paper by Opal et al 1971 to set the differential ionization crossection
@@ -491,6 +494,8 @@ contains
     
     select case(NameNeutralSpecies)
     case('O')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
        !placeholder set to 0 
        SigTotalI(:)=0.0
        Ebar=1
@@ -508,10 +513,7 @@ contains
        Ethreshold = 15.4
        Ebar = 8.3
     case('H')
-       !placeholder set to 0 
-       SigTotalI(:)=0.0
-       Ebar=1
-       Ethreshold=0.0
+       call read_diff_ionization_crossection(NameNeutralSpecies,SigDiffI)
     case('CH4')
        call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 13.0
@@ -528,22 +530,84 @@ contains
        Ethreshold=0.0
     end select
     
-    !loop over primary and secondary energies to fill diff crossection
-    do iEnergy = 1,nEnergy
-       !set the Opal coef
-       OpalCoef = SigTotalI(iEnergy)&
-            /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
-       do iEnergySec=1,nEnergy
-          SigDiffI(iEnergy,iEnergySec) = &
-               OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
+    if (NameNeutralSpecies.NE.'H') then
+       !loop over primary and secondary energies to fill diff crossection
+       do iEnergy = 1,nEnergy
+          !set the Opal coef
+          OpalCoef = SigTotalI(iEnergy)&
+               /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
+          do iEnergySec=1,nEnergy
+             SigDiffI(iEnergy,iEnergySec) = &
+                  OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
+          end do
        end do
-    end do
+    end if
     
     !deallocate to save memory
     deallocate(SigTotalI)
     
   end subroutine get_crossection_diffion
 
+  !=============================================================================
+  subroutine read_diff_ionization_crossection(NameSpecies,SigDiffI)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModIoUnit, ONLY : UnitTmp_
+    use ModInterpolate, ONLY: bilinear
+    
+    character(len=*), intent(in) :: NameSpecies
+    real :: SigDiffI(nEnergy,nEnergy)
+    character(len=100) :: DatafileName
+    character(len=31) :: TmpStr
+    integer, parameter :: DataLen = 126, nE1 = 6, nE2 = 21
+    integer :: iEnergy1,iEnergy2
+    real :: DataArray(3,DataLen)
+    real :: Energy1Array(nE1,nE2),Energy2Array(nE1,nE2),CrossSecArray(nE1,nE2)
+    
+    write(*,*) 'getting total ionization crossection for species ', &
+         NameSpecies
+
+    write(DatafileName,"(3a)") 'PW/DiffIon',NameSpecies,'.dat'
+
+    write(*,*) 'from file ',DatafileName
+    
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+    
+    read(UnitTmp_,*) TmpStr
+
+    ! Input energy arrays in eV and differential crossections in cm2
+    read(UnitTmp_,*) DataArray
+    
+    close(UnitTmp_)
+
+    SigDiffI(:,:) = 0.0
+
+    do i=1,nE1
+       Energy1Array(i,:)  = DataArray(1,(i-1)*nE2+1:i*nE2)
+       Energy2Array(i,:)  = DataArray(2,(i-1)*nE2+1:i*nE2)
+       CrossSecArray(i,:) = DataArray(3,(i-1)*nE2+1:i*nE2)*1.e-17
+    enddo
+
+    write(*,*) Energy1Array(3,:)
+    
+    do iEnergy1 = 1,nEnergy
+       do iEnergy2 = 1,nEnergy
+          if (EnergyGrid_I(iEnergy1) < Energy1Array(1,1) &
+               .or. EnergyGrid_I(iEnergy1) > Energy1Array(nE1,1)  &
+               .or. EnergyGrid_I(iEnergy2) < Energy2Array(1,1)  &
+               .or. EnergyGrid_I(iEnergy2) > Energy2Array(1,nE2)) then
+             ! if outside of data range set crossection to 0
+             SigDiffI(iEnergy1,iEnergy2)=0.0
+          else
+             ! when inside of data range interpolate
+             SigDiffI(iEnergy1,iEnergy2) = &
+                  bilinear(CrossSecArray(:,:),1,nE1,1,nE2, &
+                  [EnergyGrid_I(iEnergy1),EnergyGrid_I(iEnergy2)], &
+                  Energy1Array(:,1),Energy2Array(1,:))
+          end if
+       end do
+    end do
+    
+  end subroutine read_diff_ionization_crossection
   !=============================================================================
   subroutine read_total_ionization_crossection(NameSpecies,SigTotalI)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
