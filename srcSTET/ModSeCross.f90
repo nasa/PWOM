@@ -349,6 +349,8 @@ contains
        !
     enddo            ! energy
     !
+
+    call plot_diffion_cross
     RETURN
   END SUBROUTINE CROSS
   !
@@ -514,7 +516,9 @@ contains
        Ebar = 8.3
     case('H')
        call read_diff_ionization_crossection(NameNeutralSpecies,SigDiffI)
-    case('CH4')
+ !      SigDiffI(:,:) = 0.0
+
+   case('CH4')
        call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 13.0
        Ebar = 7.3
@@ -533,12 +537,18 @@ contains
     if (NameNeutralSpecies.NE.'H') then
        !loop over primary and secondary energies to fill diff crossection
        do iEnergy = 1,nEnergy
-          !set the Opal coef
-          OpalCoef = SigTotalI(iEnergy)&
-               /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
+          if(EnergyGrid_I(iEnergy)>=Ethreshold) then
+             !set the Opal coef
+             OpalCoef = SigTotalI(iEnergy)&
+                  /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
+          else
+             !when energy of primary is below threshold make sure coef is zero
+             OpalCoef=0.0
+          end if
           do iEnergySec=1,nEnergy
              SigDiffI(iEnergySec,iEnergy) = &
                   OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
+             !SigDiffI(iEnergySec,iEnergy) = 0.0
           end do
        end do
     end if
@@ -549,6 +559,7 @@ contains
   end subroutine get_crossection_diffion
 
   !=============================================================================
+  ! crossection for H taken from Shyn 1992
   subroutine read_diff_ionization_crossection(NameSpecies,SigDiffI)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
     use ModIoUnit, ONLY : UnitTmp_
@@ -584,7 +595,11 @@ contains
     do i=1,nE1
        Energy1Array(i,:)  = DataArray(1,(i-1)*nE2+1:i*nE2)
        Energy2Array(i,:)  = DataArray(2,(i-1)*nE2+1:i*nE2)
-       CrossSecArray(i,:) = DataArray(3,(i-1)*nE2+1:i*nE2)*1.e-17
+       if (i<nE1-1) then
+          CrossSecArray(i,:) = DataArray(3,(i-1)*nE2+1:i*nE2)*1.e-17
+       else
+          CrossSecArray(i,:) = DataArray(3,(i-1)*nE2+1:i*nE2)*1.e-18
+       endif
     enddo
 
     write(*,*) Energy1Array(3,:)
@@ -674,12 +689,16 @@ contains
     integer :: nStep =0
 
     !grid parameters
-    integer, parameter :: nDim =2, nVar=4, E1_=1, E2_=2
+!    integer, parameter :: nDim =2, nVar=4, E1_=1, E2_=2
+    integer, parameter :: nDim =2, nVar=3, E1_=1, E2_=2
     
-    integer :: iNeutral, nNeutral=4
+!    integer :: iNeutral, nNeutral=4
+    integer :: iNeutral, nNeutral=3
     
+!    character(len=100),parameter :: &
+!         NamePlotVar='Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
     character(len=100),parameter :: &
-         NamePlotVar='Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
+         NamePlotVar='Es[eV] Ep[eV]  sigmaO[/cc/eV] sigmaO2[/cc/eV] sigmaN2[/cc/eV] g r'
 
     character(len=100) :: NamePlot = 'DiffIonCross.out'
     
