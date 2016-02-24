@@ -971,6 +971,8 @@ contains
     nEnergy=100
 !    nEnergy=94
     EnergyMax=100.5
+!    nEnergy=2000
+!    EnergyMax=2000.5
     DeltaE = 1.0
 
     ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  

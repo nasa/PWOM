@@ -350,6 +350,7 @@ contains
     enddo            ! energy
     !
 
+    SIGA(:,:,:) = 0.0
     call plot_diffion_cross
     RETURN
   END SUBROUTINE CROSS
@@ -460,13 +461,13 @@ contains
     do iNeutral = 1, nNeutralSpecies
 
        write(*,*) 'getting H2 cross'
-       call get_crossection_diffion('H2', SIGI(H2_,:,:))
+       call get_crossection_diffion('H2', SIGI(H2_,:,:), SIGA(H2_,:,:))
        write(*,*) 'getting He cross'
-       call get_crossection_diffion('He', SIGI(He_,:,:))
+       call get_crossection_diffion('He', SIGI(He_,:,:), SIGA(He_,:,:))
        write(*,*) 'getting H cross'
-       call get_crossection_diffion('H',  SIGI(H_,:,:))
+       call get_crossection_diffion('H',  SIGI(H_,:,:), SIGA(H_,:,:))
        write(*,*) 'getting CH4 cross'
-       call get_crossection_diffion('CH4',SIGI(CH4_,:,:))
+       call get_crossection_diffion('CH4',SIGI(CH4_,:,:), SIGA(CH4_,:,:))
        
     end do
     
@@ -475,19 +476,22 @@ contains
   end subroutine cross_jupiter
 
   !=============================================================================
-  subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+  subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI,SigDiffA)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
+
     character(len=*), intent(in) :: NameNeutralSpecies
-    real, intent(out) :: SigDiffI(nEnergy,nEnergy)
+    real, intent(out) :: SigDiffI(nEnergy,nEnergy), SigDiffA(nEnergy,nEnergy)
+
     real :: Ethreshold,Ebar,OpalCoef
     real :: S_kr,t_kr,coef_kr,coef2_kr,w_kr,dfdw_kr,Term1_kr,Term2_kr,Term3_kr
     real, allocatable :: SigTotalI(:)
     integer :: iEnergy,iEnergySec
-    !use the paper by Opal et al 1971 to set the differential ionization crossection
+
+    real :: NewPrimaryELow,NewPrimaryEHigh,EnergySecondary,SIGG
+    integer ::iEnergyLow,iEnergyHigh,iNewEnergy
     
-    !allocate arrays to hold the total and differential ionization crossection
+    !allocate arrays to hold the total ionization crossection
     if(.not.allocated(SigTotalI)) allocate(SigTotalI(nEnergy))
-!    if(.not.allocated(SigDiffI)) allocate(SigDiffI(nEnergy,nEnergy))
 
     !for testing
     SigTotalI(:) = 0.0
@@ -534,9 +538,11 @@ contains
        Ethreshold=0.0
     end select
     
-    if (NameNeutralSpecies.NE.'H') then
-       !loop over primary and secondary energies to fill diff crossection
-       do iEnergy = 1,nEnergy
+    !loop over primary and secondary energies to fill diff crossection
+    do iEnergy = 1,nEnergy
+
+       if (NameNeutralSpecies.NE.'H') then
+          !use the paper by Opal et al 1971 to set the differential ionization crossection
           if(EnergyGrid_I(iEnergy)>=Ethreshold) then
              !set the Opal coef
              OpalCoef = SigTotalI(iEnergy)&
@@ -550,12 +556,58 @@ contains
                   OpalCoef / (1.0+(EnergyGrid_I(iEnergySec)/Ebar)**2.0)
              !SigDiffI(iEnergySec,iEnergy) = 0.0
           end do
-       end do
-    end if
+       endif
+
+       ! Put degradation cross sections into SIGA
+       ! JY is energy loop iEnergy
+       ! ETJ is EnergyGrid_I(iEnergy)
+       NewPrimaryELow = (EnergyGrid_I(iEnergy)-Ethreshold) / 2. ! Lowest primary energy after collision
+       NewPrimaryEHigh = EnergyGrid_I(iEnergy)-Ethreshold       ! Highest primary energy after collision
+       
+       IF (NewPrimaryELow .LE. 0.) cycle
+       
+       iEnergyLow=BINNUM(NewPrimaryELow)
+       iEnergyHigh=BINNUM(NewPrimaryEHigh)
+       
+       ! if NewPrimaryELow is below the EnergyMin then say that the primary loses all of its energy
+       ! for all New Primary Energies from NewPrimaryELow to EnergyMin,
+       ! which means Secondary Energies from NewPrimaryEHigh-EnergyMin to NewPrimaryEHigh-NewPrimaryELow,
+       ! or NewPrimaryELow (because NewPrimaryELow*2 = NewPrimaryEHigh)
+       
+       IF (iEnergyLow.EQ.0 .OR. NewPrimaryELow.LE.EnergyMin) THEN
+          !          E1Secondary=NewPrimaryEHigh-EnergyMin
+          !          IF (E1Secondary.LT.0.) E1Secondary=0.
+          !          E2Secondary=NewPrimaryELow
+          ! Not sure about the right way to convert this to a single secondary energy...
+          EnergySecondary=NewPrimaryELow
+          iEnergySec=BINNUM(EnergySecondary)
+          SigDiffA(iEnergy,iEnergy)=SigDiffA(iEnergy,iEnergy)+SigDiffI(iEnergySec,iEnergy)
+          iEnergyLow=1
+          NewPrimaryELow=NewPrimaryEHigh-EnergyMin
+       END IF
+       IF (iEnergyHigh.EQ.0 .OR. NewPrimaryEHigh.LE.EnergyMin) cycle
+       DO  iNewEnergy=iEnergyHigh,iEnergyLow,-1
+          ! Secondary energy = new total energy - new primary energy
+          EnergySecondary = NewPrimaryEHigh - EnergyGrid_I(iNewEnergy)
+          IF (iNewEnergy.EQ.iEnergyLow) EnergySecondary=NewPrimaryELow
+          IF (EnergySecondary.LE.1.E-10) cycle
+          iEnergySec = BINNUM(EnergySecondary)
+          SIGG=SigDiffI(iEnergySec,iEnergy)
+          IF (iNewEnergy.EQ.iEnergy) THEN
+             SigDiffA(1,iEnergy)=SigDiffA(1,iEnergy) &
+                  +SIGG*(Ethreshold+EnergySecondary)/(EnergyGrid_I(iEnergy)-EnergyGrid_I(iEnergy-1))
+          ELSE
+             ! Put secondary energy into energy SigDiffA(PrimaryEnergyLoss,OriginalPrimaryEnergy)?
+             SigDiffA(iEnergy-iNewEnergy,iEnergy)=SigDiffA(iEnergy-iNewEnergy,iEnergy)+SIGG
+          END IF
+       enddo
+       !
+       !
+    end do
     
     !deallocate to save memory
     deallocate(SigTotalI)
-    
+
   end subroutine get_crossection_diffion
 
   !=============================================================================
@@ -682,24 +734,22 @@ contains
     use ModSeGrid,     ONLY: nEnergy, EnergyGrid_I
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
-
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
+    
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
 
     real    :: time=0
     integer :: nStep =0
-
+    
     !grid parameters
-!    integer, parameter :: nDim =2, nVar=4, E1_=1, E2_=2
-    integer, parameter :: nDim =2, nVar=3, E1_=1, E2_=2
+    integer, parameter :: nDim =2, E1_=1, E2_=2
     
-!    integer :: iNeutral, nNeutral=4
-    integer :: iNeutral, nNeutral=3
-    
-!    character(len=100),parameter :: &
-!         NamePlotVar='Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
-    character(len=100),parameter :: &
-         NamePlotVar='Es[eV] Ep[eV]  sigmaO[/cc/eV] sigmaO2[/cc/eV] sigmaN2[/cc/eV] g r'
+    ! planet-specific values
+    integer :: nVar, nNeutral
+    character(len=100) :: NamePlotVar
 
+    integer :: iNeutral
+    
     character(len=100) :: NamePlot = 'DiffIonCross.out'
     
     character(len=*),parameter :: NameHeader='SE output iono'
@@ -709,6 +759,20 @@ contains
     logical :: IsFirstCall=.true.
     
     !--------------------------------------------------------------------------
+
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       nVar=3
+       nNeutral=3
+       NamePlotVar= &
+            'Es[eV] Ep[eV]  sigmaO[/cc/eV] sigmaO2[/cc/eV] sigmaN2[/cc/eV] g r'
+
+    case('JUPITER')
+       nVar=4
+       nNeutral=4
+       NamePlotVar= 'Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
+
+    end select
     
     allocate(Coord_DII(nDim,nEnergy,nEnergy),PlotState_IIV(nEnergy,nEnergy,nVar))
     
