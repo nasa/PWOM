@@ -38,7 +38,7 @@ Module ModSeState
   ! Arrays for electron production in ionosphere. These are only used to store 
   ! these values for output. They are already added into Qstar for the purposes 
   ! of calculation.
-  real,allocatable :: Qestar_ICI(:,:,:) ! secondary production in ionosphere 
+  real,allocatable :: Qestar_IICI(:,:,:,:) ! secondary production in ionosphere 
   real,allocatable :: Qpstar_ICI(:,:,:) ! Beam-induced production 
                                         ! (non-degredating beam)
 
@@ -48,6 +48,7 @@ Module ModSeState
   real,public,allocatable :: HeatingRate_IC(:,:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_IC(:,:) ! number density of SE [/cm3]
   real,public,allocatable :: NumberFlux_IC(:,:) ! number flux of SE [/cm2/s]
+  real,public,allocatable :: SecondaryIonRate_IIC(:,:,:) 
   
   ! Total electron production rate (matches ionization rate) [/cm3/s]
   real,public,allocatable :: TotalIonizationRate_IC(:,:) 
@@ -461,7 +462,7 @@ contains
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
-                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+                  Qestar_IICI(iLine,:,iIono,j),Qpstar_ICI(iLine,iIono,j))
              Qstar_ICI(iLine,iIono,j)=Qstar
                        
              do k=1,nThetaAlt_II(iLine,i)-1
@@ -596,7 +597,7 @@ contains
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
-                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+                  Qestar_IICI(iLine,:,iIono,j),Qpstar_ICI(iLine,iIono,j))
              Qstar_ICI(iLine,iIono,j)=Qstar
              
              DO k=1,nThetaAlt_II(iLine,i)-1
@@ -1245,7 +1246,7 @@ contains
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
-                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+                  Qestar_IICI(iLine,:,iIono,j),Qpstar_ICI(iLine,iIono,j))
              Qstar_ICI(iLine,iIono,j)=Qstar
              
              do k=1,nThetaAlt_IIC(iLine,j,i)-1
@@ -1408,7 +1409,7 @@ contains
                   ePhotoProdSpec_IC(j,iIonoHalf), &
                   NeutralDens_IC(:,iIonoHalf),SIGS,SIGI,SIGA,Qstar, &
                   specup(iLine,:,i),specdn(iLine,:,i),&
-                  Qestar_ICI(iLine,iIono,j),Qpstar_ICI(iLine,iIono,j))
+                  Qestar_IICI(iLine,:,iIono,j),Qpstar_ICI(iLine,iIono,j))
              Qstar_ICI(iLine,iIono,j)=Qstar
 
              DO k=1,nThetaAlt_IIC(iLine,j,i)-1
@@ -1714,11 +1715,11 @@ contains
     
     real   , intent(in) :: OmniDirFluxUp_I(nEnergy),OmniDirFluxDn_I(nEnergy)
     !outgoing electron production rate from secondary production
-    real   , intent(out):: Qe
+    real   , intent(out):: Qe(nNeutral)
     !incomming electron production rate from precip
     real   , intent(in) :: Qp
 
-    real   :: NetFlux, SecProd(nEnergy)
+    real   :: NetFlux, SecProd(nNeutral,nEnergy)
     REAL   :: elassum
     
     ! Minimum ionization threshold
@@ -1728,8 +1729,11 @@ contains
         
     ! this part gives the sum elastic scattering cross sections
     elassum=0.
-    Qe=0.
-    SecProd(:)=0.
+    Qe(:)=0.
+    SecProd(:,:)=0.
+
+    ! start with photoelectron and incoming e- production rate
+    Qstar=PE/(4*cPi*DeltaE_I(iEnergyIn))+Qp
 
     do n=1,nNeutral
        elassum=elassum+NeutralDens_I(n)*SIGS(n,iEnergyIn)
@@ -1744,12 +1748,16 @@ contains
 
           DO jj=LL,nEnergy
              NetFlux=OmniDirFluxUp_I(jj)-OmniDirFluxDn_I(jj)
-             SecProd(jj)=SecProd(jj)+NeutralDens_I(n)*SIGI(n,iEnergyIn,jj)*NetFlux
+             SecProd(n,jj)=SecProd(n,jj)+ &
+                  NeutralDens_I(n)*SIGI(n,iEnergyIn,jj)*NetFlux
           enddo
        END IF
+       ! energy-integrated secondary production per species into Qe
+       CALL midpnt_int(Qe(n),SecProd(n,:),DeltaE_I,1,nEnergy,nEnergy,2)
+       ! add in species secondary production to total e- production
+       Qstar = Qstar+Qe(n)
     enddo
-    CALL midpnt_int(Qe,SecProd,DeltaE_I,1,nEnergy,nEnergy,2)
-    Qstar=PE/(4*cPi*DeltaE_I(iEnergyIn))+Qe+Qp
+    
     RETURN
   end SUBROUTINE get_sigma0_and_eprod
 
@@ -2274,7 +2282,7 @@ contains
   !============================================================================
   ! A subroutine to get integrated output quantities including number density,
   ! number flux, and volume heating rate
-  subroutine calc_integrated_output(iLine,eThermalDensity_C)
+  subroutine calc_integrated_output(iLine,nNeutral,eThermalDensity_C)
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint,&
          KineticEnergy_IIC, DoIncludePotential,nThetaAlt_II,nThetaAlt_IIC, &
          mu_III,mu_IIIC, EnergyGrid_I, DeltaE_I,MaxAlt_IC
@@ -2282,7 +2290,7 @@ contains
     use ModNumConst,    ONLY: cPi
     implicit none
     
-    integer, intent(in) :: iLine
+    integer, intent(in) :: iLine,nNeutral
     real   , intent(in) :: eThermalDensity_C(nPoint)
     real,allocatable :: spec(:)   !integrand of heating rate
     real,allocatable :: NumDensIntegrand_I(:) !integrand of number density
@@ -2295,7 +2303,7 @@ contains
     real, parameter  :: Acoef = 2.6e-12 !ev^2cm^2
 
     !loop variables
-    integer :: iPoint, iEnergy, iAngle, iPlas, iIono
+    integer :: iPoint, iEnergy, iAngle, iPlas, iIono, iNeutral
     !---------------------------------------------------------------------------
     !allocate temporary arrays
     if (.not.allocated(spec)) allocate(spec(nEnergy))
@@ -2361,6 +2369,14 @@ contains
           else
              iIono = iPoint-nIono-nPlas
           endif
+
+          DO iNeutral=1,nNeutral
+             CALL midpnt_int(SecondaryIonRate_IIC(iLine,iNeutral,iPoint),&
+                  Qestar_IICI(iLine,iNeutral,iIono,:),delKE_I,1,&
+                  nEnergy,nEnergy,2)
+             SecondaryIonRate_IIC(iLine,iNeutral,iPoint) = &
+                  4.0*cPi*SecondaryIonRate_IIC(iLine,iNeutral,iPoint)
+          END DO
           
           CALL midpnt_int(TotalIonizationRate_IC(iLine,iPoint),&
                Qstar_ICI(iLine,iIono,:),delKE_I,1,nEnergy,nEnergy,2)
@@ -2510,7 +2526,7 @@ contains
   !============================================================================
   subroutine allocate_state_arrays
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine
-    
+    use ModSeBackground, only: nNeutralSpecies
     
     if(.not.allocated(phiup)) allocate(phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1))
     if(.not.allocated(phidn)) allocate(phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1))
@@ -2531,7 +2547,8 @@ contains
 
     if(.not.allocated(SRC))    allocate(SRC(nPoint))
 
-    if(.not.allocated(Qestar_ICI))allocate(Qestar_ICI(nLine,2*nIono,nEnergy))
+    if(.not.allocated(Qestar_IICI)) &
+         allocate(Qestar_IICI(nLine,nNeutralSpecies,2*nIono,nEnergy))
     if(.not.allocated(Qpstar_ICI))allocate(Qpstar_ICI(nLine,2*nIono,nEnergy))
     if(.not.allocated(Qstar_ICI)) allocate(Qstar_ICI (nLine,2*nIono,nEnergy))
     ! Initiallize Qpstar to 0 as we do not include this will get updated 
@@ -2542,6 +2559,8 @@ contains
     if(.not.allocated(HeatingRate_IC)) allocate(HeatingRate_IC(nLine,nPoint))
     if(.not.allocated(NumberDens_IC))  allocate(NumberDens_IC(nLine,nPoint))
     if(.not.allocated(NumberFlux_IC))  allocate(NumberFlux_IC(nLine,nPoint))
+    if(.not.allocated(SecondaryIonRate_IIC))&
+         allocate(SecondaryIonRate_IIC(nLine,nNeutralSpecies,nPoint))
     if(.not.allocated(TotalIonizationRate_IC))&
          allocate(TotalIonizationRate_IC(nLine,nPoint))
   end subroutine allocate_state_arrays
