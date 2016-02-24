@@ -350,8 +350,7 @@ contains
     enddo            ! energy
     !
 
-    SIGA(:,:,:) = 0.0
-    call plot_diffion_cross
+!    call plot_diffion_cross
     RETURN
   END SUBROUTINE CROSS
   !
