@@ -630,8 +630,6 @@ contains
 
     write(DatafileName,"(3a)") 'PW/DiffIon',NameSpecies,'.dat'
 
-    write(*,*) 'from file ',DatafileName
-    
     open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
     
     read(UnitTmp_,*) TmpStr
@@ -653,8 +651,6 @@ contains
        endif
     enddo
 
-    write(*,*) Energy1Array(3,:)
-    
     do iEnergy1 = 1,nEnergy
        do iEnergy2 = 1,nEnergy
           if (EnergyGrid_I(iEnergy1) < Energy1Array(1,1) &
@@ -691,8 +687,6 @@ contains
 
     write(DatafileName,"(3a)") 'PW/IonCross',NameSpecies,'.dat'
 
-    write(*,*) 'from file ',DatafileName
-    
     open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
     
     read(UnitTmp_,*) DataLen
@@ -708,9 +702,6 @@ contains
 
     SigTotalI(:) = 0.0
 
-    write(*,*) nEnergy,DataLen,EnergyGrid_I(1),EnergyGrid_I(nEnergy), &
-         EnergyArray(1),EnergyArray(DataLen)
-    
     do iEnergy = 1,nEnergy
        if (EnergyGrid_I(iEnergy) < EnergyArray(1) &
             .or. EnergyGrid_I(iEnergy) > EnergyArray(DataLen)) then
