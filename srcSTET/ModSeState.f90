@@ -1784,8 +1784,9 @@ contains
        end do
     end do
     IF (iEnergyIn.LT.nEnergy) THEN
-       ! what I think this is doing: For each energy step jj above the current energy iEnergyIn,
-       ! calculate and sum up the flux that has cascaded down into this energy bin
+       ! what this is doing: For each energy step jj above the current energy 
+       ! iEnergyIn, calculate and sum up the flux that has cascaded down into
+       ! this energy bin
        do jj=iEnergyIn+1,nEnergy
           LL=jj-iEnergyIn
           ! IF (m.EQ.1) flux=AngIonJ(i,j,k,i,jj,iphiup(0,i1,jj))
