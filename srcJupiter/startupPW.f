@@ -190,6 +190,10 @@ C                                                                      C
       if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
       if (.not.allocated(PhotoIonRate_IC)) 
      &     allocate(PhotoIonRate_IC(nIon-1,nDim))
+      if (.not.allocated(SecIonRate_IC)) 
+     &     allocate(SecIonRate_IC(nIon-1,nDim))
+      if (.not.allocated(TotalIonRate_IC)) 
+     &     allocate(TotalIonRate_IC(nIon-1,nDim))
       
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
      &     .and.DoCoupleSTET) then 
@@ -197,7 +201,10 @@ C                                                                      C
      &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
      &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
-     &        PhotoIonRatePW_IC=PhotoIonRate_IC)
+     &        PhotoIonRatePW_IC=PhotoIonRate_IC,
+     &        SecIonRatePW_IC=SecIonRate_IC)
+
+         TotalIonRate_IC(:,:) = PhotoIonRate_IC(:,:) + SecIonRate_IC(:,:)
          ! Divide the Ionization rate from STET by oxygen density to get
          ! production in units of ions/cc/s rather than ions/s
          !IonRateO_C(1:nDim)=IonRateO_C(1:nDim)/XO(1:nDim)
@@ -205,7 +212,8 @@ C                                                                      C
 !      write(*,*) 'PhotoIonRate_IC'
 !      write(*,*) PhotoIonRate_IC(1:3,1)
 !      write(*,*) PhotoIonRate_IC(1:3,2)
-!      write(*,*) PhotoIonRate_IC(1:3,3)
+      write(*,*) PhotoIonRate_IC(1:3,3),SecIonRate_IC(1:3,3)
+      write(*,*) TotalIonRate_IC(1:3,3)
 !      stop
       if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
          SeDens_C(:)=0.0

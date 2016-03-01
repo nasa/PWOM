@@ -23,12 +23,12 @@ C**********************************************************************
 
 C KGS Put in source
 !      write(*,*) 'test5a'
-      Source_CV(I,RhoH2_)=(PhotoIonRate_IC(Ion1_,I) + 
+      Source_CV(I,RhoH2_)=(TotalIonRate_IC(Ion1_,I) + 
      &        FFH2pc1(I)*StateIn_GV(I,RhoH2_)/Mass_I(Ion3_) +
      &        FFH2pc9(I)*StateIn_GV(I,RhoH_)/Mass_I(Ion2_))*Mass_I(Ion3_)
 
 !      write(*,*) 'test5b'
-      Source_CV(I,RhoH_)=( PhotoIonRate_IC(Ion2_,I) +! s + 
+      Source_CV(I,RhoH_)=( TotalIonRate_IC(Ion2_,I) +! s + 
      &     FFHpc2(I)*StateIn_GV(I,RhoH_)/Mass_I(Ion2_) + 
      &     FFHpc3(I)*StateIn_GV(I,RhoH_)/Mass_I(Ion2_) +
      &     FFHpc8(I)*StateIn_GV(I,RhoH_)/Mass_I(Ion2_) +

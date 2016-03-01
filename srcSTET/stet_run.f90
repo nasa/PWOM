@@ -127,7 +127,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
 
   ! Find heating rate, Se number density and flux
   write(*,*) 'Getting Integrals for output'
-  call calc_integrated_output(iLine,eThermalDensity_IC(iLine,:))
+  call calc_integrated_output(iLine,nNeutralSpecies,eThermalDensity_IC(iLine,:))
   
   !\
   ! plot model output

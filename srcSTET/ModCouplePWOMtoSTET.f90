@@ -294,10 +294,10 @@ contains
                 SecIonRatePW_IC(:,iAlt) = 0.0
              else
                 SecIonRatePW_IC(H2plusPW_,iAlt) = &
-                     linear(SecondaryIonRate1_IIC(iLine,H2plus_,1:nIono),1,nIono,&
+                     linear(SecondaryIonRate_IIC(iLine,H2plus_,1:nIono),1,nIono,&
                      Coord,FieldLineGrid_IC(iLine,1:nIono))
                 SecIonRatePW_IC(HplusPW_,iAlt) = &
-                     linear(SecondaryIonRate1_IIC(iLine,Hplus_, 1:nIono),1,nIono, &
+                     linear(SecondaryIonRate_IIC(iLine,Hplus_, 1:nIono),1,nIono, &
                      Coord,FieldLineGrid_IC(iLine,1:nIono))
                 SecIonRatePW_IC(H3plusPW_,iAlt) = 0.0
              end if

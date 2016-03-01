@@ -37,7 +37,8 @@ Module ModCommonPlanet
        Neutral3_= 7, & !Saturn:H2O
        Neutral4_= 8    !Saturn:CH4
   
-  real, allocatable :: PhotoIonRate_IC(:,:)
+  real, allocatable :: PhotoIonRate_IC(:,:),SecIonRate_IC(:,:)
+  real, allocatable :: TotalIonRate_IC(:,:)
   ! named state variables
   integer, parameter :: RhoH3_=1, uH3_=2,  pH3_=3,  Th3_=4, &
        RhoH_=5, uH_=6,  pH_=7,  Th_=8, &
