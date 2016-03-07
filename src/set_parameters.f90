@@ -83,6 +83,7 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DtPlotElectrodynamics',DtPlotElectrodynamics)
      case('#SCHEME')
         call read_var('TypeSolver',TypeSolver)
+        call read_var('TypeFlux',TypeFlux)
         call read_var('DtVertical',DtVertical)
         call read_var('IsFullyImplicit'   ,IsFullyImplicit)
         if(IsFullyImplicit)then
@@ -94,8 +95,6 @@ subroutine PW_set_parameters(NameAction)
         end if
      case('#VARIABLEDT')
         call read_var('IsVariableDt',IsVariableDt)
-     case('#DIFFUSION')
-        call read_var('TypeDiffusion',TypeDiffusion)
      case('#LIMITER')
         call read_var('LimiterBeta',BetaIn)
         Beta = BetaIn
