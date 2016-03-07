@@ -35,7 +35,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
 
   ! Set the timestep and convergence criteria
   delt=1.0e5
-  epsilon = 0.1
+  epsilon = 0.05
 
   ! Define the initial state
   iphiup(iLine,:,:,:)=0.0
