@@ -227,7 +227,7 @@ contains
     use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX
     use ModSeCross,     only: cross
     use EUA_ModMsis90,  only: GTD6,TSELEC
-    use ModNumConst,    only: cDegToRad
+    use ModNumConst,    only: cDegToRad,cRadToDeg
 
     integer, intent(in) :: iLine
     real   , intent(in) :: F107, F107A,AP(7)
@@ -238,7 +238,9 @@ contains
     ! production variables
     real    :: SZA1,SZA2
     real,allocatable :: ColumnDens_IC(:,:)
-   
+
+    real, parameter :: cCmToKm=1.0e-5
+
     !MSIS variables
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
     real :: SW(25),DN(8),TN(2)
@@ -280,9 +282,10 @@ contains
          NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
     !  Calculate the photoelectron production spectrum
-    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
+!    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
+    IF (DoCalcPeIono1) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
-            nIono,0)
+            nIono,0,SZA1*cRadToDeg,FieldLineGrid_IC(iLine,1:nIono)*cCmToKm)
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
@@ -312,17 +315,18 @@ contains
     
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
+    !write(*,*) 'SZA2',SZA2    
     SZA2=SZA2*cDegToRad
 
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens2_IIC(iLine,:,:),NeutralTemp2_IC(iLine,:),nIono)    
 
-    write(*,*) 'SZA1',SZA2    
+
     !  Calculate the photoelectron production spectrum
-    IF ((SZA2.LT.2.).AND.(DoCalcPeIono2)) THEN
+    IF (DoCalcPeIono2) THEN
        CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
-            nIono,nPoint)
+            nIono,nPoint,SZA2*cRadToDeg,FieldLineGrid_IC(iLine,1:nIono)*cCmToKm)
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
