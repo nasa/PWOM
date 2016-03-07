@@ -170,7 +170,8 @@ rundir:
 		mkdir restartIN restartOUT plots; \
 		cp ${PWDIR}/data_local/input/${PLANET}/restart_iline* restartIN/ ;\
 		cp ${PWDIR}/data_local/input/${PLANET}/North.dat .;\
-		cp -r ${PWDIR}/srcSTET/IRI_DATA .
+		cp -r ${PWDIR}/srcSTET/IRI_DATA .;\
+		cp ${PWDIR}/srcSTET/nightside_fluxes/*dat .
 	@(if [ "$(STANDALONE)" != "NO" ]; then \
 		cd ${RUNDIR}; \
 			ln -s ${BINDIR}/PWOM.exe .; \
