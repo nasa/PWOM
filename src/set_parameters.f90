@@ -13,7 +13,9 @@ subroutine PW_set_parameters(NameAction)
   use ModPwWaves, ONLY: UseWaveAcceleration 
   use ModPhotoElectron, ONLY: PrecipEnergyMin, PrecipEnergyMax, &
        PrecipEnergyMean, PrecipEnergyFlux,UseFixedPrecip, &
-       DoCoupleSTET, UseFeedbackFromSTET
+       PolarRainEMin, PolarRainEMax, &
+       PolarRainEMean, PolarRainEFlux,UsePolarRain, &
+       DoCoupleSTET, UseFeedbackFromSTET,IsVerboseSTET,DtGetSe
 
   implicit none
   
@@ -211,6 +213,9 @@ subroutine PW_set_parameters(NameAction)
      case('#STET')
         call read_var('DoCoupleSTET', DoCoupleSTET)
         call read_var('UseFeedbackFromSTET', UseFeedbackFromSTET)
+        call read_var('IsVerboseSTET', IsVerboseSTET)
+        call read_var('DtGetSe', DtGetSe)
+        
 
      case('#SETPRECIP')
         call read_var('UseFixedPrecip',  UseFixedPrecip)
@@ -218,9 +223,18 @@ subroutine PW_set_parameters(NameAction)
         call read_var('PrecipEnergyMax', PrecipEnergyMax)        
         call read_var('PrecipEnergyMean',PrecipEnergyMean)        
         call read_var('PrecipEnergyFlux',PrecipEnergyFlux)        
-        
+
 !        if(.not.DoCoupleSTET) &
 !             write(*,*) 'PW_WARNING: #SETPRECIP invoked but STET not coupled'
+
+
+     case('#POLARRAIN')
+        call read_var('UsePolarRain',  UsePolarRain)
+        call read_var('PolarRainEMin', PolarRainEMin)        
+        call read_var('PolarRainEMax', PolarRainEMax)        
+        call read_var('PolarRainEMean',PolarRainEMean)        
+        call read_var('PolarRainEFlux',PolarRainEFlux)        
+        
         
      endselect
   enddo

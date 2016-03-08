@@ -509,7 +509,7 @@ contains
           end do
        end DO
        !
-       write(*,*) 'test1'
+       
 
        DO  L=1,LMAX
           DO  I=1,NMAJ
@@ -530,7 +530,7 @@ contains
              END IF
           end do
        end do
-       write(*,*) 'test2'
+
 
 !
     ENDIF

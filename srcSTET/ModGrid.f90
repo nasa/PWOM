@@ -2,6 +2,8 @@ Module ModSeGrid
   implicit none
   
   private !except
+  ! should the code write in a verbose manner?
+  logical, public :: IsVerbose=.false.
 
   !field line grid
   real, public, allocatable    :: FieldLineGrid_IC(:,:) 
@@ -144,13 +146,13 @@ contains
          /(Lshell_I(iLine)**3*(1-SphiO**2)**3)*cTeslaToGauss
     BFieldIono_I(iLine) = Biono
     BFieldEq_I(iLine)   = Beq
-    write(*,*) 'calc bfield and s grid for iLine = ', iLine
+    if(IsVerbose) write(*,*) 'calc bfield and s grid for iLine = ', iLine
     call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
-    write(*,*) 'calc equatorial PA grid', iLine
+    if(IsVerbose) write(*,*) 'calc equatorial PA grid', iLine
     call calc_equatorial_pitchangle(iLine,Beq,Biono)
-    write(*,*) 'calc mu'
+    if(IsVerbose) write(*,*) 'calc mu'
     call calc_mu(iLine,Beq)
-    write(*,*) 'calc energy grid', iLine
+    if(IsVerbose) write(*,*) 'calc energy grid', iLine
     call calc_energy_grid
     
   end subroutine init_se_grid
@@ -919,7 +921,7 @@ contains
     ! Set the Lshell for each line based on the input latitude
     Lshell_I(iLine) = (cos(Coord_D(Lat_)*cDegToRad))**-2.0
         
-    write(*,*) 'calling init_se_grid'
+    if(IsVerbose) write(*,*) 'calling init_se_grid'
     call init_se_grid(iLine)
     
     ! when including a potential a new grid is needed
@@ -952,7 +954,7 @@ contains
     DeltaE = 1.0
 
     ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
-    write(*,*) 'allocating arrays'
+    if(IsVerbose) write(*,*) 'allocating arrays'
     call allocate_grid_arrays
 
     Lshell_I(1)=4.0
@@ -964,7 +966,7 @@ contains
 
     nAngle = sum(nTheta_II(1,:))
 
-    write(*,*) 'calling init_se_grid'
+    if(IsVerbose) write(*,*) 'calling init_se_grid'
     call init_se_grid(1)
     
   end subroutine create_se_test_grid

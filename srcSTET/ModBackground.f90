@@ -52,7 +52,6 @@ contains
 
     !  Find the geographic coordinates for our geomagnetic coordinates iono1
     CALL GEOMAG(1,gLon1_I(iLine),gLat1_I(iLine),mLon_I(iLine),mLat_I(iLine))
-    write(*,*) 'finish geomag'
     IF (DoAlignDipoleRot) THEN
        gLat1_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want the
        gLon1_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligned
@@ -68,7 +67,7 @@ contains
   !=============================================================================
   subroutine fill_thermal_plasma_empirical(iLine,F107,F107A,t)
     use ModSeGrid, only: nIono1,nIono2,nIono,nPlas, nPoint, &
-                         FieldLineGrid_IC,Bfield_IC
+                         FieldLineGrid_IC,Bfield_IC,IsVerbose
     
     integer, intent(in) :: iLine
     real   , intent(in) :: F107, F107A, t
@@ -77,9 +76,9 @@ contains
 
     !  Use IRI to fill the thermal plasma
     IF (facn.GE.0. .OR. t.EQ.0) THEN
-       write(*,*) 'calling get_iri'
+       if(IsVerbose) write(*,*) 'calling get_iri'
        CALL get_iri(iLine,F107A)
-       write(*,*) 'finish get_iri'
+       if(IsVerbose) write(*,*) 'finish get_iri'
        !  The next few lines are for thinning the topside ionosphere densities
        IF (ABS(facn).GT.0.) THEN
           do iIono=nIono1+nIono2+1,nIono
@@ -147,7 +146,7 @@ contains
   !=============================================================================
   !*  Subroutine get_iri calls IRI-90 for each ionosphere.
   SUBROUTINE get_iri(iLine,F107A)
-    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC
+    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC,IsVerbose
     
     real,    intent(in) :: F107A
     integer, intent(in) :: iLine
@@ -189,10 +188,10 @@ contains
     STL1=(UT/240+gLon1_I(iLine))/15
     IF (STL1.LT.0.) STL1=STL1+24.
     IF (STL1.GT.24.) STL1=STL1-24.
-    write(*,*) 'calling iri'
+    if(IsVerbose) write(*,*) 'calling iri'
     CALL IRI90(JF,JMAG,gLat1_I(iLine),gLon1_I(iLine),RZ12,MMDD,STL1, &
          FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,'PW/IRI_DATA/ ',IriOutput_VC,OARR)
-    write(*,*) 'finish iri'
+    if(IsVerbose) write(*,*) 'finish iri'
     do i=nIono,1,-1
        eThermalDensity_IC(iLine,i)=IriOutput_VC(1,i)*PerM3toPerCm3 
        IF (IRIOUTPUT_VC(4,i).LT.0.) IriOutput_VC(4,i)=IriOutput_VC(4,i+1)

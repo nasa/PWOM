@@ -16,20 +16,31 @@ contains
   ! set up coupling between pwom and stet for all lines. 
   ! thermal e density and temperature for each line and interpolate to STET 
   ! grid 
-  subroutine init_pwom_stet_coupling(nAltPwIn,nLinePw,iLineGlobalPw_I,&
-       AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn)
-    use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential
+  subroutine init_pwom_stet_coupling(IsVerbosePw,nAltPwIn,nLinePw,&
+       iLineGlobalPw_I,&
+       AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn,&
+       PolarRainEminPwIn,PolarRainEmaxPwIn,PolarRainEmeanPwIn,&
+       PolarRainEfluxPwIn)
+    use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential,IsVerbose
     use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP,&
                               DoUsePWOM
     use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
-         PrecipEmean,PrecipEflux,UsePrecipitation
+         PrecipEmean,PrecipEflux,UsePrecipitation,&
+         PolarRainEmin, PolarRainEmax, &
+         PolarRainEmean,PolarRainEflux,UsePolarRain
+    logical, intent(in) :: IsVerbosePw
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
     real,    intent(in) :: AltPwIn_C(nAltPwIn)
     real, optional, intent(in)::PrecipEminPwIn,PrecipEmaxPwIn, &
                                 PrecipEmeanPwIn,PrecipEfluxPwIn
+    real, optional, intent(in)::PolarRainEminPwIn,PolarRainEmaxPwIn, &
+                                PolarRainEmeanPwIn,PolarRainEfluxPwIn
     !---------------------------------------------------------------------------
     DoUsePWOM = .true.    
     
+    ! Set verbose base on PWOM input
+    IsVerbose = IsVerbosePw
+
     ! Set lines on proc to match lines in PWOM
     nLine = nLinePw
     
@@ -38,7 +49,7 @@ contains
     
     ! Set up the grid parameters, actual grid will be set later by each line
     
-    write(*,*) 'setting grid dimensions'
+    if(IsVerbose) write(*,*) 'setting grid dimensions'
     call set_grid_dimensions_default
     
     ! Set the global line number
@@ -46,7 +57,7 @@ contains
 
 
     ! Allocate the background arrays
-    write(*,*) 'allocating background arrays'
+    if(IsVerbose) write(*,*) 'allocating background arrays'
     call allocate_background_arrays
     
     ! align dipole and rotation
@@ -79,6 +90,19 @@ contains
          .or.present(PrecipEmeanPwIn).or.present(PrecipEfluxPwIn)) then
        call con_stop('PW_error: STET precip update values incomplete')
     endif
+
+    ! Set the incomming polar rain
+    if (present(PolarRainEminPwIn).and.present(PolarRainEmaxPwIn) &
+         .and.present(PolarRainEmeanPwIn).and.present(PolarRainEfluxPwIn)) then
+       UsePolarRain = .true.
+       PolarRainEmax=PolarRainEmaxPwIn
+       PolarRainEmin=PolarRainEminPwIn
+       PolarRainEmean=PolarRainEmeanPwIn
+       PolarRainEflux=PolarRainEfluxPwIn
+    elseif(present(PolarRainEminPwIn).or.present(PolarRainEmaxPwIn) &
+         .or.present(PolarRainEmeanPwIn).or.present(PolarRainEfluxPwIn)) then
+       call con_stop('PW_error: STET PolarRain update values incomplete')
+    endif
        
   end subroutine init_pwom_stet_coupling
   
@@ -87,7 +111,7 @@ contains
   subroutine get_stet_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
        SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C)
-    use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I
+    use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I,IsVerbose
     use ModSeBackground,only: mLat_I,mLon_I, gLat1_I,gLat2_I,gLon1_I,gLon2_I,&
          Idate, UT,set_footpoint_locations,fill_thermal_plasma_empirical,&
          plot_background,plot_ephoto_prod,get_neutrals_and_pe_spectrum
@@ -117,11 +141,12 @@ contains
     ! Conversion between statV/cm in PWOM to Volts/m needed for STET
     real, parameter :: cSTATVperCMtoVperM=30000.0
     !---------------------------------------------------------------------------
-    write(*,*) '!!!!!!!!!!!!!!!!!!!'
-    write(*,*) 'CALLING get_stet_for_pwom at time=',TimePw
-    write(*,*) 'Working on iLine (local,global)=',iLine,iLineGlobal_I(iLine)
-    write(*,*) '!!!!!!!!!!!!!!!!!!!'
-
+    if(IsVerbose) then
+       write(*,*) '!!!!!!!!!!!!!!!!!!!'
+       write(*,*) 'CALLING get_stet_for_pwom at time=',TimePw
+       write(*,*) 'Working on iLine (local,global)=',iLine,iLineGlobal_I(iLine)
+       write(*,*) '!!!!!!!!!!!!!!!!!!!'
+    endif
     ! Set the Time in STET to match the time in PWOM
     Time=TimePw
     
@@ -165,8 +190,11 @@ contains
     call interpolate_pwom_to_stet(iLine,eDensPW_C,eTempPW_C,&
          EfieldPW_C*cSTATVperCMtoVperM)
 
-    write(*,*) 'maxval(Efield_IC(iLine,:))',maxval(Efield_IC(iLine,:))
-    write(*,*) 'maxval(EfieldPW_C(:))',maxval(EfieldPW_C(:)*cSTATVperCMtoVperM)
+    if(IsVerbose) then
+       write(*,*) 'maxval(Efield_IC(iLine,:))',maxval(Efield_IC(iLine,:))
+       write(*,*) 'maxval(EfieldPW_C(:))',&
+            maxval(EfieldPW_C(:)*cSTATVperCMtoVperM)
+    endif
     ! plot background after interp
 !    call plot_background(iLine,1,time)
 !    call con_stop('')     
@@ -185,10 +213,11 @@ contains
        call interpolate_stet_to_PWOM(iLine,SeDensPW_C,SeFluxPW_C,SeHeatPW_C)
     endif
     
-    write(*,*) '!!!!!!!!!!!!!!!!!!!'
-    write(*,*) 'FINISH CALLING get_stet_for_pwom at time=',TimePw
-    write(*,*) '!!!!!!!!!!!!!!!!!!!'
-
+    if(IsVerbose) then
+       write(*,*) '!!!!!!!!!!!!!!!!!!!'
+       write(*,*) 'FINISH CALLING get_stet_for_pwom at time=',TimePw
+       write(*,*) '!!!!!!!!!!!!!!!!!!!'
+    endif
 !    call con_stop('')     
   end subroutine get_stet_for_pwom
   
