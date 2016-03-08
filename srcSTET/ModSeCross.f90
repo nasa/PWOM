@@ -461,12 +461,16 @@ contains
 
        write(*,*) 'getting H2 cross'
        call get_crossection_diffion('H2', SIGI(H2_,:,:), SIGA(H2_,:,:))
+       call get_scattering_crossection('H2',SIGS(H2_,:))
        write(*,*) 'getting He cross'
        call get_crossection_diffion('He', SIGI(He_,:,:), SIGA(He_,:,:))
+       call get_scattering_crossection('He',SIGS(He_,:))
        write(*,*) 'getting H cross'
        call get_crossection_diffion('H',  SIGI(H_,:,:), SIGA(H_,:,:))
+       call get_scattering_crossection('H',SIGS(H_,:))
        write(*,*) 'getting CH4 cross'
        call get_crossection_diffion('CH4',SIGI(CH4_,:,:), SIGA(CH4_,:,:))
+       call get_scattering_crossection('CH4',SIGS(CH4_,:))
        
     end do
     
@@ -475,6 +479,74 @@ contains
   end subroutine cross_jupiter
 
   !=============================================================================
+  subroutine get_scattering_crossection(NameNeutralSpecies,SigS)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
+
+    character(len=*), intent(in) :: NameNeutralSpecies
+    real, intent(out) :: SigS(nEnergy)
+
+    real, allocatable :: SigTotalI(:)
+    integer :: iEnergy,iEnergySec
+
+    real :: NewPrimaryELow,NewPrimaryEHigh,EnergySecondary,SIGG
+    integer ::iEnergyLow,iEnergyHigh,iNewEnergy
+
+    select case(NameNeutralSpecies)
+    case('O')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       !placeholder set to 0
+       SigS(:) = 0.0
+    case('N2')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       !placeholder set to 0
+       SigS(:) = 0.0
+    case('O2')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       !placeholder set to 0
+       SigS(:) = 0.0
+    case('H2')
+       call read_scattering_crossection(NameNeutralSpecies,SigS)
+    case('H')
+       call read_scattering_crossection(NameNeutralSpecies,SigS)       
+    case('CH4')
+       ! crossections from Shirai et al, 2002
+       ! Analytic Cross Sections for Electron Collisions with Hydrocarbons
+       Sig0 = 1.0e-16  ! cm**2
+       ER = 1.361e-2 ! keV
+       
+       a1 = 2.93e-2
+       a2 = -1.03
+       a3 = 3.28e2
+       a4 = 2.19
+       a5 = 5.4e-3
+       a6 = 7.92e-1
+
+       do iEnergy = 1,nEnergy
+          E1 = 1.0e-3*EnergyGrid_I(iEnergy) ! convert from eV to keV
+          
+          f1 = Sig0*a1*(E1/ER)**a2
+          f12 = Sig0*a3*(E1/ER)**a4
+          f2 = f12/(1.0+(E1/a5)**(a4+a6))
+          
+          SigS(iEnergy) = f1 + f2
+       end do
+       
+    case('He')
+       call read_scattering_crossection(NameNeutralSpecies,SigS)
+       
+    case default
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       SigS(:) = 0.0
+    end select
+
+    
+  end subroutine get_scattering_crossection
+  
+ !=============================================================================
   subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI,SigDiffA)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
 
@@ -488,7 +560,7 @@ contains
 
     real :: NewPrimaryELow,NewPrimaryEHigh,EnergySecondary,SIGG
     integer ::iEnergyLow,iEnergyHigh,iNewEnergy
-    
+   
     !allocate arrays to hold the total ionization crossection
     if(.not.allocated(SigTotalI)) allocate(SigTotalI(nEnergy))
 
@@ -541,13 +613,14 @@ contains
     do iEnergy = 1,nEnergy
 
        if (NameNeutralSpecies.NE.'H') then
-          !use the paper by Opal et al 1971 to set the differential ionization crossection
+          !use the paper by Opal et al 1971 to set
+          ! the differential ionization crossection
           if(EnergyGrid_I(iEnergy)>=Ethreshold) then
              !set the Opal coef
              OpalCoef = SigTotalI(iEnergy)&
                   /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
           else
-             !when energy of primary is below threshold make sure coef is zero
+             ! when energy of primary is below threshold make sure coef is zero
              OpalCoef=0.0
           end if
           do iEnergySec=1,nEnergy
@@ -560,17 +633,21 @@ contains
        ! Put degradation cross sections into SIGA
        ! JY is energy loop iEnergy
        ! ETJ is EnergyGrid_I(iEnergy)
-       NewPrimaryELow = (EnergyGrid_I(iEnergy)-Ethreshold) / 2. ! Lowest primary energy after collision
-       NewPrimaryEHigh = EnergyGrid_I(iEnergy)-Ethreshold       ! Highest primary energy after collision
+
+       ! Lowest primary energy after collision
+       NewPrimaryELow = (EnergyGrid_I(iEnergy)-Ethreshold) / 2.
+       ! Highest primary energy after collision
+       NewPrimaryEHigh = EnergyGrid_I(iEnergy)-Ethreshold
        
        IF (NewPrimaryELow .LE. 0.) cycle
        
        iEnergyLow=BINNUM(NewPrimaryELow)
        iEnergyHigh=BINNUM(NewPrimaryEHigh)
        
-       ! if NewPrimaryELow is below the EnergyMin then say that the primary loses all of its energy
-       ! for all New Primary Energies from NewPrimaryELow to EnergyMin,
-       ! which means Secondary Energies from NewPrimaryEHigh-EnergyMin to NewPrimaryEHigh-NewPrimaryELow,
+       ! if NewPrimaryELow is below the EnergyMin then say that the primary
+       ! loses all of its energy for all New Primary Energies from
+       ! NewPrimaryELow to EnergyMin, which means Secondary Energies from
+       ! NewPrimaryEHigh-EnergyMin to NewPrimaryEHigh-NewPrimaryELow,
        ! or NewPrimaryELow (because NewPrimaryELow*2 = NewPrimaryEHigh)
        
        IF (iEnergyLow.EQ.0 .OR. NewPrimaryELow.LE.EnergyMin) THEN
@@ -580,7 +657,8 @@ contains
           ! Not sure about the right way to convert this to a single secondary energy...
           EnergySecondary=NewPrimaryELow
           iEnergySec=BINNUM(EnergySecondary)
-          SigDiffA(iEnergy,iEnergy)=SigDiffA(iEnergy,iEnergy)+SigDiffI(iEnergySec,iEnergy)
+          SigDiffA(iEnergy,iEnergy) = SigDiffA(iEnergy,iEnergy) + &
+               SigDiffI(iEnergySec,iEnergy)
           iEnergyLow=1
           NewPrimaryELow=NewPrimaryEHigh-EnergyMin
        END IF
@@ -594,10 +672,13 @@ contains
           SIGG=SigDiffI(iEnergySec,iEnergy)
           IF (iNewEnergy.EQ.iEnergy) THEN
              SigDiffA(1,iEnergy)=SigDiffA(1,iEnergy) &
-                  +SIGG*(Ethreshold+EnergySecondary)/(EnergyGrid_I(iEnergy)-EnergyGrid_I(iEnergy-1))
+                  + SIGG*(Ethreshold+EnergySecondary) / &
+                  (EnergyGrid_I(iEnergy)-EnergyGrid_I(iEnergy-1))
           ELSE
-             ! Put secondary energy into energy SigDiffA(PrimaryEnergyLoss,OriginalPrimaryEnergy)?
-             SigDiffA(iEnergy-iNewEnergy,iEnergy)=SigDiffA(iEnergy-iNewEnergy,iEnergy)+SIGG
+             ! Put secondary energy into energy
+             ! SigDiffA(PrimaryEnergyLoss,OriginalPrimaryEnergy)
+             SigDiffA(iEnergy-iNewEnergy,iEnergy) = &
+                  SigDiffA(iEnergy-iNewEnergy,iEnergy)+SIGG
           END IF
        enddo
        !
@@ -718,6 +799,54 @@ contains
     deallocate(CrossSecArray)
 
   end subroutine read_total_ionization_crossection
+  !============================================================================
+  subroutine read_scattering_crossection(NameSpecies,SigS)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModIoUnit, ONLY : UnitTmp_
+    use ModInterpolate, ONLY: linear
+    
+    character(len=*), intent(in) :: NameSpecies
+    real :: SigS(:)  ! should be allocated and passed in
+    character(len=100) :: DatafileName
+    integer :: DataLen
+    real, allocatable :: EnergyArray(:),CrossSecArray(:)
+    
+    write(*,*) 'getting elastic scattering crossection for species ', &
+         NameSpecies
+
+    write(DatafileName,"(3a)") 'PW/',NameSpecies,'Scross.dat'
+
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+    
+    read(UnitTmp_,*) DataLen
+
+    if(.not.allocated(EnergyArray)) allocate(EnergyArray(DataLen))
+    if(.not.allocated(CrossSecArray)) allocate(CrossSecArray(DataLen))
+    
+    ! Input energy array in eV and elastic scattering crossections in cm2
+    read(UnitTmp_,*) EnergyArray
+    read(UnitTmp_,*) CrossSecArray
+    
+    close(UnitTmp_)
+
+    SigS(:) = 0.0
+
+    do iEnergy = 1,nEnergy
+       if (EnergyGrid_I(iEnergy) < EnergyArray(1) &
+            .or. EnergyGrid_I(iEnergy) > EnergyArray(DataLen)) then
+          ! if outside of data range set crossection to 0
+          SigS(iEnergy)=0.0
+       else
+          ! when inside of data range interpolate
+          SigS(iEnergy) = linear(CrossSecArray(:),1,DataLen, &
+               EnergyGrid_I(iEnergy),EnergyArray(:))
+       end if
+    end do
+    
+    deallocate(EnergyArray)
+    deallocate(CrossSecArray)
+
+  end subroutine read_scattering_crossection
   !============================================================================
   ! plot differential ionization crossection
   subroutine plot_diffion_cross
