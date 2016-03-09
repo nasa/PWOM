@@ -56,6 +56,10 @@ Module ModSeState
   !Precipitation info
   logical, public :: UsePrecipitation = .false.
   real   , public :: PrecipEmin, PrecipEmax,PrecipEmean,PrecipEflux
+  !Polar Rain info
+  logical, public :: UsePolarRain = .false.
+  real   , public :: PolarRainEmin=80.0,  PolarRainEmax=300.0, &
+       PolarRainEmean=100.0, PolarRainEflux=1.0e-2
 
   !public methods
   public :: allocate_state_arrays
@@ -1159,7 +1163,7 @@ contains
     real,parameter :: cEVtoCMperS = 5.88e7 ! convert energy to velocity
 
     ! precipitation 
-    real :: PrecipCoef
+    real :: PrecipCoef,PolarRainCoef
     !---------------------------------------------------------------------------
 
     !initialize lbeta to 0
@@ -1355,7 +1359,7 @@ contains
 
              ! Add precip info here
              ! Add precip info here KLUDGE
-             if(UsePrecipitation .and. EnergyGrid_I(j) > 100.0 ) then 
+             if(UsePrecipitation .and. EnergyGrid_I(j) > PrecipEmin ) then 
                 do k=0,nThetaAlt_IIC(iLine,j,nIono)
                    !These current values are for soft electron precipitation 
                    ! from strangeway et al 2005. In future should come from 
@@ -1366,6 +1370,25 @@ contains
                    iphidn(iLine,k,nIono+1,j)= &
                         PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
                         /PrecipEmean)
+                end do
+             end if
+             
+             ! add in polar rain
+             if(UsePolarRain .and. EnergyGrid_I(j) > PolarRainEmin ) then 
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   PolarRainCoef=get_precip_norm(PolarRainEmean,PolarRainEmin,&
+                        PolarRainEmax,PolarRainEflux)
+                   if (UsePrecipitation.and. EnergyGrid_I(j) > PrecipEmin) then
+                      !add polar rain on top of the precipitation set
+                      iphidn(iLine,k,nIono+1,j)= iphidn(iLine,k,nIono+1,j) + &
+                           PolarRainCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                           /PolarRainEmean)
+                   else
+                      !set polar rain values instead of adding
+                      iphidn(iLine,k,nIono+1,j)= &
+                           PolarRainCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                           /PolarRainEmean)
+                   endif
                 end do
              end if
           endif
@@ -2139,7 +2162,7 @@ contains
   !  This subroutine checks for "time" convergence for a particular line
   SUBROUTINE check_time_pot(iLine,flag)
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine,&
-         nThetaAlt_IIC
+         nThetaAlt_IIC,IsVerbose
 
     integer,intent(in) :: iLine
     integer,intent(out):: flag
@@ -2196,22 +2219,24 @@ contains
        end do
     end do
     !report results of check_time
-    write(*,*), 'FINISHED check_time, Report:'
-    write(*,*), 'check_time: Ibad=',Ibad
-    write(*,*), 'check_time: ErrorMax=',ErrorMax
-    write(*,*), 'check_time: iAltAtMax=',iAltAtMax
-    write(*,*), 'check_time: iAngleAtMax=',iAngleAtMax
-    write(*,*), 'check_time: nThetaAtMax=',nThetaAlt_IIC(iLine,iEnergyAtMax,iAltAtMax)
-    write(*,*), 'check_time: iEnergyAtMax=',iEnergyAtMax
-    write(*,*), 'check_time: FluxAtMax=',FluxAtMax
-    write(*,*), 'check_time: OldFluxMax=',OldFluxAtMax
+    if(IsVerbose) then
+       write(*,*), 'FINISHED check_time, Report for iLine:',iLine
+       write(*,*), 'check_time: Ibad=',Ibad
+       write(*,*), 'check_time: ErrorMax=',ErrorMax
+       write(*,*), 'check_time: iAltAtMax=',iAltAtMax
+       write(*,*), 'check_time: iAngleAtMax=',iAngleAtMax
+       write(*,*), 'check_time: nThetaAtMax=',nThetaAlt_IIC(iLine,iEnergyAtMax,iAltAtMax)
+       write(*,*), 'check_time: iEnergyAtMax=',iEnergyAtMax
+       write(*,*), 'check_time: FluxAtMax=',FluxAtMax
+       write(*,*), 'check_time: OldFluxMax=',OldFluxAtMax
+    endif
     RETURN
   END SUBROUTINE check_time_pot
   !============================================================================
   !  This subroutine checks for "time" convergence for a particular line
   SUBROUTINE check_time(iLine,flag)
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint, nLine,&
-         nThetaAlt_II
+         nThetaAlt_II,IsVerbose
 
     integer,intent(in) :: iLine
     integer,intent(out):: flag
@@ -2268,15 +2293,17 @@ contains
        end do
     end do
     !report results of check_time
-    write(*,*), 'FINISHED check_time, Report:'
-    write(*,*), 'check_time: Ibad=',Ibad
-    write(*,*), 'check_time: ErrorMax=',ErrorMax
-    write(*,*), 'check_time: iAltAtMax=',iAltAtMax
-    write(*,*), 'check_time: iAngleAtMax=',iAngleAtMax
-    write(*,*), 'check_time: nThetaAtMax=',nThetaAlt_II(iLine,iAltAtMax)
-    write(*,*), 'check_time: iEnergyAtMax=',iEnergyAtMax
-    write(*,*), 'check_time: FluxAtMax=',FluxAtMax
-    write(*,*), 'check_time: OldFluxMax=',OldFluxAtMax
+    if(IsVerbose) then
+       write(*,*), 'FINISHED check_time, Report:'
+       write(*,*), 'check_time: Ibad=',Ibad
+       write(*,*), 'check_time: ErrorMax=',ErrorMax
+       write(*,*), 'check_time: iAltAtMax=',iAltAtMax
+       write(*,*), 'check_time: iAngleAtMax=',iAngleAtMax
+       write(*,*), 'check_time: nThetaAtMax=',nThetaAlt_II(iLine,iAltAtMax)
+       write(*,*), 'check_time: iEnergyAtMax=',iEnergyAtMax
+       write(*,*), 'check_time: FluxAtMax=',FluxAtMax
+       write(*,*), 'check_time: OldFluxMax=',OldFluxAtMax
+    endif
     RETURN
   END SUBROUTINE check_time
   !============================================================================

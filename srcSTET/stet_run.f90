@@ -3,7 +3,7 @@
 ! a particular line, iLine.
 subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   use ModSeGrid, only:create_se_test_grid,set_grid_pot,nLine,nPoint,nIono,&
-       nPlas,Efield_IC,DoIncludePotential
+       nPlas,Efield_IC,DoIncludePotential,IsVerbose
   use ModSeBackground,only: plot_background,plot_ephoto_prod,&
        eThermalDensity_IC,eThermalTemp_IC,nNeutralSpecies,&
        NeutralDens1_IIC,ePhotoProdSpec1_IIC,NeutralDens2_IIC,ePhotoProdSpec2_IIC
@@ -35,7 +35,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
 
   ! Set the timestep and convergence criteria
   delt=1.0e5
-  epsilon = 0.1
+  epsilon = 0.05
 
   ! Define the initial state
   iphiup(iLine,:,:,:)=0.0
@@ -57,7 +57,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   TIME_LOOP: do while (flag == 1)
      if(.not.DoIncludePotential) then
         ! Initialize the ionosphere
-        write(*,*) 'Initializing iono'
+        if(IsVerbose) write(*,*) 'Initializing iono'
         call initiono(iLine,DoSavePreviousAndReset)
         
         ! update the SE state for iono1
@@ -76,23 +76,24 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         endif
         
         ! Initialize the plasmasphere
-        write(*,*) 'Initializing plasmasphere'
+        if(IsVerbose) write(*,*) 'Initializing plasmasphere'
         call initplas(iLine,DoSavePreviousAndReset)
         
         ! update the SE state
-        write(*,*) 'update se state'
+        if(IsVerbose) write(*,*) 'update se state'
         call update_se_state(iLine, eThermalDensity_IC(iLine,:),&
              eThermalTemp_IC(iLine,:),IsOpen)
         
         ! check convergence
-        write(*,*) 'check for convergence'
+        if(IsVerbose) write(*,*) 'check for convergence'
         call check_time(iLine,flag)
      else
                 ! Initialize the ionosphere
-        write(*,*) 'Initializing iono'
+        if(IsVerbose) write(*,*) 'Initializing iono1'
         call initiono_pot(iLine,DoSavePreviousAndReset)
         
         ! update the SE state for iono1
+
         call update_se_state_iono_pot(iLine,IsIono1,eThermalDensity_IC(iLine,:),&
              eThermalTemp_IC(iLine,:),nNeutralSpecies,&
              NeutralDens1_IIC(iLine,:,:),SIGS,SIGI,SIGA,&
@@ -108,16 +109,16 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         endif
 
         ! Initialize the plasmasphere
-        write(*,*) 'Initializing plasmasphere'
+        if(IsVerbose) write(*,*) 'Initializing plasmasphere'
         call initplas_pot(iLine,DoSavePreviousAndReset)
         
         ! update the SE state
-        write(*,*) 'update se state'
+        if(IsVerbose) write(*,*) 'update se state'
         call update_se_state_pot(iLine, eThermalDensity_IC(iLine,:),&
              eThermalTemp_IC(iLine,:),IsOpen)
         
         ! check convergence
-        write(*,*) 'check for convergence'
+        if(IsVerbose) write(*,*) 'check for convergence'
         call check_time_pot(iLine,flag)
      endif
      ! increment step
@@ -126,7 +127,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   end do TIME_LOOP
 
   ! Find heating rate, Se number density and flux
-  write(*,*) 'Getting Integrals for output'
+  if(IsVerbose) write(*,*) 'Getting Integrals for output'
   call calc_integrated_output(iLine,nNeutralSpecies,eThermalDensity_IC(iLine,:))
   
   !\

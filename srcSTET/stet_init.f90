@@ -1,7 +1,7 @@
 ! Initializes the stet code, 
 
 subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
-  use ModSeGrid, only:update_grid,nLine,Efield_IC,DoIncludePotential
+  use ModSeGrid, only:update_grid,nLine,Efield_IC,DoIncludePotential,IsVerbose
   use ModSeBackground,only: allocate_background_arrays,mLat_I,mLon_I, &
        set_footpoint_locations,fill_thermal_plasma_empirical,plot_background,&
        plot_ephoto_prod,DoAlignDipoleRot,get_neutrals_and_pe_spectrum
@@ -32,7 +32,7 @@ subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
   !\
   ! Set up the grid
   !/
-  write(*,*) 'setting grid dimensions'
+  if(IsVerbose) write(*,*) 'setting grid dimensions'
   call set_grid_dimensions_default
   
   do iLine=1,nLine
@@ -53,7 +53,7 @@ subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
   ! Set the background arrays, sources, and locations
   !/
   ! Allocate the background right
-  write(*,*) 'allocating background arrays'
+  if(IsVerbose) write(*,*) 'allocating background arrays'
   call allocate_background_arrays
   
   !align dipole and rotation
@@ -66,12 +66,12 @@ subroutine stet_init(nLineIn,Coord_ID,Ap_I,F107,F107A, TimeIn)
      
      !set glat and glon coords
      call set_footpoint_locations(iLine)
-     write(*,*) 'finished setting footpoints'
+     if(IsVerbose) write(*,*) 'finished setting footpoints'
      ! Get the neutral atmosphere and photo e production spectrum
      call get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP_I)
-          write(*,*) 'finished getting neutrals and pe spec'
+     if(IsVerbose) write(*,*) 'finished getting neutrals and pe spec'
      ! Fill the background arrays
-     write(*,*) 'filling background arrays'
+     if(IsVerbose) write(*,*) 'filling background arrays'
      call fill_thermal_plasma_empirical(iLine,F107,F107A,Time)
   end do
   
@@ -128,8 +128,8 @@ subroutine set_grid_dimensions_default
   !    nEnergy=94
 
   ! Energy grid for only photoelectrons
-  nEnergy=99
-  EnergyMax=100.5
+  nEnergy=299
+  EnergyMax=300.5
 
   ! Energy grid for precipitation
 !  nEnergy=999  

@@ -14,7 +14,9 @@ subroutine PW_initialize
   use ModPwWaves,ONLY: wave_init
   use ModCouplePWOMtoSTET, ONLY: init_pwom_stet_coupling
   use ModPhotoelectron, ONLY: PrecipEnergyMin, PrecipEnergyMax, &
-       PrecipEnergyMean, PrecipEnergyFlux, UseFixedPrecip, DoCoupleSTET
+       PrecipEnergyMean, PrecipEnergyFlux, UseFixedPrecip, DoCoupleSTET,&
+       PolarRainEMin, PolarRainEMax, &
+       PolarRainEMean, PolarRainEFlux, UsePolarRain, IsVerboseSTET
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -185,12 +187,24 @@ subroutine PW_initialize
 
   ! initialize the SE model
   if(DoCoupleSTET) then
-     if(UseFixedPrecip) then
-        call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD,&
+     if(UseFixedPrecip .and. UsePolarRain) then
+        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+             PrecipEminPwIn=PrecipEnergyMin,PrecipEmaxPwIn=PrecipEnergyMax, &
+             PrecipEmeanPwIn=PrecipEnergyMean,PrecipEfluxPwIn=PrecipEnergyFlux,&
+             PolarRainEminPwIn=PolarRainEMin,PolarRainEmaxPwIn=PolarRainEMax, &
+             PolarRainEmeanPwIn=PolarRainEMean,&
+             PolarRainEfluxPwIn=PolarRainEFlux)
+     elseif(UseFixedPrecip) then
+        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              PrecipEminPwIn=PrecipEnergyMin,PrecipEmaxPwIn=PrecipEnergyMax, &
              PrecipEmeanPwIn=PrecipEnergyMean,PrecipEfluxPwIn=PrecipEnergyFlux)
+     elseif(UsePolarRain) then
+        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+             PolarRainEminPwIn=PolarRainEMin,PolarRainEmaxPwIn=PolarRainEMax, &
+             PolarRainEmeanPwIn=PolarRainEMean,&
+             PolarRainEfluxPwIn=PolarRainEFlux)
      else
-        call init_pwom_stet_coupling(nAlt,nLine,iLineGlobal,ALTD)
+        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD)
      end if
   end if
 end subroutine PW_initialize

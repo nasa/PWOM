@@ -7,6 +7,8 @@ Module ModSeProduction
   public :: SOLZEN
   public :: SSFLUX
   public :: init_production
+  public :: unit_test_plas_resonant_scattering
+
   !number of wavelengthincrements
   integer, parameter :: LMAX=59
   !number of excited states
@@ -302,7 +304,8 @@ contains
 ! NF      number of available types of auroral fluxes
 !
 !
-  SUBROUTINE ESPEC(ZMAJ,PESPEC,Iono,Ioff,nIons,PhotoIonRate_IC)
+  SUBROUTINE ESPEC(ZMAJ,PESPEC,Iono,Ioff,SZA,AltKm_C,nIons,PhotoIonRate_IC)
+
     !
     !
     
@@ -315,7 +318,12 @@ contains
 !    PARAMETER (NW=20)
 !    PARAMETER (NC=10)
 !    PARAMETER (NF=4)
-    !
+
+    
+    real, intent(in) :: SZA, AltKm_C(Iono)
+    real :: FluxRes
+    !Set named constants for particular wavelength bins
+    integer,parameter :: LyAlpha_= 12, LyBeta_=18 , HeI_=35, HeII_=44
 !    COMMON /CGLOW/ &
 !         ZCOL(nNeutral,IONO),WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
     !
@@ -353,6 +361,7 @@ contains
     !
     
 
+
     IF (IFIRST .EQ. 1) THEN
        IFIRST = 0
 
@@ -362,6 +371,7 @@ contains
        if (.not.allocated(EPB2)) allocate(EPB2(nNeutral,LMAX))
        if (.not.allocated(EPSIL1)) allocate(EPSIL1(nStatesMax,nNeutral,LMAX))
        if (.not.allocated(EPSIL2)) allocate(EPSIL2(nStatesMax,nNeutral,LMAX))
+
 
        DO  L=1,LMAX
           DO  I=1,nNeutral
@@ -382,7 +392,7 @@ contains
              END IF
           end do
        end do
-       
+
 
 !
     ENDIF
@@ -404,7 +414,7 @@ contains
        end do
     end do
 
-
+!    write(*,*) '!!! SZA',SZA
     !
     !
     ! Calculate attenuated solar flux at all altitudes and wavelengths:
@@ -421,6 +431,30 @@ contains
              FLUX(L,J) = 0.0
           ENDIF
 
+          if(NamePlanet_I(Planet_)=='EARTH')then
+             ! add in the resonant scattering from the plasmasphere from 
+             ! strobel et al 1974, only for earth now
+             if (L==LyAlpha_)then
+                call get_plas_resonant_scattering(&
+                     (/SZA,AltKm_C(J)/),'LyAlpha',FluxRes)
+                FLUX(L,J) = FLUX(L,J) + FluxRes
+             endif
+             if (L==LyBeta_)then
+                call get_plas_resonant_scattering(&
+                     (/SZA,AltKm_C(J)/),'LyBeta',FluxRes)
+                FLUX(L,J) = FLUX(L,J) + FluxRes
+             endif
+             if (L==HeI_)then
+                call get_plas_resonant_scattering(&
+                     (/SZA,AltKm_C(J)/),'HeI',FluxRes)
+                FLUX(L,J) = FLUX(L,J) + FluxRes
+             endif
+             if (L==HeII_)then
+                call get_plas_resonant_scattering(&
+                     (/SZA,AltKm_C(J)/),'HeII',FluxRes)
+                FLUX(L,J) = FLUX(L,J) + FluxRes
+             endif
+          endif
           !
           !
           ! Calculate SRC photodissociation of O2, dissociative excitation of
@@ -435,6 +469,8 @@ contains
 !               ZMAJ(3,J)*(SIGABS(3,L)-SIGION(3,L))*FLUX(L,J)
        end do
     end do
+    
+
     !
     !
     Emax=ENER(nEnergy)+DEL(nEnergy)/2.
@@ -1448,10 +1484,10 @@ contains
     
   END SUBROUTINE SSFLUX
 
+
   !============================================================================
   subroutine init_production
     use ModPlanetConst, ONLY: Planet_, NamePlanet_I, rPlanet_I
-
     !\
     ! Earth
     !/
@@ -2061,5 +2097,300 @@ contains
     deallocate(WaveGridCenters)
 
   end subroutine read_phidrates
+
+  !============================================================================
+  ! subroutine to get the flux contribution in four wavelengths for 
+  ! resonant scattering in plasmasphere
+  ! Xy_D is input: Xy_D(1)=SZA and Xy_D(2) = Alt of required point
+  ! Flux is output
+  subroutine get_plas_resonant_scattering(Xy_D,NameLamda,Flux)
+    use ModTriangulate,ONLY:calc_triangulation, find_triangle
+    use ModIoUnit,     ONLY: UnitTmp_
+    implicit none
+    real, intent(in)  :: Xy_D(2)
+    character(len=*), intent(in) :: NameLamda
+    real, intent(out) :: Flux
+    
+    integer, parameter   :: nPointLyAlpha=56
+    real,save,    allocatable :: CoordLyAlphaXy_DI(:,:),FluxLyAlpha_I(:)
+    integer,save, allocatable :: iNodeTriangleLyAlpha_II(:,:)
+    integer,save :: nTriangleLyAlpha
+    integer, parameter   :: nPointLyBeta=43
+    real,save,    allocatable :: CoordLyBetaXy_DI(:,:),FluxLyBeta_I(:)
+    integer,save, allocatable :: iNodeTriangleLyBeta_II(:,:)
+    integer,save :: nTriangleLyBeta
+
+    integer, parameter   :: nPointHeI=41
+    real,save,    allocatable :: CoordHeIXy_DI(:,:),FluxHeI_I(:)
+    integer,save, allocatable :: iNodeTriangleHeI_II(:,:)
+    integer,save :: nTriangleHeI
+
+    integer, parameter   :: nPointHeII=46
+    real,save,    allocatable :: CoordHeIIXy_DI(:,:),FluxHeII_I(:)
+    integer, save,allocatable :: iNodeTriangleHeII_II(:,:)
+    integer,save :: nTriangleHeII
+
+
+    integer, parameter :: nCoord=2
+    integer    :: iPoint
+    logical    :: IsTriangleFound
+    integer    :: iNode1, iNode2, iNode3
+    real       :: Area1, Area2, Area3
+
+    logical, save ::IsFirstCall = .true.
+    !---------------------------------------------------------------------------
+    ! on first call allocate arrays and read all data files and calc the 
+    ! triangulations
+    
+    if (IsFirstCall) then
+       !\
+       ! LyAlpha
+       !/
+       ! allocate arrays
+       allocate(iNodeTriangleLyAlpha_II(3, 2*nPointLyAlpha),&
+            CoordLyAlphaXy_DI(nCoord, nPointLyAlpha),&
+            FluxLyAlpha_I(nPointLyAlpha))
+       
+       ! read data
+       open(UNIT=UnitTmp_, FILE='PW/strobel_LyAlpha.dat', STATUS='OLD')
+       do iPoint=1,nPointLyAlpha
+          read(UnitTmp_,*) CoordLyAlphaXy_DI(1,iPoint),&
+               CoordLyAlphaXy_DI(2,iPoint),FluxLyAlpha_I(iPoint)
+       end do
+       close(UnitTmp_)
+       ! find a triangulation on points
+       call calc_triangulation(nPointLyAlpha, CoordLyAlphaXy_DI(:,1:nPointLyAlpha), &
+            iNodeTriangleLyAlpha_II, nTriangleLyAlpha)
+
+       !\
+       ! LyBeta
+       !/
+       ! allocate arrays
+       allocate(iNodeTriangleLyBeta_II(3, 2*nPointLyBeta),&
+            CoordLyBetaXy_DI(nCoord, nPointLyBeta),&
+            FluxLyBeta_I(nPointLyBeta))
+       
+       ! read data
+       open(UNIT=UnitTmp_, FILE='PW/strobel_LyBeta.dat', STATUS='OLD')
+       do iPoint=1,nPointLyBeta
+          read(UnitTmp_,*) CoordLyBetaXy_DI(1,iPoint),&
+               CoordLyBetaXy_DI(2,iPoint),FluxLyBeta_I(iPoint)
+       end do
+       close(UnitTmp_)
+       ! find a triangulation on points
+       call calc_triangulation(nPointLyBeta, CoordLyBetaXy_DI(:,1:nPointLyBeta), &
+            iNodeTriangleLyBeta_II, nTriangleLyBeta)
+
+       !\
+       ! HeI
+       !/
+       ! allocate arrays
+       allocate(iNodeTriangleHeI_II(3, 2*nPointHeI),&
+            CoordHeIXy_DI(nCoord, nPointHeI),&
+            FluxHeI_I(nPointHeI))
+       
+       ! read data
+       open(UNIT=UnitTmp_, FILE='PW/strobel_HeI.dat', STATUS='OLD')
+       do iPoint=1,nPointHeI
+          read(UnitTmp_,*) CoordHeIXy_DI(1,iPoint),&
+               CoordHeIXy_DI(2,iPoint),FluxHeI_I(iPoint)
+       end do
+       close(UnitTmp_)
+       ! find a triangulation on points
+       call calc_triangulation(nPointHeI, CoordHeIXy_DI(:,1:nPointHeI), &
+            iNodeTriangleHeI_II, nTriangleHeI)
+
+       !\
+       ! HeII
+       !/
+       ! allocate arrays
+       allocate(iNodeTriangleHeII_II(3, 2*nPointHeII),&
+            CoordHeIIXy_DI(nCoord, nPointHeII),&
+            FluxHeII_I(nPointHeII))
+       
+       ! read data
+       open(UNIT=UnitTmp_, FILE='PW/strobel_HeII.dat', STATUS='OLD')
+       do iPoint=1,nPointHeII
+          read(UnitTmp_,*) CoordHeIIXy_DI(1,iPoint),&
+               CoordHeIIXy_DI(2,iPoint),FluxHeII_I(iPoint)
+       end do
+       close(UnitTmp_)
+       ! find a triangulation on points
+       call calc_triangulation(nPointHeII, CoordHeIIXy_DI(:,1:nPointHeII), &
+            iNodeTriangleHeII_II, nTriangleHeII)
+       
+       IsFirstCall=.false.
+    end if
+
+    ! select case based on name of wavelength considered
+    select case(NameLamda)
+    case('LyAlpha')
+       call find_triangle(&
+            nPointLyAlpha, nTriangleLyAlpha, Xy_D, &
+            CoordLyAlphaXy_DI(:,1:nPointLyAlpha), &
+            iNodeTriangleLyAlpha_II(:,1:nTriangleLyAlpha), &
+            iNode1, iNode2, iNode3, Area1, Area2, Area3, IsTriangleFound)
+       if(IsTriangleFound) then
+          Flux = Area1*FluxLyAlpha_I(iNode1) + Area2*FluxLyAlpha_I(iNode2) &
+               + Area3*FluxLyAlpha_I(iNode3)
+       else
+          Flux=0.0
+       endif
+    case('LyBeta')
+       call find_triangle(&
+            nPointLyBeta, nTriangleLyBeta, Xy_D, &
+            CoordLyBetaXy_DI(:,1:nPointLyBeta), &
+            iNodeTriangleLyBeta_II(:,1:nTriangleLyBeta), &
+            iNode1, iNode2, iNode3, Area1, Area2, Area3, IsTriangleFound)
+       if(IsTriangleFound) then
+          Flux = Area1*FluxLyBeta_I(iNode1) + Area2*FluxLyBeta_I(iNode2) &
+               + Area3*FluxLyBeta_I(iNode3)
+          
+!          write(*,*) 'details of found triangle for Xy_D=',Xy_D
+!          write(*,*) IsTriangleFound,nTriangleLyBeta
+!          write(*,*)CoordLyBetaXy_DI(:,iNode1)
+!          write(*,*)CoordLyBetaXy_DI(:,iNode2)
+!          write(*,*)CoordLyBetaXy_DI(:,iNode3)
+          !stop
+       else
+          Flux=0.0
+!          write(*,*) IsTriangleFound,Xy_D
+       endif
+       
+
+    case('HeI')
+       call find_triangle(&
+            nPointHeI, nTriangleHeI, Xy_D, &
+            CoordHeIXy_DI(:,1:nPointHeI), &
+            iNodeTriangleHeI_II(:,1:nTriangleHeI), &
+            iNode1, iNode2, iNode3, Area1, Area2, Area3, IsTriangleFound)
+       if(IsTriangleFound) then
+          Flux = Area1*FluxHeI_I(iNode1) + Area2*FluxHeI_I(iNode2) &
+               + Area3*FluxHeI_I(iNode3)
+       else
+          Flux=0.0
+       endif
+    case('HeII')
+       call find_triangle(&
+            nPointHeII, nTriangleHeII, Xy_D, &
+            CoordHeIIXy_DI(:,1:nPointHeII), &
+            iNodeTriangleHeII_II(:,1:nTriangleHeII), &
+            iNode1, iNode2, iNode3, Area1, Area2, Area3, IsTriangleFound)
+       if(IsTriangleFound) then
+          Flux = Area1*FluxHeII_I(iNode1) + Area2*FluxHeII_I(iNode2) &
+               + Area3*FluxHeII_I(iNode3)
+       else
+          Flux=0.0
+       endif
+    end select
+    !locate triangle containing input point
+ 
+
+
+    !interpolate flux to input point
+
+
+    
+  end subroutine get_plas_resonant_scattering
+
+  !============================================================================
+  subroutine unit_test_plas_resonant_scattering
+    use ModIoUnit,     ONLY: UnitTmp_
+    implicit none
+    real :: Xy_D(2),Flux
+    integer :: iAlt,iSZA
+    integer :: nAlt=100,nSZA=18
+    !--------------------------------------------------------------------------
+    
+    ! test one point
+    Xy_D(1)=100.0
+    Xy_D(2)=400.0
+    
+    call get_plas_resonant_scattering(Xy_D,'LyBeta',Flux)
+    
+    write(*,*) 'For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
+
+    call get_plas_resonant_scattering(Xy_D,'LyBeta',Flux)
+    
+    write(*,*) 'AGAIN!For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
+
+    ! now test file
+    open(UnitTmp_,FILE='StrobelLyBeta.dat')
+    write(UnitTmp_,'(a)') &
+         'VARIABLES = "Sza", "Alt", "Flux [photons/cm2/s]"'
+    write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nSZA, &
+         ', J=', nAlt,', DATAPACKING=POINT'
+    do iAlt=1,nAlt
+       do iSZA=1,nSZA
+          Xy_D(2) = real(iAlt-1)*10.0+90.0
+          Xy_D(1) = real(iSZA-1)*5.0+90.0
+          call get_plas_resonant_scattering(Xy_D,'LyBeta',Flux)
+ !         write(*,"(100es18.10)") Xy_D(1),&
+ !                Xy_D(2),Flux
+          write(UnitTmp_,"(100es18.10)") Xy_D(1),&
+                 Xy_D(2),Flux
+       end do
+    end do
+    close(UnitTmp_)
+
+
+    ! now test file
+    open(UnitTmp_,FILE='StrobelLyAlpha.dat')
+    write(UnitTmp_,'(a)') &
+         'VARIABLES = "Sza", "Alt", "Flux [photons/cm2/s]"'
+    write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nSZA, &
+         ', J=', nAlt,', DATAPACKING=POINT'
+    do iAlt=1,nAlt
+       do iSZA=1,nSZA
+          Xy_D(2) = real(iAlt-1)*10.0+90.0
+          Xy_D(1) = real(iSZA-1)*5.0+90.0
+          call get_plas_resonant_scattering(Xy_D,'LyAlpha',Flux)
+ !         write(*,"(100es18.10)") Xy_D(1),&
+ !                Xy_D(2),Flux
+          write(UnitTmp_,"(100es18.10)") Xy_D(1),&
+                 Xy_D(2),Flux
+       end do
+    end do
+    close(UnitTmp_)
+
+    ! now test file
+    open(UnitTmp_,FILE='StrobelHeI.dat')
+    write(UnitTmp_,'(a)') &
+         'VARIABLES = "Sza", "Alt", "Flux [photons/cm2/s]"'
+    write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nSZA, &
+         ', J=', nAlt,', DATAPACKING=POINT'
+    do iAlt=1,nAlt
+       do iSZA=1,nSZA
+          Xy_D(2) = real(iAlt-1)*10.0+90.0
+          Xy_D(1) = real(iSZA-1)*5.0+90.0
+          call get_plas_resonant_scattering(Xy_D,'HeI',Flux)
+ !         write(*,"(100es18.10)") Xy_D(1),&
+ !                Xy_D(2),Flux
+          write(UnitTmp_,"(100es18.10)") Xy_D(1),&
+                 Xy_D(2),Flux
+       end do
+    end do
+    close(UnitTmp_)
+
+    ! now test file
+    open(UnitTmp_,FILE='StrobelHeII.dat')
+    write(UnitTmp_,'(a)') &
+         'VARIABLES = "Sza", "Alt", "Flux [photons/cm2/s]"'
+    write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nSZA, &
+         ', J=', nAlt,', DATAPACKING=POINT'
+    do iAlt=1,nAlt
+       do iSZA=1,nSZA
+          Xy_D(2) = real(iAlt-1)*10.0+90.0
+          Xy_D(1) = real(iSZA-1)*5.0+90.0
+          call get_plas_resonant_scattering(Xy_D,'HeII',Flux)
+ !         write(*,"(100es18.10)") Xy_D(1),&
+ !                Xy_D(2),Flux
+          write(UnitTmp_,"(100es18.10)") Xy_D(1),&
+                 Xy_D(2),Flux
+       end do
+    end do
+    close(UnitTmp_)
+
+  end subroutine unit_test_plas_resonant_scattering
 
 end Module ModSeProduction

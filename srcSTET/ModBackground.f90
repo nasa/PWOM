@@ -60,7 +60,6 @@ contains
 
     !  Find the geographic coordinates for our geomagnetic coordinates iono1
     CALL GEOMAG(1,gLon1_I(iLine),gLat1_I(iLine),mLon_I(iLine),mLat_I(iLine))
-    write(*,*) 'finish geomag'
     IF (DoAlignDipoleRot) THEN
        gLat1_I(iLine)=mLat_I(iLine)      ! Use these two lines if you want the
        gLon1_I(iLine)=mLon_I(iLine)      ! magnetic and geographic poles aligned
@@ -76,7 +75,7 @@ contains
   !=============================================================================
   subroutine fill_thermal_plasma_empirical(iLine,F107,F107A,t)
     use ModSeGrid, only: nIono1,nIono2,nIono,nPlas, nPoint, &
-                         FieldLineGrid_IC,Bfield_IC
+                         FieldLineGrid_IC,Bfield_IC,IsVerbose
     use ModPlanetConst, only: Planet_, NamePlanet_I
 
     integer, intent(in) :: iLine
@@ -87,9 +86,9 @@ contains
     select case(NamePlanet_I(Planet_))
     case('EARTH')
        !  Use IRI to fill the thermal plasma
-       write(*,*) 'calling get_iri'
+       if(IsVerbose) write(*,*) 'calling get_iri'
        CALL get_iri(iLine,F107A)
-       write(*,*) 'finish get_iri'
+       if(IsVerbose) write(*,*) 'finish get_iri'
        ! The next few lines are for thinning the topside ionosphere densities
        IF (ABS(facn).GT.0.) THEN
           do iIono=nIono1+nIono2+1,nIono
@@ -170,7 +169,7 @@ contains
   !=============================================================================
   !*  Subroutine get_iri calls IRI-90 for each ionosphere.
   SUBROUTINE get_iri(iLine,F107A)
-    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC
+    use ModSeGrid, only: nIono,nPoint,FieldLineGrid_IC,IsVerbose
     
     real,    intent(in) :: F107A
     integer, intent(in) :: iLine
@@ -212,10 +211,10 @@ contains
     STL1=(UT/240+gLon1_I(iLine))/15
     IF (STL1.LT.0.) STL1=STL1+24.
     IF (STL1.GT.24.) STL1=STL1-24.
-    write(*,*) 'calling iri'
+    if(IsVerbose) write(*,*) 'calling iri'
     CALL IRI90(JF,JMAG,gLat1_I(iLine),gLon1_I(iLine),RZ12,MMDD,STL1, &
          FieldLineGrid_IC(iLine,1:nIono)/1e5,nIono,'PW/IRI_DATA/ ',IriOutput_VC,OARR)
-    write(*,*) 'finish iri'
+    if(IsVerbose) write(*,*) 'finish iri'
     do i=nIono,1,-1
        eThermalDensity_IC(iLine,i)=IriOutput_VC(1,i)*PerM3toPerCm3 
        IF (IRIOUTPUT_VC(4,i).LT.0.) IriOutput_VC(4,i)=IriOutput_VC(4,i+1)
@@ -251,7 +250,7 @@ contains
     use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX,init_production
     use ModSeCross,     only: cross,cross_jupiter
     use EUA_ModMsis90,  only: GTD6,TSELEC
-    use ModNumConst,    only: cDegToRad
+    use ModNumConst,    only: cDegToRad,cRadToDeg
     use ModPlanetConst, only: Planet_, NamePlanet_I
 
     integer, intent(in) :: iLine
@@ -263,7 +262,9 @@ contains
     ! production variables
     real    :: SZA1,SZA2
     real,allocatable :: ColumnDens_IC(:,:)
-   
+
+    real, parameter :: cCmToKm=1.0e-5
+
     !MSIS variables
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
     real :: SW(25),DN(8),TN(2)
@@ -328,9 +329,11 @@ contains
          NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
     !  Calculate the photoelectron production spectrum
-    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
+!    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
+    IF (DoCalcPeIono1) THEN
        CALL ESPEC(NeutralDens1_IIC(iLine,:,:),ePhotoProdSpec1_IIC(iLine,:,:),&
-            nIono,0,nIons,PhotoIonRate1_IIC(iLine,:,:))
+            nIono,0,SZA1*cRadToDeg,FieldLineGrid_IC(iLine,1:nIono)*cCmToKm,&
+            nIons,PhotoIonRate1_IIC(iLine,:,:))
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
@@ -366,17 +369,19 @@ contains
     
     ! Calculate the solar zenith angle
     CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
+    !write(*,*) 'SZA2',SZA2    
     SZA2=SZA2*cDegToRad
 
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens2_IIC(iLine,:,:),NeutralTemp2_IC(iLine,:),nIono)    
 
-    write(*,*) 'SZA1',SZA2    
+
     !  Calculate the photoelectron production spectrum
-    IF ((SZA2.LT.2.).AND.(DoCalcPeIono2)) THEN
+    IF (DoCalcPeIono2) THEN
        CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
-            nIono,nPoint,nIons,PhotoIonRate1_IIC(iLine,:,:))
+            nIono,nPoint,SZA2*cRadToDeg,FieldLineGrid_IC(iLine,1:nIono)*cCmToKm,&
+            nIons,PhotoIonRate1_IIC(iLine,:,:))
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy

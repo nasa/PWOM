@@ -217,6 +217,7 @@ contains
          do iIon=1,nIon-1
             call rusanov_solver(iIon,nDim,RGAS_I(iIon),dt,   &
                  State_GV(-1:nDim+2,iRho_I(iIon):iP_I(iIon)),&
+                 State_GV(-1:nDim+2,iRho_I(nIon):iP_I(nIon)),&
                  Source_CV(1:nDim,iRho_I(iIon)), Source_CV(1:nDim,iU_I(iIon)),&
                  Source_CV(1:nDim,iP_I(iIon)),  &
                  HeatCon_GI(0:nDim+1,iIon), &

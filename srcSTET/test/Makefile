@@ -262,3 +262,25 @@ unit_test_background:
 	-@(./unit_test_background_exe )
 
 #######################################################################
+OBJ_RESSCATTER = \
+	../ModMath.o\
+	../ModGrid.o \
+	../ModSeMpi.o \
+	../ModSeProduction.o
+
+
+
+unit_test_res_scatter_exe:
+	@(cd .. ;make ModMath.o ModGrid.o ModSeMpi.o ModSeProduction.o)
+	@make unit_test_res_scatter.o 
+	${LINK.f90} -o unit_test_res_scatter.exe ${OBJ_RESSCATTER} \
+		unit_test_res_scatter.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_res_scatter: 
+	@echo unit_test_res_scatter starting
+	@make unit_test_res_scatter_exe 
+	@echo ./unit_test_res_scatter_exe
+	-@(./unit_test_background_exe )
+
+#######################################################################

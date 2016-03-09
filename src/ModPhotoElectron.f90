@@ -15,5 +15,11 @@ module ModPhotoElectron
   logical :: UseFixedPrecip = .false.
   real :: PrecipEnergyMin, PrecipEnergyMax, PrecipEnergyMean, PrecipEnergyFlux
 
+  !PolarRain precipitation to pass to STET
+  logical :: UsePolarRain = .false.
+  real :: PolarRainEMin, PolarRainEMax, PolarRainEMean, PolarRainEFlux
+
+  !Should STET be verbose with output?
+  logical :: IsVerboseSTET=.false.
 
 end module ModPhotoElectron
