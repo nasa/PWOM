@@ -33,8 +33,8 @@ contains
          PrecipEmean,PrecipEflux,UsePrecipitation,&
          PolarRainEmin, PolarRainEmax, &
          PolarRainEmean,PolarRainEflux,UsePolarRain
-    logical, intent(in) :: IsVerbosePw
     use ModPlanetConst, only: Planet_, NamePlanet_I
+    logical, intent(in) :: IsVerbosePw
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
     real,    intent(in) :: AltPwIn_C(nAltPwIn)
     real, optional, intent(in)::PrecipEminPwIn,PrecipEmaxPwIn, &
