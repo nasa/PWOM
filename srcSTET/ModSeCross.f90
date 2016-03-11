@@ -228,27 +228,38 @@ contains
        ETJ=ENER(JY)
        DO  I=1,NMAJ
           DO  J=1,NNN(I)
+             ! difference between energy and threshold
              ETA = ETJ - WW(J,I)
              IF (ETA .GT. 0.) THEN
+                !when energy exceeds the threshold 
                 WE = WW(J,I) / ETJ
                 SIGG = QQN * AO(J,I) * (WE**OMEG(J,I) / WW(J,I)**2) &
                      * (1.0 - WE**BB(J,I)) ** ANU(J,I)
                 IF (SIGG .LT. 1.E-30) SIGG = 0.0
+                !find closest energy bins bracketing (Energy-threshold)
                 IE = INV (nEnergy,ETA,JY,ENER,Emin)
                 IEE = IE - 1
+                ! K is shifted index. Note that second index in SIGA is measured relative 
+                ! to the index of the energy bin cooresponding to E-threshold
                 K = JY - IE
                 KK = JY - IEE
                 IF (IE .EQ. JY) THEN
+                   !when shifted index is at 0 (when energybin cooresponds to index)
                    IF (JY .EQ. 1) THEN
+                      !special case when energy index is at bottom of energy grid
                       SIGA(I,1,JY)=SIGA(I,1,JY)+SIGG*WW(J,I)/(.5*DEL(JY))
                    ELSE
+                      !exactly on an energy bin but not at the bottom
                       SIGA(I,1,JY)=SIGA(I,1,JY) &
                            +SIGG*WW(J,I)/(ETJ-ENER(JY-1))
                    END IF
                 ELSE
                    IF (IE .LE. 1 .OR. ETA.LE.Emin) THEN
+                      !special case when index is less than bottom or energy grid
+                      ! when difference between threshold and energy is very small
                       SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG
                    ELSE
+                      ! usual case where you are interpolating between two bins
                       FF = (ENER(IE)-ETA) / (ENER(IE)-ENER(IEE))
                       FF = 1.0 - ABS(FF)
                       SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG * FF
