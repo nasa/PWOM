@@ -431,6 +431,7 @@ contains
              FLUX(L,J) = 0.0
           ENDIF
 
+
           if(NamePlanet_I(Planet_)=='EARTH')then
              ! add in the resonant scattering from the plasmasphere from 
              ! strobel et al 1974, only for earth now
@@ -455,6 +456,8 @@ contains
                 FLUX(L,J) = FLUX(L,J) + FluxRes
              endif
           endif
+
+
           !
           !
           ! Calculate SRC photodissociation of O2, dissociative excitation of
@@ -467,6 +470,7 @@ contains
 !               * BSO2(L)
 !          PHOTOD(1,3,J) = PHOTOD(1,3,J) + &
 !               ZMAJ(3,J)*(SIGABS(3,L)-SIGION(3,L))*FLUX(L,J)
+          
        end do
     end do
     
@@ -511,8 +515,9 @@ contains
                    !
                    ! Calculate ionization rates:
                    !
-                   DSPECT = ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)*PROB(K,I,L)/100.0
+                   DSPECT = ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)*PROB(K,I,L)
                    PHOTOI(K,I,J) = PHOTOI(K,I,J) + DSPECT
+                   
                    !
                    !
                    ! Find box numbers M1, M2 corresponding to energies E1, E2:
@@ -540,6 +545,7 @@ contains
                       ENDIF
                       PESPEC(N,J) = PESPEC(N,J) + DSPECT * FAC
                       PeSpectrumSpecies_IIIC(K,I,N,J)=DSPECT * FAC
+                      
                    enddo
                    !
                 enddo   ! End of ion state loop
@@ -566,8 +572,8 @@ contains
                       IF (E1.LT.Emin .OR. E1.GT.Emax) cycle
                       DSPECT = &
                            ZMAJ(I,J)*SIGION(I,L)*FLUX(L,J)&
-                           *PROB(K1,I,L)/100.0&
-                           *PROB(K2,I,iAugWaveBin_I(I))/100.0
+                           *PROB(K1,I,L)&
+                           *PROB(K2,I,iAugWaveBin_I(I))
                       PHOTOI(K1,I,J) = PHOTOI(K1,I,J) + DSPECT      ! Technically, it's
                       PHOTOI(K2,I,J) = PHOTOI(K2,I,J) + DSPECT      ! double ionization
                       CALL BOXNUM (E1,E2,M1,M2,R1,R2,Emax)       ! not two single ions
@@ -1474,7 +1480,6 @@ contains
     select case(NamePlanet_I(Planet_))
     case('JUPITER')
        SFLUX(:) = SFLUX(:) * (1.0/5.2)**2
-
     case('SATURN')
        SFLUX(:) = SFLUX(:) * (1.0/9.5)**2
     end select
@@ -1971,7 +1976,7 @@ contains
                StandardWaveGrid(i),WaveGridCenters)
           do l=1,nStates
              ProbSpecies(l,i) = linear(ProbIn(l,:),1,nLines, &
-                  StandardWaveGrid(i),WaveGridCenters)
+                  StandardWaveGrid(i),WaveGridCenters)/100.0
           end do
        endif
     enddo
@@ -2037,8 +2042,8 @@ contains
              ProbIn(1,i) = 0.0
              ProbIn(2,i) = 0.0
           else
-             ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
-             ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
+             ProbIn(1,i) = cross1/SigIonIn(i)
+             ProbIn(2,i) = cross2/SigIonIn(i)
           endif
        elseif(NameNeutral == 'CH4') then
           read(UnitTmp_,*) WaveGridCenters(i),SigAbsIn(i),junk1,junk2,junk3,&
@@ -2051,11 +2056,11 @@ contains
              ProbIn(4,i) = 0.0
              ProbIn(5,i) = 0.0
           else
-             ProbIn(1,i) = 100.0*cross1/SigIonIn(i)
-             ProbIn(2,i) = 100.0*cross2/SigIonIn(i)
-             ProbIn(3,i) = 100.0*cross3/SigIonIn(i)
-             ProbIn(4,i) = 100.0*cross4/SigIonIn(i)
-             ProbIn(5,i) = 100.0*cross5/SigIonIn(i)
+             ProbIn(1,i) = cross1/SigIonIn(i)
+             ProbIn(2,i) = cross2/SigIonIn(i)
+             ProbIn(3,i) = cross3/SigIonIn(i)
+             ProbIn(4,i) = cross4/SigIonIn(i)
+             ProbIn(5,i) = cross5/SigIonIn(i)
           endif
           
        endif
