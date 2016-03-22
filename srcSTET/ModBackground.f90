@@ -381,7 +381,7 @@ contains
     IF (DoCalcPeIono2) THEN
        CALL ESPEC(NeutralDens2_IIC(iLine,:,:),ePhotoProdSpec2_IIC(iLine,:,:),&
             nIono,nPoint,SZA2*cRadToDeg,FieldLineGrid_IC(iLine,1:nIono)*cCmToKm,&
-            nIons,PhotoIonRate1_IIC(iLine,:,:))
+            nIons,PhotoIonRate2_IIC(iLine,:,:))
     ELSE
        do iIono=1,nIono
           do iEnergy=1,nEnergy
