@@ -308,21 +308,18 @@ contains
           NeutralTemp1_IC (iLine,iIono)=TN(2)
        end do
 
+       ! Calculate the solar zenith angle
+       CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
+       SZA1=SZA1*cDegToRad
     case('JUPITER')
        ! interpolate from AtmosArray(1,:) to FieldLineGrid_IC(iLine,iAlt)
        NeutralFile = 'PW/JGITM-1D-atmos.dat'
        CALL get_jupiter_atmos(NeutralFile,nNeutralSpecies, iLine, &
             NeutralDens1_IIC(iLine,:,1:nIono),NeutralTemp1_IC(iLine,1:nIono))
 
+       ! Calculate the solar zenith angle
+       SZA1=acos(cos(glat_I(iLine)*cDegToRad)*cos(glon_I(iLine)*cDegToRad))
     end select
-
-    ! Calculate the solar zenith angle
-    CALL SOLZEN(Idate,UT,gLat1_I(iLine),gLon1_I(iLine),SZA1)
-!    write(*,*) 'SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)',&
-!         SZA1,glat1_I(iLine),glon1_I(iLine),glat2_I(iLine),glon2_I(iLine),mlat_I(iLine),mlon_I(iLine)
-!    call con_stop('')
-
-    SZA1=SZA1*cDegToRad
     
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
@@ -362,15 +359,20 @@ contains
           NeutralDens2_IIC(iLine,N2_,iIono)=DN(msisN2_)
           NeutralTemp2_IC (iLine,iIono)=TN(2)
        end do
+
+       ! Calculate the solar zenith angle
+       CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
+       !write(*,*) 'SZA2',SZA2    
+       SZA2=SZA2*cDegToRad
+       
     case('JUPITER')
        NeutralDens2_IIC(iLine,:,:)  = NeutralDens1_IIC(iLine,:,:)
        NeutralTemp2_IC(iLine,:) = NeutralTemp1_IC(iLine,:)
+
+       ! Calculate the solar zenith angle
+       SZA2=acos(cos(glat_I(iLine)*cDegToRad)*cos(glon_I(iLine)*cDegToRad))
     end select
     
-    ! Calculate the solar zenith angle
-    CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
-    !write(*,*) 'SZA2',SZA2    
-    SZA2=SZA2*cDegToRad
 
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
