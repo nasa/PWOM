@@ -431,7 +431,6 @@ contains
              FLUX(L,J) = 0.0
           ENDIF
 
-
           if(NamePlanet_I(Planet_)=='EARTH')then
              ! add in the resonant scattering from the plasmasphere from 
              ! strobel et al 1974, only for earth now
@@ -1025,7 +1024,16 @@ contains
     !
     RLAT = GLAT * PI/180.
     RLONG = GLONG * PI/180.
-    CALL SUNCOR (IDATE, UT, SDEC, SRASN, GST)
+
+    ! Convert IDATE to 4-digit year and 3-digit day of year
+    ! for dates between 1950 and 2049
+    IYR=IDATE/1000
+    IDAY=IDATE-IYR*1000
+    if (IYR.LT.50) IYR = IYR+100
+    IYR = IYR+1900
+    
+    CALL SunCoordsGEI (IYR, IDAY, UT, SDEC, SRASN, GST)
+    write(*,*) IDATE, SDEC,SRASN,GST
     RH = SRASN - (GST+RLONG)
     COSSZA = SIN(SDEC)*SIN(RLAT) + COS(SDEC)*COS(RLAT)*COS(RH)
     SZA = ACOS(COSSZA) * 180./PI
@@ -1034,33 +1042,45 @@ contains
   !
   !
   !
-  !
-  ! Subroutine SUNCOR returns the declination SDEC and right ascension
+  ! Subroutine SunCoordsGEI returns the declination SDEC and right ascension
   ! SRASN of the sun in GEI coordinates, radians, for a given date IDATE
   ! in yyddd format and universal time UT in seconds.  Greenwich Sidereal
-  ! Time GST in radians is also returned.  Reference:  C.T. Russell,
-  ! Geophysical Coordinate Transforms.
+  ! Time GST in radians is also returned. For years 1901-2099. Accuracy 0.006
+  ! degree. Reference:  C.T. Russell, Geophysical Coordinate Transforms.
   !
-  SUBROUTINE SUNCOR (IDATE, UT, SDEC, SRASN, GST)
-    DATA PI/3.1415926536/
+  Subroutine SunCoordsGEI (iYear, iDOY, UTseconds, Dec, RA, GST)
+    use ModNumConst, ONLY: cPi,cDegToRad
+    integer, intent(in) :: iYear, iDOY
+    real, intent(in)    :: UTseconds
+
+    real, intent(out)   :: Dec, RA, GST
+
+    real :: SecPerDay,DaysPerYr,DaysPer100Yr,FractionOfDay,JD1900
+    real :: CenturiesElapsed,MeanLongitude,MeanAnomaly,EclipticLongitude
+    real :: ObliquityOfEcliptic,SinDec,CosDec
     !
-    FDAY=UT/86400.
-    IYR=IDATE/1000
-    IDAY=IDATE-IYR*1000
-    DJ=365*IYR+(IYR-1)/4+IDAY+FDAY-0.5
-    T=DJ/36525.
-    VL=AMOD(279.696678+.9856473354*DJ,360.)
-    GST=AMOD(279.696678+.9856473354*DJ+360.*FDAY+180.,360.) * PI/180.
-    G=AMOD(358.475845+.985600267*DJ,360.) * PI/180.
-    SLONG=VL+(1.91946-.004789*T)*SIN(G)+.020094*SIN(2.*G)
-    OBLIQ=(23.45229-0.0130125*T) *PI/180.
-    SLP=(SLONG-.005686) * PI/180.
-    SIND=SIN(OBLIQ)*SIN(SLP)
-    COSD=SQRT(1.-SIND**2)
-    SDEC=ATAN(SIND/COSD)
-    SRASN=3.14159-ATAN2(1./TAN(OBLIQ)*SIND/COSD,-COS(SLP)/COSD)
+    SecPerDay = 86400.
+    DaysPerYr = 365.
+    DaysPer100Yr=36525.
+    FractionOfDay=UTseconds/SecPerDay
+    JD1900=DaysPerYr*(iYear-1900)+(iYear-1901)/4+iDOY+FractionOfDay-0.5
+    CenturiesElapsed=JD1900/DaysPer100Yr
+    MeanLongitude=AMOD(279.696678+.9856473354*JD1900,360.)
+    GST=AMOD(279.696678+.9856473354*JD1900+360.*FractionOfDay+180.,360.) &
+         * cDegToRad
+    MeanAnomaly=AMOD(358.475845+.985600267*JD1900,360.) * cDegtoRad
+    EclipticLongitude = MeanLongitude + &
+         (1.91946-.004789*CenturiesElapsed)*SIN(MeanAnomaly) + &
+         .020094*SIN(2.*MeanAnomaly)
+    ObliquityOfEcliptic=(23.45229-0.0130125*CenturiesElapsed) * cDegtoRad
+    EclipticLongitude=(EclipticLongitude-.005686) * cDegtoRad
+    SinDec=SIN(ObliquityOfEcliptic)*SIN(EclipticLongitude)
+    CosDec=SQRT(1.-SinDec**2)
+    Dec=ATAN(SinDec/CosDec)
+    RA=cPi-ATAN2(1./TAN(ObliquityOfEcliptic)*SinDec/CosDec, &
+         -COS(EclipticLongitude)/CosDec)
     RETURN
-  END SUBROUTINE SUNCOR
+  END SUBROUTINE SunCoordsGEI
 
   ! Subroutine SSFLUX
   !
