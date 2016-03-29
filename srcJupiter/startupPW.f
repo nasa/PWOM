@@ -176,6 +176,8 @@ C                                                                      C
       gmLon=SmLon
       gLat=SmLat
       gLon=SmLon
+      gLat2=-SmLat
+      gLon2=SmLon
       
       CALL JupiterAtmos(XH2,XH,XH2O,XCH4,XTN)
       NDensity_CI(1:nDim,H2_) = XH2(1:NDIM)

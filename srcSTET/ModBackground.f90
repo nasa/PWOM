@@ -246,7 +246,7 @@ contains
   !============================================================================
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
-    use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC
+    use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC,IsVerbose
     use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX,init_production
     use ModSeCross,     only: cross,cross_jupiter
     use EUA_ModMsis90,  only: GTD6,TSELEC
@@ -318,8 +318,9 @@ contains
             NeutralDens1_IIC(iLine,:,1:nIono),NeutralTemp1_IC(iLine,1:nIono))
 
        ! Calculate the solar zenith angle
-       SZA1=acos(cos(glat_I(iLine)*cDegToRad)*cos(glon_I(iLine)*cDegToRad))
+       SZA1=acos(cos(gLat1_I(iLine)*cDegToRad)*cos(gLon1_I(iLine)*cDegToRad))
     end select
+    if (IsVerbose) write(*,*) 'SZA1 ',SZA1*cRadToDeg
     
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
@@ -338,6 +339,7 @@ contains
 	  end do
        end do
     END IF
+    if(IsVerbose) write (*,*) PhotoIonRate1_IIC(1,10:15,10:15)
 
     !\
     ! Work on ionosphere 2
@@ -362,7 +364,6 @@ contains
 
        ! Calculate the solar zenith angle
        CALL SOLZEN(Idate,UT,gLat2_I(iLine),gLon2_I(iLine),SZA2)
-       !write(*,*) 'SZA2',SZA2    
        SZA2=SZA2*cDegToRad
        
     case('JUPITER')
@@ -370,9 +371,11 @@ contains
        NeutralTemp2_IC(iLine,:) = NeutralTemp1_IC(iLine,:)
 
        ! Calculate the solar zenith angle
-       SZA2=acos(cos(glat_I(iLine)*cDegToRad)*cos(glon_I(iLine)*cDegToRad))
+       SZA2=acos(cos(gLat2_I(iLine)*cDegToRad)*cos(gLon2_I(iLine)*cDegToRad))
     end select
-    
+
+    if (IsVerbose) write(*,*) 'SZA2 ',SZA2*cRadToDeg
+
 
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
@@ -391,6 +394,8 @@ contains
 	  end do
        end do
     END IF
+    if(IsVerbose) write (*,*) 'PhotoIon2: ',PhotoIonRate2_IIC(1,10:15,10:15)
+
 
     ! set the cross sections (perhaps this should only be called once?)
     select case(NamePlanet_I(Planet_))
