@@ -2,8 +2,8 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 Module ModCommonPlanet
   use ModParameters
-  character(6) NamePlanet
-  parameter (NamePlanet = 'Earth ')
+!  character(6) NamePlanet
+  character(len=100),parameter :: NamePlanet = 'EARTH'
 
   integer,parameter :: nVar=16
   real,   parameter :: rLowerBoundary  = 6.55677E8

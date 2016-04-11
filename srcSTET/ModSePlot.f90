@@ -18,7 +18,7 @@ contains
   subroutine plot_state(iLine,nStep,time,iphiup,iphidn,phiup,phidn)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,EqAngleGrid_IG,Bfield_IC,&
                              nIono,nPlas, nAngle, nEnergy, nLine, nPoint,&
-                             nThetaAlt_II
+                             nThetaAlt_II,rPlanetCM
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -30,7 +30,6 @@ contains
                            phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1), &
                            phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1)
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
     !grid parameters
     integer, parameter :: nDim =2, nVar=7, S_=1, PA_=2,B_=1
     integer, parameter :: E1_=3, E2_=4, E3_=5, E4_=6, E5_=7
@@ -54,12 +53,12 @@ contains
              !set coord based on up or down region
              if(iAngle<nAngle) then
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
              else
                 iAngleDn = 2*nAngle-iAngle
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= &
                      cPi-EqAngleGrid_IG(iLine,iAngleDn)
              endif
@@ -171,7 +170,7 @@ contains
   subroutine plot_state_pot(iLine,iEnergyIn,nStep,time,iphiup,iphidn,phiup,phidn)
     use ModSeGrid,     ONLY: FieldLineGrid_IC,EqAngleGrid_IG,Bfield_IC,&
                              nIono,nPlas, nAngle, nEnergy, nLine, nPoint,&
-                             nThetaAlt_IIC,EnergyGrid_I,MaxAlt_IC
+                             nThetaAlt_IIC,EnergyGrid_I,MaxAlt_IC,rPlanetCM
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -183,7 +182,7 @@ contains
                            phiup(nLine,0:nAngle,0:nPlas+1,nEnergy+1), &
                            phidn(nLine,0:nAngle,0:nPlas+1,nEnergy+1)
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
+
     !grid parameters
     integer, parameter :: nDim =2, nVar=3, S_=1, PA_=2,B_=1
     integer, parameter :: E1_=3
@@ -206,12 +205,12 @@ contains
              !set coord based on up or down region
              if(iAngle<nAngle) then
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
              else
                 iAngleDn = 2*nAngle-iAngle
                 Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)&
-                     /rEarthCM
+                     /rPlanetCM
                 Coord_DII(PA_,iPoint,iAngle)= &
                      cPi-EqAngleGrid_IG(iLine,iAngleDn)
              endif
@@ -292,7 +291,7 @@ contains
   ! plot omnidirectional flux in the ionosphere
   subroutine plot_omni_iono(iLine,nStep,time,specup,specdn,IsIono1)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, nIono, nEnergy, nLine, &
-         nPoint,EnergyGrid_I,iLineGlobal_I
+         nPoint,EnergyGrid_I,iLineGlobal_I,rPlanetCM
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -304,7 +303,7 @@ contains
     logical, intent(in) :: IsIono1
     
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
+
     !grid parameters
     integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
     !variable parameters
@@ -424,7 +423,7 @@ contains
     logical, intent(in) :: IsIono1
     
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
+
     !grid parameters
     integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
     !variable parameters
@@ -543,7 +542,7 @@ contains
          specdn(nLine,nEnergy,nPoint)
     
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
+
     !grid parameters
     integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
     !variable parameters
@@ -622,7 +621,6 @@ contains
          specdn(nLine,nEnergy,nPoint)
     
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
-    real, parameter     :: rEarthCM = 6375.0e5
     !grid parameters
     integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
     !variable parameters
@@ -692,7 +690,8 @@ contains
   subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,&
        NumberFlux_IC,TotalIonizationRate_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
-                             MinEnergy_IC, EnergyGrid_I,Efield_IC,iLineGlobal_I
+                             MinEnergy_IC, EnergyGrid_I,Efield_IC,iLineGlobal_I,&
+                             rPlanetCM
 
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
@@ -720,7 +719,7 @@ contains
     
     !Set Coordinates along field line and PA
     do iPoint=1,nPoint
-       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+       Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/rPlanetCM
        PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
        PlotState_IV(iPoint,Qe_)  = HeatingRate_IC(iLine,iPoint)
        PlotState_IV(iPoint,Nse_) = NumberDens_IC(iLine,iPoint)

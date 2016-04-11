@@ -87,19 +87,38 @@ subroutine set_grid_dimensions_default
   use ModSeGrid, only: allocate_grid_arrays, nIono,&
        DrIono1,nIono1,DrIono2,nIono2,DrIono3,nIono3,DrIono4,nIono4,TypeGridE,&
        nEnergy,EnergyMax,DeltaE, nTheta_II
+  use ModPlanetConst, ONLY: Planet_, NamePlanet_I
   !-----------------------------------------------------------------------------
  ! For now this is the same as the unit test grid.
   write(*,*) 'creating grid'
   !  call create_se_test_grid
   
-  DrIono1 = 1e6
-  nIono1  = 12
-  DrIono2 = 2e6
-  nIono2  = 10
-  DrIono3 = 3e6
-  nIono3  = 10
-  DrIono4 = 5e6
-  nIono4  = 2    
+    select case(NamePlanet_I(Planet_))
+
+    case('EARTH')
+
+    DrIono1 = 1e6
+    nIono1  = 12
+    DrIono2 = 2e6
+    nIono2  = 10
+    DrIono3 = 3e6
+    nIono3  = 10
+    DrIono4 = 5e6
+    nIono4  = 2    
+
+    case('JUPITER')
+
+    DrIono1 = 5.0*1e6
+    nIono1  = 12
+    DrIono2 = 5.0*2e6
+    nIono2  = 10
+    DrIono3 = 5.0*3e6
+    nIono3  = 10
+    DrIono4 = 5.0*5e6
+    nIono4  = 2    
+
+
+    end select
   
   nIono=nIono1+nIono2+nIono3+nIono4
   ! set the energy parameters for the energy grid

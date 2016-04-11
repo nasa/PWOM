@@ -39,7 +39,7 @@ program main_stet
   ! Initialize the planetary constant library and set Earth
   ! as the default planet.
   !/
-  write(*,*) 'Initiallizing Planet'
+  write(*,*) 'Initiallizing Planet',NamePlanet
 
   call init_planet_const
 

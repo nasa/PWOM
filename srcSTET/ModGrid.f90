@@ -110,7 +110,7 @@ Module ModSeGrid
   public :: set_grid_pot
   public :: update_grid
 
-  real :: rPlanetCM
+  real, public :: rPlanetCM
 contains
   !============================================================================
   subroutine init_se_grid(iLine)
@@ -133,7 +133,6 @@ contains
     
     rPlanetCM=rPlanet_I(Planet_)*cMtoCM
     ! Set field line info
-    !       write(*,*) 'rPlanetCM,BaseAltPlas,Lshell_I(iLine)',rPlanetCM,BaseAltPlas,Lshell_I(iLine)
     PhiBasePlas=&
          ACOS(SQRT((rPlanetCM+BaseAltPlas)/(Lshell_I(iLine)*rPlanetCM)))
     SphiO=SIN(PhiBasePlas)
@@ -800,7 +799,8 @@ contains
        !Set Coordinates along field line and PA
           do iPoint=1,nPoint
              do iAngle=1,nAngle
-             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+!             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/6375.0e5
+             Coord_DII(S_,iPoint,iAngle) = FieldLineGrid_IC(iLine,iPoint)/rPlanetCM
              Coord_DII(PA_,iPoint,iAngle)= EqAngleGrid_IG(iLine,iAngle)
              if (iAngle <= nThetaAlt_II(iLine,iPoint) )then
                 PlotState_IIV(iPoint,iAngle,B_) = Bfield_IC(iLine,iPoint)
@@ -936,6 +936,12 @@ contains
   ! Test Grid: This is a routine that creates the test grid for all unit tests 
   ! (since all other modules rely on the grid)
   subroutine create_se_test_grid
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
+
+    select case(NamePlanet_I(Planet_))
+
+    case('EARTH')
+
     DrIono1 = 1e6
     nIono1  = 12
     DrIono2 = 2e6
@@ -945,12 +951,30 @@ contains
     DrIono4 = 5e6
     nIono4  = 2    
 
+    case('JUPITER')
+
+    DrIono1 = 5.0*1e6
+    nIono1  = 12
+    DrIono2 = 5.0*2e6
+    nIono2  = 10
+    DrIono3 = 5.0*3e6
+    nIono3  = 10
+    DrIono4 = 5.0*5e6
+    nIono4  = 2    
+
+
+    end select
+
+
+
     nIono=nIono1+nIono2+nIono3+nIono4
     ! set the energy parameters for the energy grid
     TypeGridE = 'ConstDE'
     nEnergy=100
 !    nEnergy=94
     EnergyMax=100.5
+!    nEnergy=2000
+!    EnergyMax=2000.5
     DeltaE = 1.0
 
     ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  

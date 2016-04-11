@@ -1,5 +1,4 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
+
 !******************************************************************************
 ! Use Newton's method to find chemical equilibrium for lower boundary
 !******************************************************************************
@@ -16,8 +15,11 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
   real :: InitialGuess,kr1T,kr2T
   integer :: i
   
-  call MODATM(1400.0e5,DensityH2, DensityH, DensityH2O, DensityCH4,Temperature)
-  
+  DensityH2 = XH2(0)
+  DensityH  = XH(0)
+  DensityH2O = XH2O(0)
+  DensityCH4 = XCH4(0)
+  Temperature = XTN(0)
 
 ! set source - loss to zero for chemical equilibrium
 
@@ -27,12 +29,15 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
 
 
 ! source & loss for H+
-  alpha1= jp1*DensityH2 + jp3*DensityH + jp4*DensityH2O  ! s
+!  alpha1= jp1*DensityH2 + jp3*DensityH + jp4*DensityH2O  ! s
+  alpha1=  TotalIonRate_IC(Ion2_,1)! s
+  
   alpha2= -kc2*DensityH2**2. - kc3*DensityCH4 - kc8*DensityH2O & ! l
           - kc9(1)*DensityH2
   
 ! source & loss for H3+
-  beta1 = kc1*(jp2/kc1)*DensityH2 ! s
+!  beta1 = kc1*(jp2/kc1)*DensityH2 ! s
+  beta1 = TotalIonRate_IC(Ion3_,1)! s
   beta2 = kc2*DensityH2**2.+ kc9(1)*DensityH2 ! l
   beta3 =-kc6*DensityCH4-kc7*DensityH2O  ! l
   
@@ -67,7 +72,7 @@ subroutine calc_chemical_equilibrium(DensityHp, DensityH3p, DensityH2p)
 
   DensityH3p=(-zeta1-(zeta1**2.0-4.0*zeta2*zeta0)**0.5)/(2.0*zeta2)
 
-  DensityH2p= jp2/kc1
+  DensityH2p= TotalIonRate_IC(Ion3_,1)/(kc1*DensityH2)
 
   return
 end subroutine calc_chemical_equilibrium

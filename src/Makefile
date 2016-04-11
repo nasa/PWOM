@@ -12,7 +12,7 @@ include Makefile.RULES
 MODULES = \
 	ModPW.o\
 	ModParameters.o\
-	ModCommonPlanet.o\
+	ModCommonPlanet_planet.o\
 	ModCommonVariables.o\
 	ModNeutralPW.o\
 	ModPass.o\
@@ -108,6 +108,4 @@ PWOM_for_Darwin:
 	rm -rf Tmp_
 
 distclean: clean
-	rm -f PLANET *_planet.f get_rate.f90 \
-		ModGlow.f90 upper_heat_conduction.f90 \
-		ModCommonPlanet.f90 Makefile.planet 
+	rm -f PLANET *_planet.f *_planet.f90
