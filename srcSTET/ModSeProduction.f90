@@ -3,6 +3,7 @@ Module ModSeProduction
   save
   private !except
   public :: RCOLUM
+  public :: RCOLUM_ABOVE
   public :: espec
   public :: SOLZEN
   public :: SSFLUX
@@ -24,6 +25,9 @@ Module ModSeProduction
 
   ! store the slant column density
   real, allocatable ::ZCOL(:,:)
+
+  ! store the column density above for starlight input calculation
+  real, allocatable ::ZCOLabove(:,:)
 
   ! Store the crossections
   real, allocatable :: SIGION(:,:),SIGABS(:,:)
@@ -173,7 +177,101 @@ contains
     !
     RETURN
   END SUBROUTINE RCOLUM
-  
+
+  !============================================================================
+  !variant of rcolum to get column density above the location of interest
+  SUBROUTINE RCOLUM_ABOVE (ZZ, ZMAJ, TN, IONO)
+
+!    INCLUDE 'numbers.h'
+    use ModSeGrid,      ONLY: rPlanetCM
+    use ModNumConst,    ONLY: cPi
+    PARAMETER (NM=3) 
+    PARAMETER (NU=4) !heights in us standard model
+    integer, intent(in) :: IONO
+    real,    intent(in) :: ZMAJ(nNeutral,IONO)
+    !
+    DIMENSION ZZ(IONO), TN(IONO)
+    real, allocatable :: ZVCD(:,:),ZCG(:)
+    real,parameter ::CHI=0.0
+    ! *** planet specific
+    DIMENSION  ZUS(NU), TNUS(NU), ZCUS(NM,NU)
+
+    !
+
+    ! These are the heights, temperatures and densities for US standard model
+    DATA ZUS/0., 1.5E6, 5.E6, 9.E6/, TNUS/288., 217., 271., 187./
+    DATA ZCUS/8.00E17, 4.54E24, 1.69E25, &
+         8.00E17, 5.46E23, 2.03E24, &
+         8.00E17, 3.63E21, 1.35E22, &
+         7.80E17, 8.48E18, 3.16E19/
+    !
+    !
+    if (.not.allocated(ZVCD)) allocate(ZVCD(nNeutral,IONO))
+    if (.not.allocated(ZCG)) allocate(ZCG(nNeutral))
+
+    if (.not.allocated(ZCOLabove)) allocate(ZCOLabove(nNeutral,IONO))
+    CALL VCD (ZZ, ZMAJ, ZVCD, IONO, nNeutral)
+    !
+    IF (CHI .GE. 2.) THEN
+       do I=1,nNeutral
+          do J=1,IONO
+             ZCOLabove(I,J) = 1.0E30
+          enddo
+       enddo
+       RETURN
+    ENDIF
+    !
+    IF (CHI .LE. cPi/2.) THEN
+       DO I=1,nNeutral
+          DO J=1,IONO
+             ZCOLabove(I,J) = ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
+          enddo
+       enddo
+    ELSE
+       do J=1,IONO
+          GHRG=(rPlanetCM+ZZ(J))*SIN(CHI)
+          GHZ=GHRG-rPlanetCM
+          IF (GHZ .LE. 0.) THEN
+             do I=1,nNeutral
+                ZCOLabove(I,J) = 1.0E30
+             end do
+             cycle
+          ENDIF
+          IF (GHZ .GE. ZZ(1)) THEN
+             DO JG=1,J-1
+                IF (ZZ(JG) .LE. GHZ .AND. ZZ(JG+1) .GT. GHZ) GOTO 120
+             enddo
+120          TNG = TN(JG)+(TN(JG+1)-TN(JG))*(GHZ-ZZ(JG))/(ZZ(JG+1)-ZZ(JG))
+             do I=1,nNeutral
+                ZCG(I) = ZVCD(I,JG) * (ZVCD(I,JG+1) / ZVCD(I,JG)) ** &
+                     ((GHZ-ZZ(JG)) / (ZZ(JG+1)-ZZ(JG)))
+             enddo
+          ELSE
+             !Here the grazing altitude is less than the bottom of the model 
+             !therefore the values are interpolated from US standard atmosphere 
+             !at sea level. Only good for Earth, Not suitable for Jupiter!!!
+             ! for Jupiter we have densities down to 0 altitude so just use 
+             ! GITM values. For jupiter zz should go to 0 alt.
+             do JG=1,3
+                IF (ZUS(JG) .LT. GHZ .AND. ZUS(JG+1) .GT. GHZ) GOTO 180
+             enddo
+180          TNG = TNUS(JG) &
+                  + (TNUS(JG+1)-TNUS(JG))*(GHZ-ZUS(JG))/(ZUS(JG+1)-ZUS(JG))
+             do I=1,nNeutral
+                ZCG(I) = ZCUS(I,JG) * (ZCUS(I,JG+1) / ZCUS(I,JG)) ** &
+                     ((GHZ-ZUS(JG)) / (ZUS(JG+1)-ZUS(JG)))
+             end do
+          ENDIF
+          do I=1,nNeutral
+             ZCOLabove(I,J) = 2. * ZCG(I) * CHAP(CPI/2.,GHZ,TNG,I) &
+                  - ZVCD(I,J) * CHAP(CHI,ZZ(J),TN(J),I)
+          end do
+       end do
+    ENDIF
+    !
+    RETURN
+  END SUBROUTINE RCOLUM_ABOVE
+  !============================================================================
   !
   !
   !
@@ -324,6 +422,12 @@ contains
     real :: FluxRes
     !Set named constants for particular wavelength bins
     integer,parameter :: LyAlpha_= 12, LyBeta_=18 , HeI_=35, HeII_=44
+    !for starlight bin1 is 1000-1050A, bin2 is 950-1000A and bin3 is 900-950A
+    integer,parameter :: Starlight1_= 16,Starlight2_= 19,Starlight3=21
+    
+    !incident starlight intensity for starlight bins (Thitheridge 2000)
+    real, parameter :: StarLightIntensity = 5.0e6 !photons/cm2/s
+
 !    COMMON /CGLOW/ &
 !         ZCOL(nNeutral,IONO),WAVE1(LMAX),WAVE2(LMAX),SFLUX(LMAX)
     !
@@ -415,6 +519,9 @@ contains
     end do
 
 !    write(*,*) '!!! SZA',SZA
+
+
+
     !
     !
     ! Calculate attenuated solar flux at all altitudes and wavelengths:
@@ -454,6 +561,20 @@ contains
                      (/SZA,AltKm_C(J)/),'HeII',FluxRes)
                 FLUX(L,J) = FLUX(L,J) + FluxRes
              endif
+             
+          endif
+
+          ! add in the starlight source
+          if (L==Starlight1_ .or. L==Starlight2_ .or. L==Starlight3_) then
+             ! recalculate tau for startlight which arrives over multiple 
+             ! directions using approach of Titheridge 2000
+             TAU=0.
+             DO  I=1,nNeutral
+                TAU=TAU+SIGABS(I,L)*ZCOLabove(I,J)
+             end do
+             FLUX(L,J) = FLUX(L,J) &
+                  + StarLightIntensity * 0.25* (exp(-TAU/0.9) &
+                  + exp(-TAU/0.7)+exp(-TAU/0.5)+exp(-TAU/0.3))
           endif
 
 

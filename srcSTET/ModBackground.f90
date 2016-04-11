@@ -247,7 +247,8 @@ contains
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(iLine,F107,F107A,AP)
     use ModSeGrid,      only: nIono,nEnergy,nPoint,FieldLineGrid_IC,IsVerbose
-    use ModSeProduction,only: RCOLUM,ESPEC,SOLZEN,SSFLUX,init_production
+    use ModSeProduction,only: RCOLUM,RCOLUM_ABOVE,ESPEC,SOLZEN,SSFLUX,&
+                              init_production
     use ModSeCross,     only: cross,cross_jupiter
     use EUA_ModMsis90,  only: GTD6,TSELEC
     use ModNumConst,    only: cDegToRad,cRadToDeg
@@ -325,6 +326,10 @@ contains
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA1,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
+
+    ! for starlight input get the column density above 
+    CALL RCOLUM_ABOVE(FieldLineGrid_IC(iLine,1:nIono), &
+         NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
     
     !  Calculate the photoelectron production spectrum
 !    IF ((SZA1.LT.2.).AND.(DoCalcPeIono1)) THEN
@@ -380,6 +385,10 @@ contains
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA2,FieldLineGrid_IC(iLine,1:nIono), &
          NeutralDens2_IIC(iLine,:,:),NeutralTemp2_IC(iLine,:),nIono)    
+
+    ! for starlight input get the column density above 
+    CALL RCOLUM_ABOVE(FieldLineGrid_IC(iLine,1:nIono), &
+         NeutralDens1_IIC(iLine,:,:),NeutralTemp1_IC(iLine,:),nIono)    
 
 
     !  Calculate the photoelectron production spectrum
