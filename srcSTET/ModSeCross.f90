@@ -471,15 +471,19 @@ contains
     do iNeutral = 1, nNeutralSpecies
 
        write(*,*) 'getting H2 cross'
+       call get_excitation_crossection('H2', SIGA(H2_,:,:))
        call get_crossection_diffion('H2', SIGI(H2_,:,:), SIGA(H2_,:,:))
        call get_scattering_crossection('H2',SIGS(H2_,:))
        write(*,*) 'getting He cross'
+       call get_excitation_crossection('He', SIGA(He_,:,:))
        call get_crossection_diffion('He', SIGI(He_,:,:), SIGA(He_,:,:))
        call get_scattering_crossection('He',SIGS(He_,:))
        write(*,*) 'getting H cross'
+       call get_excitation_crossection('H', SIGA(H_,:,:))
        call get_crossection_diffion('H',  SIGI(H_,:,:), SIGA(H_,:,:))
        call get_scattering_crossection('H',SIGS(H_,:))
        write(*,*) 'getting CH4 cross'
+       call get_excitation_crossection('CH4', SIGA(CH4_,:,:))
        call get_crossection_diffion('CH4',SIGI(CH4_,:,:), SIGA(CH4_,:,:))
        call get_scattering_crossection('CH4',SIGS(CH4_,:))
        
@@ -489,6 +493,123 @@ contains
     call plot_diffion_cross
   end subroutine cross_jupiter
 
+  !=============================================================================
+  subroutine get_excitation_crossection(NameNeutralSpecies,SigA)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
+    
+    character(len=*), intent(in) :: NameNeutralSpecies
+    real, intent(out) :: SigA(nEnergy,nEnergy)
+    integer :: nStates
+
+    real, allocatable :: SigExcitation(:,:),Threshold(:)
+
+    integer :: iEnergy,iState, iBinHigh,iBinLow,nBinShiftHigh,nBinShiftLow
+    real :: Energy, DeltaE, Sigma, UpperBinFrac
+    !
+    !
+    ! Calculate electron impact excitation cross sections (put into SIGA):
+    !
+    write(*,*) 'Getting excitation crossections for ',NameNeutralSpecies
+    
+    select case(NameNeutralSpecies)
+    case('O')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       nStates = 0
+    case('N2')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       nStates = 0
+    case('O2')
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       nStates = 0
+    case('H2')
+       nStates = 12
+       if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
+       if(.not.allocated(Threshold)) allocate(Threshold(nStates))
+       call read_excitation_crossection(NameNeutralSpecies,nStates,Threshold,SigExcitation)
+    case('H')
+       nStates = 6
+       if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
+       if(.not.allocated(Threshold)) allocate(Threshold(nStates))
+       call read_excitation_crossection(NameNeutralSpecies,nStates,Threshold,SigExcitation)
+   case('CH4')
+       nStates = 5
+       if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
+       if(.not.allocated(Threshold)) allocate(Threshold(nStates))
+       call read_excitation_crossection(NameNeutralSpecies,nStates,Threshold,SigExcitation)
+    case('He')
+       nStates = 18
+       if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
+       if(.not.allocated(Threshold)) allocate(Threshold(nStates))
+       call read_excitation_crossection(NameNeutralSpecies,nStates,Threshold,SigExcitation)
+    case default
+       write(*,*) 'WARNING: Species ',NameNeutralSpecies&
+            ,' not yet supported. Using 0 for crossection.' 
+       nStates = 0
+       
+    end select
+
+    DO  iEnergy=1,nEnergy
+       Energy=EnergyGrid_I(iEnergy)
+       DO  iState=1,nStates ! was J
+          ! difference between energy and threshold
+          DeltaE = Energy - Threshold(iState) ! was ETA = ETJ-WW
+          IF (DeltaE .GT. 0.) THEN
+             !when energy exceeds the threshold
+             ! *************************
+             !Calculate crossection here:
+             ! *************************
+             ! GSinv_eps = Threshold(iState) / Energy
+             ! from Green and Stolarski, 1972, eqs 1 & 7
+             ! Sigma = GSq0 * GSA(iState) * (GSinv_eps**GSomega(iState,iSpecies) / &
+             ! Threshold(iState)**2) * (1.0 - GSinv_eps**GSgamma(iState,iSpecies)) &
+             ! ** GSnu(iState,iSpecies)
+             Sigma = SigExcitation(iEnergy,iState)
+             IF (Sigma .LT. 1.E-30) Sigma = 0.0
+             !find closest energy bins bracketing (Energy-threshold)
+             !could prob use iBin = BINNUM(DeltaE) but would make a small difference
+             !in interpolation
+             iBinHigh = INV(nEnergy,DeltaE,iEnergy,EnergyGrid_I,Emin)
+             iBinLow  = iBinHigh - 1
+             ! Find shifted indices. Note that second index in SIGA is measured relative 
+             ! to the index of the energy bin cooresponding to E-threshold
+             nBinShiftHigh = iEnergy - iBinHigh
+             nBinShiftLow  = iEnergy - iBinLow
+             IF (nBinShiftHigh .EQ. iEnergy) THEN
+                !when shifted index is at 0 (when energybin corresponds to index)
+                IF (iEnergy .EQ. 1) THEN
+                   !special case when energy index is at bottom of energy grid
+                   SigA(1,iEnergy)=SigA(1,iEnergy)+ &
+                        Sigma*Threshold(iState)/(.5*DeltaE_I(iEnergy))
+                ELSE
+                   !exactly on an energy bin but not at the bottom
+                   SigA(1,iEnergy)=SigA(1,iEnergy) &
+                        +Sigma*Threshold(iState)/(Energy-EnergyGrid_I(iEnergy-1))
+                END IF
+             ELSE
+                IF (iBinHigh .LE. 1 .OR. DeltaE.LE.Emin) THEN
+                   !special case when index is less than bottom or energy grid
+                   ! when difference between threshold and energy is very small
+                   SigA(nBinShiftHigh,iEnergy) = SigA(nBinShiftHigh,iEnergy) &
+                        + Sigma
+                ELSE
+                   ! usual case where you are interpolating between two bins
+                   UpperBinFrac = (EnergyGrid_I(iBinHigh)-DeltaE) / &
+                        (EnergyGrid_I(iBinHigh)-EnergyGrid_I(iBinLow))
+                   UpperBinFrac = 1.0 - ABS(UpperBinFrac)
+                   SigA(nBinShiftHigh,iEnergy) = SigA(nBinShiftHigh,iEnergy) &
+                        + Sigma * UpperBinFrac
+                   SigA(nBinShiftLow,iEnergy)  = SigA(nBinShiftLow,iEnergy) &
+                        + Sigma * (1.0-UpperBinFrac)
+                END IF
+             END IF
+          END IF
+       enddo
+    enddo
+  end subroutine get_excitation_crossection
+  
   !=============================================================================
   subroutine get_scattering_crossection(NameNeutralSpecies,SigS)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
@@ -810,6 +931,60 @@ contains
     deallocate(CrossSecArray)
 
   end subroutine read_total_ionization_crossection
+  !============================================================================
+  subroutine read_excitation_crossection(NameSpecies,nStates,Threshold,SigEx)
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModIoUnit, ONLY : UnitTmp_
+    use ModInterpolate, ONLY: linear
+    
+    character(len=*), intent(in) :: NameSpecies
+    integer, intent(in) :: nStates
+    !real :: Threshold(:),SigEx(:,:)  ! should be allocated and passed in
+    real :: Threshold(nStates),SigEx(nEnergy,nStates)
+    character(len=100) :: DatafileName
+    integer :: DataLen,iState,iEnergy
+    real, allocatable :: EnergyArray(:),CrossSecArray(:)
+    
+    write(*,*) 'getting excitation/absorption crossections for species ', &
+         NameSpecies
+
+    write(DatafileName,"(3a)") 'PW/',NameSpecies,'Across.dat'
+
+    SigEx(:,:) = 0.0
+
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+
+    do iState=1,nStates
+       read(UnitTmp_,*) Threshold(iState)
+       read(UnitTmp_,*) DataLen
+       
+       if(.not.allocated(EnergyArray)) allocate(EnergyArray(DataLen))
+       if(.not.allocated(CrossSecArray)) allocate(CrossSecArray(DataLen))
+    
+       ! Input energy array in eV and excitation crossections in cm2
+       read(UnitTmp_,*) EnergyArray
+       read(UnitTmp_,*) CrossSecArray
+
+       do iEnergy = 1,nEnergy
+          if (EnergyGrid_I(iEnergy) < EnergyArray(1) &
+               .or. EnergyGrid_I(iEnergy) > EnergyArray(DataLen)) then
+             ! if outside of data range set crossection to 0
+             SigEx(iEnergy,iState)=0.0
+          else
+             ! when inside of data range interpolate
+             SigEx(iEnergy,iState) = linear(CrossSecArray(:),1,DataLen, &
+                  EnergyGrid_I(iEnergy),EnergyArray(:))
+          end if
+       end do
+    
+       deallocate(EnergyArray)
+       deallocate(CrossSecArray)
+
+    end do
+    
+    close(UnitTmp_)
+
+  end subroutine read_excitation_crossection
   !============================================================================
   subroutine read_scattering_crossection(NameSpecies,SigS)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
