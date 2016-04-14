@@ -342,39 +342,41 @@ C     DEFINE TOPSIDE ELECTRON HEAT FLUX AND PARAMETRIC HEAT SOURCES    C
 C                                                                      C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
-C      READ (5,2) ETOP,ELFXIN
-c      ETOP=5.0E-3
-
-      if ((UseIE .or. UseAurora) .and. (SmLat < 85.0 .and. SmLat > -85.0)
-     &     .and. UseAuroralHeatFlux) then
-         ETOP = max (EfluxIE/EfluxRef * EtopAurora, EtopMin)
+      if(DoCoupleSTET.and.UseFeedbackFromSTET) then
+         !When using stet the heatflux should be zero
+         ETOP = 0.0
       else
-         ETOP = EtopMin
-      endif
-      
-      if (UsePhotoElectronHeatFlux) then
-         if (IsPlanetModified) then
-            if (RotAxisTheta == 0.0 .and. RotAxisPhi == 0.0) then
-               !IDEALAXES are set. Use SmLat and SmLon to set sza
-               SZA=acos(cos(SmLat*cDegToRad)*cos(SmLon*cDegToRad))*cRadToDeg
-            else
-               ! ERROR, planet modified but not IDEALAXES
-               call con_stop()
-            endif
+!when not using stet use phenomenalogical heatflux specification
+         if ((UseIE .or. UseAurora) .and. (SmLat < 85.0 .and. SmLat > -85.0)
+     &        .and. UseAuroralHeatFlux) then
+            ETOP = max (EfluxIE/EfluxRef * EtopAurora, EtopMin)
          else
-            ! Standard situation: Real axes
-            CALL SOLZEN (IYD, SEC, GLAT, GLONG, SZA)
+            ETOP = EtopMin
          endif
-         ETOP = ETOP+EtopPhotoElectrons*max(cos(SZA*cDegToRad),0.0)
-      endif
-
+         
+         if (UsePhotoElectronHeatFlux) then
+            if (IsPlanetModified) then
+               if (RotAxisTheta == 0.0 .and. RotAxisPhi == 0.0) then
+                  !IDEALAXES are set. Use SmLat and SmLon to set sza
+                  SZA=acos(cos(SmLat*cDegToRad)*cos(SmLon*cDegToRad))*cRadToDeg
+               else
+                  !ERROR, planet modified but not IDEALAXES
+                  call con_stop()
+               endif
+            else
+               ! Standard situation: Real axes
+               CALL SOLZEN (IYD, SEC, GLAT, GLONG, SZA)
+            endif
+            ETOP = ETOP+EtopPhotoElectrons*max(cos(SZA*cDegToRad),0.0)
+            
+            
 !     kludge
-!      ETOP = 0.0
-!      ETOP = EtopMin*.75
-!      ETOP = EtopMin*.375
-      ETOP = EtopMin*.75*.25
-
-
+!     ETOP = 0.0
+!     ETOP = EtopMin*.75
+!     ETOP = EtopMin*.375
+            ETOP = EtopMin*.75*.25
+         endif
+      endif
       ELFXIN=0.
 C
 C      ELFXIN=9.
