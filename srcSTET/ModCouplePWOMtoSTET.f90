@@ -26,7 +26,8 @@ contains
        AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn,&
        PolarRainEminPwIn,PolarRainEmaxPwIn,PolarRainEmeanPwIn,&
        PolarRainEfluxPwIn)
-    use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential,IsVerbose
+    use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential,IsVerbose, &
+                         UsePwRegion
     use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP,&
                               DoUsePWOM
     use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
@@ -44,6 +45,9 @@ contains
     !---------------------------------------------------------------------------
     DoUsePWOM = .true.    
     
+    ! Tell stet to include plenty of points in overlap region
+    UsePwRegion=.true.
+
     ! Set verbose base on PWOM input
     IsVerbose = IsVerbosePw
 

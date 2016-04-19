@@ -63,6 +63,7 @@ Module ModSeGrid
   real, public, allocatable :: Lshell_I(:) !Lshell foreach line
 
   integer, public :: nAngle=135 ! number of points in equatorial angle
+!  integer, public :: nAngle=235 ! number of points in equatorial angle
   integer, public :: nPoint=200 ! total number of points on grid
   integer, public :: nIono =34  ! number of points in each ionosphere
   integer, public :: nPlas =132  ! number of points in plasmasphere
@@ -99,6 +100,10 @@ Module ModSeGrid
   ! information on how global line number (as opposed to line number on 
   ! given proc)
   integer, public,allocatable :: iLineGlobal_I(:)
+
+  ! If we include extra points in PW overlap region (only when coupling PWOM)
+  logical,public :: UsePwRegion = .false.
+
 
   ! public methods
   public :: allocate_grid_arrays
@@ -159,6 +164,7 @@ contains
   !============================================================================
   subroutine calc_bfield_sgrid(iLine, Biono,PhiBasePlas)
     use ModNumConst,    ONLY: cDegToRad,cRadToDeg
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
     integer, intent(in) :: iLine
     real   , intent(in) :: Biono,PhiBasePlas
     integer :: iAlt
@@ -167,10 +173,36 @@ contains
     !length of iono regions
     real :: LengthIono1,LengthIono2,LengthIono3,LengthIono4 
 
+    !variables for PW overlap region
+    real :: PhiTopPw, dPhiPw
+    integer :: nPwRegion=50
+    real    :: TopAltPw=8000.0e5
+    !--------------------------------------------------------------------------
+
 !    if(.not.allocated(Bfield_IC)) allocate(Bfield_IC(nLine,nPoint))
-    
+
+
     ! set dPhi
-    dPhi=PhiBasePlas/nPlasHalf
+    if (UsePwRegion) then
+       !choose top of Pw grid based on planet
+       select case(NamePlanet_I(Planet_))
+       case('EARTH')
+          TopAltPw=8000.0e5
+       case('JUPITER')
+          TopAltPw=60000.0e5
+       end select
+
+
+       PhiTopPw=&
+            ACOS(SQRT((rPlanetCM+TopAltPw)/(Lshell_I(iLine)*rPlanetCM)))
+       dPhi=PhiTopPw/(nPlasHalf-nPwRegion)
+       dPhiPw=(PhiBasePlas-PhiTopPW)/nPwRegion
+    else
+       dPhi=PhiBasePlas/nPlasHalf
+       PhiTopPw=0.0
+       nPwRegion=0
+       dPhiPw=0.0
+    endif
 !    write(*,*) 'nPlasHalf,dPhi*cRadToDeg',nPlasHalf,dPhi*cRadToDeg
 
     !set Length of iono regions
@@ -198,16 +230,38 @@ contains
           FieldLineGrid_IC(iLine,iAlt) = &
                   BaseAltIono+LengthIono1+LengthIono2+LengthIono3&
                   +(iAlt-nIono1-nIono2-nIono3)*DrIono4
-          
-       elseif(iAlt < nPoint-nIono) then
+
+       elseif(iAlt <=nIono1+nIono2+nIono3+nIono4+nPwRegion.and.UsePwRegion) then
+          !set alt zone in PW region above ionosphere
+          Phi = abs (PhiBasePlas-(iAlt-nIono)*dPhiPW)
+          LastPhi = abs (PhiBasePlas-(iAlt-nIono-1)*dPhiPW)
+          ! Get B and Delta s at each point
+          call get_b_deltaS_point(Phi,LastPhi,DeltaS,Lshell_I(iLine),&
+               Bfield_IC(iLine,iAlt))
+          FieldLineGrid_IC(iLine,iAlt)=FieldLineGrid_IC(iLine,iAlt-1)+DeltaS
+
+       elseif(iAlt < nPoint-nIono-nPwRegion) then
           ! set plasmaspheric region
           ! Get polar angle at fieldline point
-          Phi = abs (PhiBasePlas-(iAlt-nIono)*dPhi)
-          LastPhi = abs (PhiBasePlas-(iAlt-nIono-1)*dPhi)
-          call get_b_deltaS_point(Phi,LastPhi,DeltaS,Lshell_I(iLine),Bfield_IC(iLine,iAlt))
+          if(UsePwRegion) then
+             Phi = abs (PhiTopPw-(iAlt-nIono-nPwRegion)*dPhi)
+             LastPhi = abs (PhiTopPw-(iAlt-nIono-nPwRegion-1)*dPhi)
+          else
+             Phi = abs (PhiBasePlas-(iAlt-nIono)*dPhi)
+             LastPhi = abs (PhiBasePlas-(iAlt-nIono-1)*dPhi)
+          endif
           ! Get B and Delta s at each point
-!          write(*,*) 'Bfield_IC(iLine,iAlt)',Bfield_IC(iLine,iAlt)
+          call get_b_deltaS_point(Phi,LastPhi,DeltaS,Lshell_I(iLine),Bfield_IC(iLine,iAlt))
           FieldLineGrid_IC(iLine,iAlt)=FieldLineGrid_IC(iLine,iAlt-1)+DeltaS
+
+       elseif(iAlt < nPoint-nIono .and. UsePwRegion) then
+          !set alt zone in PW region above ionosphere
+          Phi = abs (PhiBasePlas-(iAlt-nIono)*dPhiPW)
+          LastPhi = abs (PhiBasePlas-(iAlt-nIono-1)*dPhiPW)
+          ! Get B and Delta s at each point
+          call get_b_deltaS_point(Phi,LastPhi,DeltaS,Lshell_I(iLine),Bfield_IC(iLine,iAlt))
+          FieldLineGrid_IC(iLine,iAlt)=FieldLineGrid_IC(iLine,iAlt-1)+DeltaS
+
        elseif(iAlt < nPoint-nIono1-nIono2-nIono3) then
           !set alt zone 4 of S. ionosphere
           FieldLineGrid_IC(iLine,iAlt) = &
@@ -970,18 +1024,18 @@ contains
     nIono=nIono1+nIono2+nIono3+nIono4
     ! set the energy parameters for the energy grid
     TypeGridE = 'ConstDE'
-    nEnergy=100
+    nEnergy=800
 !    nEnergy=94
     EnergyMax=100.5
 !    nEnergy=2000
 !    EnergyMax=2000.5
-    DeltaE = 1.0
+    DeltaE = 0.125
 
     ! Allocated the grid arrays and populate the bfield, sgrid, and PA grid  
     if(IsVerbose) write(*,*) 'allocating arrays'
     call allocate_grid_arrays
 
-    Lshell_I(1)=4.0
+    Lshell_I(1)=10.0
     nTheta_II(1,1)=5
     nTheta_II(1,2)=20
     nTheta_II(1,3)=90
