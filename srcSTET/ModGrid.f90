@@ -103,6 +103,7 @@ Module ModSeGrid
 
   ! If we include extra points in PW overlap region (only when coupling PWOM)
   logical,public :: UsePwRegion = .false.
+  integer,public :: nPwRegion=50 ! points in overlap region above ionosphere
 
 
   ! public methods
@@ -175,7 +176,6 @@ contains
 
     !variables for PW overlap region
     real :: PhiTopPw, dPhiPw
-    integer :: nPwRegion=50
     real    :: TopAltPw=8000.0e5
     !--------------------------------------------------------------------------
 

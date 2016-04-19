@@ -715,7 +715,7 @@ contains
          EqAngleGrid_IG,nThetaAlt_IIC,dThetaEnd_III,mu_IIIC,&
          FieldLineGrid_IC,nTop,Bfield_IC, MaxAlt_IC,nMu0RefAlt_II,&
          BField0_II, DeltaPot_IC, DeltaPot0_II, KineticEnergy_IIC,&
-         nIono, nPlas, nPoint,nAngle
+         nIono, nPlas, nPoint,nAngle,nPwRegion
     
     use ModMath, only: midpnt_int
     
@@ -781,7 +781,8 @@ contains
           if (IsOpen) then
              ! open line so detach hemispheres
              nAltMin = nIono+1
-             nAltMax = MaxAlt_IC(iLine,j)
+             !nAltMax = MaxAlt_IC(iLine,j)
+             nAltMax = min(MaxAlt_IC(iLine,j),nIono+nPwRegion)
           else
              ! closed line so keep hemispheres attached. Note that should 
              ! they get detached for energies less than the potential we will
@@ -838,7 +839,7 @@ contains
                 
                 Flastj=phiup(iLine,k,iPlas,j+1)
                 Flastt=lphiup(iLine,k,iPlas,j)
-
+                !write(*,*) 'test1: i,j,k,ko',i,j,k,nThetaAlt_IIC(iLine,j,i)
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
@@ -921,7 +922,8 @@ contains
           if (IsOpen) then
              ! open line so detach hemispheres
              nAltMin = nIono+1
-             nAltMax = MaxAlt_IC(iLine,j)
+             !nAltMax = MaxAlt_IC(iLine,j)
+             nAltMax = min(MaxAlt_IC(iLine,j),nIono+nPwRegion)
              !set step
              h = &
                   FieldLineGrid_IC(iLine,nAltMax) &
@@ -1000,6 +1002,7 @@ contains
                 
                 Flastj=phidn(iLine,k,iPlas,j+1)
                 Flastt=lphidn(iLine,k,iPlas,j)
+                !write(*,*) 'test2: i,j,k',i,j,k
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      -mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
@@ -1271,6 +1274,7 @@ contains
                 ! coeficients by setting kk to 0
                 kk=1
                 if (iIonoHalf <= iLocal) kk=0
+                !write(*,*) 'test3: i,j,k',i,j,k
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2,&
@@ -1456,6 +1460,7 @@ contains
                 ! coeficients by setting kk to 0
                 kk=1
                 if (iIonoHalf <= iLocal) kk=0
+                !write(*,*) 'test4: i,j,k',i,j,k
                 CALL NumCalcVar_pot(alpha(k+1),alpha(k),sigma(k+1),sigma(k), &
                      -mu_IIIC(iLine,k,j,i),eta,muO,del1,del2,beta(i),lbeta(i), &
                      Flasti,Flastj,Flastt,velt,h,delE,Qstar,kk,s1,s2, &
@@ -1660,12 +1665,27 @@ contains
     alpha=b/(c-a*alp)
     sigma=(a*sig+d)/(c-a*alp)
     IF ((d.LT.0).OR.(d-d.NE.0)) THEN
-       PRINT *,'NEG D ',p,q,a,b,c,d,sigma,sig,alpha,alp
-       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar,cascade
+       PRINT *,'NEG D: '
+       write(*,*) 'd=',d
+       write(*,*) 'd is made of:s2,lbeta,Fj,DE,kk,mu,Fi,h,Qstar,cascade,Ft',&
+            s2,lbeta,Fj,DE,kk,mu,Fi,h,Qstar,cascade,Ft
        call con_stop('')
     ELSE IF ((sigma.LT.0).OR.(sigma-sigma.NE.0)) THEN
-       PRINT *,'NEG SIGMA ',p,pstar,q,a,b,c,d,sigma,sig,alpha,alp
-       PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
+       PRINT *,'WARNING NEG SIGMA:'
+       write(*,*) 'sigma=',sigma
+       write(*,*) 'sigma is made of:a,sig,d,c,a,alp',&
+            a,sig,d,c,a,alp
+       write(*,*) 'a is made of:q,pstar,p,del1,del2',&
+            q,pstar,p,del1,del2
+       write(*,*) 'c is made of:q,pstar,p,del1,del2,kk,mu,h,beta,dE,lossum,vt',&
+            q,pstar,p,del1,del2,kk,mu,h,beta,dE,lossum,vt
+       write(*,*) 'd is made of:s2,lbeta,Fj,dE,kk,mu,Fi,h,Qstar,cascade,Ft,vt',&
+            s2,lbeta,Fj,dE,kk,mu,Fi,h,Qstar,cascade,Ft,vt
+       write(*,*) 'pstar is made of:Acoef,ne,KE,muO',&
+            Acoef,ne,KE,muO
+       !call con_stop('')
+       write(*,*) 'setting sigma to 0 to proceed'
+       sigma=0.0
     ELSE IF ((alpha.LT.0).OR.(alpha-alpha.NE.0)) THEN
        PRINT *,'NEG ALPHA ',p,q,a,b,c,d,sigma,sig,alpha,alp
        PRINT *,mu,h,dE,vt,Fi,Fj,Ft,Qstar
