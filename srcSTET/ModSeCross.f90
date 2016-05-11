@@ -577,7 +577,7 @@ contains
              ! to the index of the energy bin cooresponding to E-threshold
              nBinShiftHigh = iEnergy - iBinHigh
              nBinShiftLow  = iEnergy - iBinLow
-             IF (nBinShiftHigh .EQ. iEnergy) THEN
+             IF (iBinHigh .EQ. iEnergy) THEN
                 !when shifted index is at 0 (when energybin corresponds to index)
                 IF (iEnergy .EQ. 1) THEN
                    !special case when energy index is at bottom of energy grid
@@ -983,7 +983,6 @@ contains
     end do
     
     close(UnitTmp_)
-
   end subroutine read_excitation_crossection
   !============================================================================
   subroutine read_scattering_crossection(NameSpecies,SigS)
