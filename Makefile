@@ -44,6 +44,15 @@ STET:
 	cd ${DATAREADINDICESDIR}; make LIB
 	cd srcSTET;               make STET
 
+TWOSTREAM:
+	cd ${SHAREDIR};           make LIB
+	cd ${TIMINGDIR};          make LIB
+	cd ${EMPIRICALIEDIR};     make LIB
+	cd ${EMPIRICALUADIR};     make  LIB
+	cd ${DATAREADINDICESDIR}; make LIB
+	cd srcTWOSTREAM;          make TWOSTREAM
+
+
 nompirun: PWOM
 	cd ${RUNDIR}; ./PWOM.exe
 
