@@ -344,7 +344,7 @@ contains
 	  end do
        end do
     END IF
-    if(IsVerbose) write (*,*) PhotoIonRate1_IIC(1,10:15,10:15)
+!    if(IsVerbose) write (*,*) PhotoIonRate1_IIC(1,10:15,10:15)
 
     !\
     ! Work on ionosphere 2
@@ -403,7 +403,7 @@ contains
 	  end do
        end do
     END IF
-    if(IsVerbose) write (*,*) 'PhotoIon2: ',PhotoIonRate2_IIC(1,10:15,10:15)
+!    if(IsVerbose) write (*,*) 'PhotoIon2: ',PhotoIonRate2_IIC(1,10:15,10:15)
 
 
     ! set the cross sections (perhaps this should only be called once?)
