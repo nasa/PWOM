@@ -16,6 +16,8 @@ subroutine PW_set_parameters(NameAction)
        PolarRainEMin, PolarRainEMax, &
        PolarRainEMean, PolarRainEFlux,UsePolarRain, &
        DoCoupleSTET, UseFeedbackFromSTET,IsVerboseSTET,DtGetSe
+  use ModOvation, ONLY: UseOvation,DoPlotOvation,OvationEmin,OvationEmax,&
+       DoPlotOvation
 
   implicit none
   
@@ -226,7 +228,11 @@ subroutine PW_set_parameters(NameAction)
 
 !        if(.not.DoCoupleSTET) &
 !             write(*,*) 'PW_WARNING: #SETPRECIP invoked but STET not coupled'
-
+     case('#OVATION')
+        call read_var('UseOvation',  UseOvation)
+        call read_var('DoPlotOvation',  DoPlotOvation)
+        call read_var('OvationEmin',  OvationEmin)
+        call read_var('OvationEmax',  OvationEmax)
 
      case('#POLARRAIN')
         call read_var('UsePolarRain',  UsePolarRain)

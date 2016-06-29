@@ -10,6 +10,7 @@ include Makefile.DEPEND
 include Makefile.RULES
 
 MODULES = \
+	ModOvation.o\
 	ModPW.o\
 	ModParameters.o\
 	ModCommonPlanet_planet.o\

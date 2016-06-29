@@ -21,6 +21,7 @@ subroutine polar_wind
   use ModFieldLine
   use ModPwImplicit, only: PW_implicit_update
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
+  use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
 
   INTEGER NOTP(100)
   
@@ -68,6 +69,7 @@ subroutine polar_wind
   if (IsFirstCall .and. DoSavePlot) then
      CALL PW_print_plot
      if (DoPlotNeutral) call plot_neutral_pw
+     if (DoPlotOvation) call plot_ovation_polar
      if(iLine == nLine) IsFirstCall = .false.
   endif
 
@@ -104,6 +106,7 @@ subroutine polar_wind
         if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
            CALL PW_print_plot
            if (DoPlotNeutral) call plot_neutral_pw
+           if (DoPlotOvation) call plot_ovation_polar
         endif
      else if (mod(nStep,DnOutput) == 0) then
         CALL PW_print_plot
@@ -134,6 +137,7 @@ subroutine polar_wind
         if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
            CALL PW_print_plot
            if (DoPlotNeutral) call plot_neutral_pw
+           if (DoPlotOvation) call plot_ovation_polar
         endif
         IF (IsStandAlone .and. &
              floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-2.0*DT)/DToutput) )&
@@ -150,6 +154,7 @@ subroutine polar_wind
         if (mod(nStep,DnOutput) == 0 .or. mod(nStep-1,DnOutput) == 0) then
            CALL PW_print_plot
            if (DoPlotNeutral) call plot_neutral_pw
+           if (DoPlotOvation) call plot_ovation_polar
            IF (IsStandAlone)&
                 call PW_write_restart(&
                 nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
@@ -173,7 +178,10 @@ contains
     use ModPwTime,ONLY: StartTime, Hour_,Minute_, Second_, iCurrentTime_I, &
          CurrentTime
     use ModTimeConvert, ONLY: time_real_to_int
-
+    use ModOvation, ONLY: UseOvation,get_ovation_point,read_ovation_all, &
+         OvationEmin,OvationEmax
+    
+    real :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,EFluxMono
     real :: UTsec
     !--------------------------------------------------------------------------
 
@@ -190,10 +198,25 @@ contains
        UTsec = iCurrentTime_I(Hour_)*3600.0+iCurrentTime_I(Minute_)*60.0 &
             +iCurrentTime_I(Second_)
 
-       call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),&
+       If (UseOvation) then
+          call read_ovation_all(Time)
+          call get_ovation_point(SmLat,SmLon,EMeanDiff,EFluxDiff,&
+               EMeanWave,EFluxWave,EMeanMono,EFluxMono)
+          call get_stet_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
+               (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
+               State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
+               Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,&
+               EMeanDiffPW=EMeanDiff,EFluxDiffPW=EFluxDiff, &
+               EMeanWavePW=EMeanWave,EFluxWavePW=EFluxWave, &
+               EMeanMonoPW=EMeanMono,EFluxMonoPW=EFluxMono)
+       else
+          call get_stet_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
             (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
             State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
             Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
+       endif
+
+
     endif
 
     if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
