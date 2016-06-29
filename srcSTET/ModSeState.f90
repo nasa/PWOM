@@ -60,6 +60,10 @@ Module ModSeState
   logical, public :: UsePolarRain = .false.
   real   , public :: PolarRainEmin=80.0,  PolarRainEmax=300.0, &
        PolarRainEmean=100.0, PolarRainEflux=1.0e-2
+  !Ovation Precipitation info
+  logical, public :: UseOvation
+  real   , public :: OvationEmin,OvationEmax
+  real   , public :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,EFluxMono
 
   !public methods
   public :: allocate_state_arrays
@@ -1362,8 +1366,8 @@ contains
              end do
 
              ! Add precip info here
-             ! Add precip info here KLUDGE
-             if(UsePrecipitation .and. EnergyGrid_I(j) > PrecipEmin ) then 
+             if(UsePrecipitation .and. EnergyGrid_I(j) > PrecipEmin &
+                  .and. .not.UseOvation) then 
                 do k=0,nThetaAlt_IIC(iLine,j,nIono)
                    !These current values are for soft electron precipitation 
                    ! from strangeway et al 2005. In future should come from 
@@ -1375,6 +1379,32 @@ contains
                         PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
                         /PrecipEmean)
                 end do
+             elseif(UseOvation .and. EnergyGrid_I(j) > OvationEmin &
+                  .and. .not.UsePrecipitation) then 
+                !Start with diffuse aurora
+                PrecipCoef=get_precip_norm(EmeanDiff,OvationEmin,&
+                     OvationEmax,EfluxDiff)
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   iphidn(iLine,k,nIono+1,j)= &
+                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                        /EmeanDiff)
+                enddo
+                !add in wave aurora
+                PrecipCoef=get_precip_norm(EmeanWave,OvationEmin,&
+                     OvationEmax,EfluxWave)
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   iphidn(iLine,k,nIono+1,j)= iphidn(iLine,k,nIono+1,j) + &
+                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                        /EmeanWave)
+                enddo
+                !add in Monoenergetic aurora
+                PrecipCoef=get_precip_norm(EmeanMono,OvationEmin,&
+                     OvationEmax,EfluxMono)
+                do k=0,nThetaAlt_IIC(iLine,j,nIono)
+                   iphidn(iLine,k,nIono+1,j)= iphidn(iLine,k,nIono+1,j) + &
+                        PrecipCoef*EnergyGrid_I(j)*exp(-EnergyGrid_I(j)&
+                        /EmeanMono)
+                enddo
              end if
              
              ! add in polar rain
@@ -1922,6 +1952,26 @@ contains
     return
   end function get_precip_norm
   
+  !============================================================================
+  ! function to return normalization value for Gaussian precipitation  
+  real function  get_precip_norm_gaussian(E0,E1,E2,eFlux)
+    real, intent(in) :: E0, E1, E2, eFlux ! average, min, and max energy of precip
+    real sigmaG, x1, x2 ! width of the Gaussian, substitutions from integration
+    ! eflux is integrated energy flux in                               
+    ! ergs/cm^2                                                        
+    sigmaG = E0/10.0
+    x1 = (E1 - E0)/(sqrt(2.0)*sigmaG)
+    x2 = (E2 - E0)/(sqrt(2.0)*sigmaG)
+    
+    
+    get_precip_norm_gaussian = 1.98774e11*eFlux/&
+         ((sqrt(2.0)*sigmaG/2.0)*(sqrt(2.0)*sigmaG*(exp(-x1**2.0) &
+         - exp(-x2**2.0)) + E0*1.77245*(erf(x2) - erf(x1))))
+    ! 1.77245 is sqrt(pi)                                                
+    return
+  end function get_precip_norm_gaussian
+
+
   !=============================================================================
 
 
@@ -1944,7 +1994,8 @@ contains
     real :: error
     !--------------------------------------------------------------------------
     
-    IF (flux.GT.1E-20) THEN
+!    IF (flux.GT.1E-20) THEN
+    IF (flux.GT.1E-19) THEN
        error=ABS(flux-oldflux)/flux
        IF (error.GT.epsil) flag=1
     END IF
@@ -1955,6 +2006,43 @@ contains
     if (present(ReturnError)) ReturnError=error
     RETURN
   END SUBROUTINE CheckConv
+
+  !=============================================================================
+
+
+  
+  !* ------------------------------------------------------------------ **
+  !  Subroutine CheckConv_full sees if a flux has converged or not.
+  !  uses twice the convergence criterial for full flux as opposed to 
+  !  criteria for pi/2
+  !*  VARIABLE DESCRIPTIONS
+  !*      epsil   Convergence parameter in the iteration loop
+  !*      flag    Indicates whether the fluxes have converged
+  !*  FLUX VARIABLES; cm-2 s-1 eV-1 sr-1
+  !*        flux      Current flux value to be checked
+  !*      oldflux      Previous value to check against
+  !*
+  SUBROUTINE CheckConv_full(flux,oldflux,epsil,flag, DoReportError, ReturnError)
+    REAL   ,  intent(in) :: flux,oldflux,epsil
+    INTEGER, intent(out) :: flag
+    LOGICAL,optional,intent(in) :: DoReportError
+    real,optional,intent(out) :: ReturnError
+
+    real :: error
+    !--------------------------------------------------------------------------
+    
+!    IF (flux.GT.1E-20) THEN
+    IF (flux.GT.1E-19) THEN
+       error=ABS(flux-oldflux)/flux
+       IF (error.GT.2.0*epsil) flag=1
+    END IF
+    if (present(DoReportError) .and. DoReportError) then
+       write(*,*) 'Error is:',error,'Epsilon is:',epsil
+    endif
+    
+    if (present(ReturnError)) ReturnError=error
+    RETURN
+  END SUBROUTINE CheckConv_full
   !=============================================================================
   
   !* ------------------------------------------------------------------ **
@@ -2219,7 +2307,9 @@ contains
              endif
              
              ! check the convergence
-             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.false.,&
+!             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.false.,&
+!                  ReturnError=error)
+             call CheckConv_full(flux,oldflux,epsilon,flag,DoReportError=.false.,&
                   ReturnError=error)
              
              !find maximum error and associated values to report at end of check
@@ -2293,7 +2383,9 @@ contains
              endif
              
              ! check the convergence
-             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.false.,&
+!             call CheckConv(flux,oldflux,epsilon,flag,DoReportError=.false.,&
+!                  ReturnError=error)
+             call CheckConv_full(flux,oldflux,epsilon,flag,DoReportError=.false.,&
                   ReturnError=error)
              
              !find maximum error and associated values to report at end of check

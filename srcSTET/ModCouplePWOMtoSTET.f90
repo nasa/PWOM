@@ -25,7 +25,7 @@ contains
        iLineGlobalPw_I,&
        AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn,&
        PolarRainEminPwIn,PolarRainEmaxPwIn,PolarRainEmeanPwIn,&
-       PolarRainEfluxPwIn)
+       PolarRainEfluxPwIn, OvationEminPwIn,OvationEmaxPwIn)
     use ModSeGrid, only: nLine,iLineGlobal_I,DoIncludePotential,IsVerbose, &
                          UsePwRegion
     use ModSeBackground,only: allocate_background_arrays,DoAlignDipoleRot,ZEP,&
@@ -33,7 +33,8 @@ contains
     use ModSeState,only: allocate_state_arrays,PrecipEmin, PrecipEmax, &
          PrecipEmean,PrecipEflux,UsePrecipitation,&
          PolarRainEmin, PolarRainEmax, &
-         PolarRainEmean,PolarRainEflux,UsePolarRain
+         PolarRainEmean,PolarRainEflux,UsePolarRain,&
+         OvationEmin, OvationEmax, UseOvation
     use ModPlanetConst, only: Planet_, NamePlanet_I
     logical, intent(in) :: IsVerbosePw
     integer, intent(in) :: nAltPwIn, nLinePw,iLineGlobalPw_I(nLinePw)
@@ -42,6 +43,7 @@ contains
                                 PrecipEmeanPwIn,PrecipEfluxPwIn
     real, optional, intent(in)::PolarRainEminPwIn,PolarRainEmaxPwIn, &
                                 PolarRainEmeanPwIn,PolarRainEfluxPwIn
+    real, optional, intent(in)::OvationEminPwIn,OvationEmaxPwIn
     !---------------------------------------------------------------------------
     DoUsePWOM = .true.    
     
@@ -113,6 +115,16 @@ contains
        call con_stop('PW_error: STET PolarRain update values incomplete')
     endif
 
+    ! Set the incomming Ovation parameters (note that these will change over 
+    ! time and be updated by get_stet_for_pwom)
+    if (present(OvationEminPwIn).and.present(OvationEmaxPwIn))then
+       UseOvation= .true.
+       OvationEmax=OvationEmaxPwIn
+       OvationEmin=OvationEminPwIn
+    elseif(present(OvationEminPwIn).or.present(OvationEmaxPwIn))then
+       call con_stop('PW_error: STET Ovation values incomplete')
+    endif
+
     !set number of ions based on planet
     select case(NamePlanet_I(Planet_))
     case('EARTH')
@@ -128,12 +140,15 @@ contains
   subroutine get_stet_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
        SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C, PhotoIonRatePW_IC, &
-       SecIonRatePW_IC)
+       SecIonRatePW_IC,EMeanDiffPW,EFluxDiffPW,EMeanWavePW,&
+       EFluxWavePW,EMeanMonoPW,EFluxMonoPW)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I,IsVerbose
     use ModSeBackground,only: mLat_I,mLon_I, gLat1_I,gLat2_I,gLon1_I,gLon2_I,&
          Idate, UT,set_footpoint_locations,fill_thermal_plasma_empirical,&
          plot_background,plot_ephoto_prod,get_neutrals_and_pe_spectrum
-    use ModSeState,only: Time
+    use ModSeState,only: Time, EMeanDiff,EFluxDiff,EMeanWave,&
+         EFluxWave,EMeanMono,EFluxMono
+
     implicit none
     ! Incomming time from PWOM
     real, intent(in) :: TimePw
@@ -156,6 +171,11 @@ contains
     real,optional,  intent(out):: PhotoIonRatePW_IC(nIonPW,nAltPw)
     ! Secondary Ionization rate from STET for each ion(interpolated to PWOM grid)
     real,optional,  intent(out):: SecIonRatePW_IC(nIonPW,nAltPw)
+    
+    !OVATION precipitation parameters
+    real,optional,  intent(in) :: EmeanDiffPW,EFluxDiffPW,EMeanWavePW,&
+         EFluxWavePW, EMeanMonoPW,EFluxMonoPW
+    
     ! named parameters for coordinates
     integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
     ! Is line open, for now always assume yes, but this could be passed
@@ -189,7 +209,18 @@ contains
     Efield_IC(iLine,:)=0.0
     
     !Lshell_I(iLine) = cos(Coord_D(Lat_)*cDegToRad)
-
+    
+    !set Ovation precip 
+    if (present(EMeanDiffPW).or.present(EFluxDiffPW) .or. &
+         present(EMeanWavePW).or.present(EFluxWavePW).or. &
+         present(EMeanMonoPW).or.present(EFluxMonoPW))then
+       EMeanDiff=EMeanDiffPW
+       EFluxDiff=EFluxDiffPW
+       EMeanWave=EMeanWavePW
+       EFluxWave=EFluxWavePW
+       EMeanMono=EMeanMonoPW
+       EFluxMono=EFluxMonoPW
+    endif
 
     ! From footpoint locations  from PWOM we can set the spatial part 
     ! of the grid which we need to set the background and interpolate the 
