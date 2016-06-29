@@ -25,6 +25,11 @@ C
       use ModCouplePWOMtoSTET, only: get_stet_for_pwom
       use CON_planet,  ONLY: IsPlanetModified, RotAxisTheta, RotAxisPhi
       use ModTimeConvert, ONLY: time_real_to_int
+      use ModOvation, ONLY: UseOvation,get_ovation_point,
+     &     read_ovation_all,OvationEmin,OvationEmax
+      
+      real :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,
+     &        EFluxMono
 C     
       real :: UTsec 
 !     -----------------------------------------------------------------
@@ -303,12 +308,28 @@ C                                                                      C
       if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
       
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
-     &     .and.DoCoupleSTET) then 
-         call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
-     &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
-     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
-     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
-     &        IonRatePW_C=IonRateO_C(1:nDim))
+     &     .and.DoCoupleSTET) then
+         If (UseOvation) then
+            call read_ovation_all(Time)
+            call get_ovation_point(SmLat,SmLon,EMeanDiff,EFluxDiff,
+     &       EMeanWave,EFluxWave,EMeanMono,EFluxMono)
+            call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
+     &           (/GLAT,GLONG/),(/GLAT2,GLONG2/),
+     &           State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &           Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
+     &           IonRatePW_C=IonRateO_C(1:nDim),EMeanDiffPW=EMeanDiff,
+     &           EFluxDiffPW=EFluxDiff,
+     &           EMeanWavePW=EMeanWave,EFluxWavePW=EFluxWave,
+     &           EMeanMonoPW=EMeanMono,EFluxMonoPW=EFluxMono)
+        
+         else
+            call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
+     &           (/GLAT,GLONG/),(/GLAT2,GLONG2/),
+     &           State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &           Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
+     &           IonRatePW_C=IonRateO_C(1:nDim))
+         endif
+
          ! Divide the Ionization rate from STET by oxygen density to get
          ! production in units of ions/cc/s rather than ions/s
          IonRateO_C(1:nDim)=IonRateO_C(1:nDim)/XO(1:nDim)
