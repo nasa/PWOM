@@ -174,7 +174,7 @@ contains
   
   subroutine advect
     use ModPhotoElectron
-    use ModCouplePWOMtoSTET, only: get_stet_for_pwom
+    use ModCouplePWOMtoSE, only: get_se_for_pwom
     use ModPwTime,ONLY: StartTime, Hour_,Minute_, Second_, iCurrentTime_I, &
          CurrentTime
     use ModTimeConvert, ONLY: time_real_to_int
@@ -202,7 +202,7 @@ contains
           call read_ovation_all(Time)
           call get_ovation_point(SmLat,SmLon,EMeanDiff,EFluxDiff,&
                EMeanWave,EFluxWave,EMeanMono,EFluxMono)
-          call get_stet_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
+          call get_se_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
                (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
                State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
                Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,&
@@ -210,7 +210,7 @@ contains
                EMeanWavePW=EMeanWave,EFluxWavePW=EFluxWave, &
                EMeanMonoPW=EMeanMono,EFluxMonoPW=EFluxMono)
        else
-          call get_stet_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
+          call get_se_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
             (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
             State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
             Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)

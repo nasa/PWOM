@@ -21,13 +21,24 @@ INSTALLFILES =  src/Makefile.DEPEND \
 		src/Makefile.RULES \
 		srcInterface/Makefile.DEPEND\
 		srcSTET/Makefile.DEPEND\
-		srcSTET/Makefile.RULES
+		srcSTET/Makefile.RULES\
+		srcTWOSTREAM/Makefile.DEPEND\
+		srcTWOSTREAM/Makefile.RULES
 
 
 install: bin
 	touch ${INSTALLFILES}
 
 PWOM:
+	cd ${SHAREDIR};           make LIB
+	cd ${TIMINGDIR};          make LIB
+	cd ${EMPIRICALIEDIR};     make LIB
+	cd ${EMPIRICALUADIR};     make  LIB
+	cd ${DATAREADINDICESDIR}; make LIB
+	cd ${TWOSTREAMDIR};	  make LIB
+	cd src;                   make PWOM
+
+PWOMSTET:
 	cd ${SHAREDIR};           make LIB
 	cd ${TIMINGDIR};          make LIB
 	cd ${EMPIRICALIEDIR};     make LIB
@@ -50,7 +61,7 @@ TWOSTREAM:
 	cd ${EMPIRICALIEDIR};     make LIB
 	cd ${EMPIRICALUADIR};     make  LIB
 	cd ${DATAREADINDICESDIR}; make LIB
-	cd srcTWOSTREAM;          make TWOSTREAM
+	cd ${TWOSTREAMDIR};       make TWOSTREAM
 
 
 nompirun: PWOM

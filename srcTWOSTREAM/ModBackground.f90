@@ -35,9 +35,6 @@ Module ModSeBackground
   !jupiter
   integer,parameter  :: H2_=1, He_=2, H_=3, CH4_=4, T_=5 
   
-  ! Logical variables for if we are calculating photo e spectrum in iono
-  logical :: DoCalcPeIono=.true.
-
   ! Arrays that hold the photo electron production spectrum 
   real, allocatable,public :: ePhotoProdSpec_IC(:,:)
   real, allocatable,public :: PhotoIonRate_IC(:,:)
@@ -231,17 +228,9 @@ contains
          NeutralDens_IC(:,:),NeutralTemp_C(:),nAlt)    
     
     !  Calculate the photoelectron production spectrum
-    IF (DoCalcPeIono) THEN
-       CALL ESPEC(NeutralDens_IC(:,:),ePhotoProdSpec_IC(:,:),&
-            nAlt,0,SZA*cRadToDeg,Alt_C(1:nAlt)*cCmToKm,&
-            nIons,PhotoIonRate_IC(:,:))
-    ELSE
-       do iAlt=1,nAlt
-          do iEnergy=1,nEnergy
-             ePhotoProdSpec_IC(iEnergy,iAlt)=0.
-	  end do
-       end do
-    END IF
+    CALL ESPEC(NeutralDens_IC(:,:),ePhotoProdSpec_IC(:,:),&
+         nAlt,0,SZA*cRadToDeg,Alt_C(1:nAlt)*cCmToKm,&
+         nIons,PhotoIonRate_IC(:,:))
 
     ! set the cross sections (perhaps this should only be called once?)
     select case(NamePlanet_I(Planet_))

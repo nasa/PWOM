@@ -17,6 +17,14 @@ Module ModSeGrid
   integer,parameter,public :: nAlt=120
   real,public :: Alt_C(nAlt) !altitude grid in cm
 
+  !Alt Grid Extended above two stream calculation by mapping.
+  ! should be nAlt+some points
+  integer,parameter,public :: nAltExtended=220
+  real,public :: AltExtended_C(nAltExtended) !altitude grid in cm
+  real,public :: AltPwUpper=8000.0e5 !alt of PW upper boundary in CM
+
+  real,public :: DeltaPot_C(nAltExtended),Efield_C(nAltExtended)
+
   ! information on how global line number (as opposed to line number on 
   ! given proc)
   integer, public :: iLineGlobal
@@ -26,7 +34,7 @@ Module ModSeGrid
   public :: set_egrid
   public :: set_altgrid
   public :: BINNUM
-
+  public :: calc_potential
   real, public :: rPlanetCM
 
 
@@ -79,6 +87,7 @@ contains
     ! Local:
     real,parameter :: cKmToCm=1.0e5, cMtoCM = 1.0e2
     Integer ::iAlt
+    real :: dAltExtended
     real :: AltKM_C(nAlt)
     DATA AltKM_C/     80., 81., 82., 83., 84., 85., 86., 87., 88., 89., &
          90., 91., 92., 93., 94., 95., 96., 97., 98., 99., &
@@ -96,6 +105,20 @@ contains
     Alt_C(:) = AltKM_C * cKmToCm
     
     rPlanetCM=rPlanet_I(Planet_)*cMtoCM
+
+    !add in points in extended grid above 2 stream calc. Fill in equally spaced 
+    ! up to PWOM boundary
+    
+    !first set AltExtended_C to Alt in two stream region
+    AltExtended_C(1:nAlt)=Alt_C(1:nAlt)
+    
+    !find grid spacing in extended region
+    dAltExtended=(AltPwUpper-Alt_C(nAlt))/ real(nAltExtended-nAlt)
+    
+    !fill in Altitude grid in extended region
+    do iAlt=nAlt+1,nAltExtended
+       AltExtended_C(iAlt)=AltExtended_C(iAlt-1)+dAltExtended
+    enddo
 
   End Subroutine set_altgrid
   
@@ -130,6 +153,42 @@ contains
   END FUNCTION BINNUM
 
 
+  !============================================================================
+  subroutine calc_potential
+    use ModConst,only: cElectronCharge ! in Coulombs 
+    integer :: iAlt
+    real    :: Pot !the electric potential difference from the equator [Volts]
+    real,parameter :: cCmToM = 1.0e-2, cJoulesToeV=6.24150934e18
+    !--------------------------------------------------------------------------
+    
+
+    !fill the DeltaPot_C array. The reference point (zero potential) is at the 
+    ! top of the ionosphere. Ignore E|| effects in iono. note that you 
+    ! want the total energy array to be positive so the reference point for 
+    ! the potential energy should be at minimum  potential energy location. 
+    ! since E|| =-dPhi/ds, DeltaPhi = int(- E||) from s_iono to s.
+    DeltaPot_C(:)=0.0
+    do iAlt=nAlt+1,nAltExtended
+       call midpnt_int(Pot,-1.0*Efield_C(:),&
+            AltExtended_C(:)*cCmToM,nAlt,iAlt,nAltExtended,1)
+
+       ! from the potential change
+       DeltaPot_C(iAlt) = -cElectronCharge*Pot*cJoulesToeV
+       
+    end do
+
+!    do iAlt=1,nAltExtended
+!       write(*,*) 'AltExtended_C(iAlt)*1e-5,DeltaPot_C(iAlt) ',&
+!            AltExtended_C(iAlt)*1e-5,DeltaPot_C(iAlt) 
+!    enddo
+    
+              
+    
+  end subroutine calc_potential
+
+  
+
+
 !  subroutine allocate_grid_arrays
 !    
 !    ! Allocate PA related grid
@@ -139,6 +198,25 @@ contains
 !
 !!    if (.not.allocated(iLineGlobal_I))  allocate(iLineGlobal_I(nLine))
 !  end subroutine allocate_grid_arrays
+
+  SUBROUTINE midpnt_int(sum,f,x,a,b,N,ii)
+    IMPLICIT NONE
+    INTEGER a,b,N,j,ii
+    REAL f(N),x(N),sum
+    
+    sum=0.
+    if ((b-a.LT.0).OR.(b.GT.N).OR.(a.LE.0)) RETURN
+    if (ii.EQ.1) then
+       do  j=a,b-1
+          sum=sum+(x(j+1)-x(j))*(f(j)+f(j+1))*0.5
+       enddo
+    else      ! ii=2
+       do j=a,b
+          sum=sum+x(j)*f(j)
+       enddo
+    END IF
+    RETURN
+  END SUBROUTINE midpnt_int
 
  
 end Module ModSeGrid

@@ -1,4 +1,4 @@
-Module ModCouplePWOMtoSTET
+Module ModCouplePWOMtoSE
   implicit none
   
   private !except
@@ -13,15 +13,15 @@ Module ModCouplePWOMtoSTET
   !jupiter
   integer :: H3plusPW_=1,HplusPW_=2,H2plusPW_=3
   !public methods
-  public :: init_pwom_stet_coupling
-  public :: get_stet_for_pwom
+  public :: init_pwom_se_coupling
+  public :: get_se_for_pwom
   
 contains
   !=============================================================================
   ! set up coupling between pwom and stet for all lines. 
   ! thermal e density and temperature for each line and interpolate to STET 
   ! grid 
-  subroutine init_pwom_stet_coupling(IsVerbosePw,nAltPwIn,nLinePw,&
+  subroutine init_pwom_se_coupling(IsVerbosePw,nAltPwIn,nLinePw,&
        iLineGlobalPw_I,&
        AltPwIn_C,PrecipEminPwIn,PrecipEmaxPwIn,PrecipEmeanPwIn,PrecipEfluxPwIn,&
        PolarRainEminPwIn,PolarRainEmaxPwIn,PolarRainEmeanPwIn,&
@@ -133,11 +133,11 @@ contains
        nIonPW=3
     end select
        
-  end subroutine init_pwom_stet_coupling
+  end subroutine init_pwom_se_coupling
   
   !=============================================================================
   ! input the pwom grid, thermal e density, and Efield. run stet for iLine
-  subroutine get_stet_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
+  subroutine get_se_for_pwom(TimePw,UtPw,iLine,Coord_D,CoordG_D,CoordG2_D,&
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
        SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C, PhotoIonRatePW_IC, &
        SecIonRatePW_IC,EMeanDiffPW,EFluxDiffPW,EMeanWavePW,&
@@ -280,7 +280,7 @@ contains
        write(*,*) '!!!!!!!!!!!!!!!!!!!'
     endif
 !    call con_stop('')     
-  end subroutine get_stet_for_pwom
+  end subroutine get_se_for_pwom
   
   
   !=============================================================================
@@ -422,4 +422,4 @@ contains
 
   end subroutine interpolate_pwom_to_stet
   
-end Module ModCouplePWOMtoSTET
+end Module ModCouplePWOMtoSE

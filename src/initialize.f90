@@ -12,7 +12,7 @@ subroutine PW_initialize
   use ModPwTime
   use ModAurora, ONLY: init_aurora
   use ModPwWaves,ONLY: wave_init
-  use ModCouplePWOMtoSTET, ONLY: init_pwom_stet_coupling
+  use ModCouplePWOMtoSE, ONLY: init_pwom_se_coupling
   use ModPhotoelectron, ONLY: PrecipEnergyMin, PrecipEnergyMax, &
        PrecipEnergyMean, PrecipEnergyFlux, UseFixedPrecip, DoCoupleSTET,&
        PolarRainEMin, PolarRainEMax, &
@@ -195,34 +195,34 @@ subroutine PW_initialize
   ! simultaneously)
   if(DoCoupleSTET) then
      if(UseFixedPrecip .and. UsePolarRain .and. .not.UseOvation) then
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              PrecipEminPwIn=PrecipEnergyMin,PrecipEmaxPwIn=PrecipEnergyMax, &
              PrecipEmeanPwIn=PrecipEnergyMean,PrecipEfluxPwIn=PrecipEnergyFlux,&
              PolarRainEminPwIn=PolarRainEMin,PolarRainEmaxPwIn=PolarRainEMax, &
              PolarRainEmeanPwIn=PolarRainEMean,&
              PolarRainEfluxPwIn=PolarRainEFlux)
      elseif(.not.UseFixedPrecip .and. UsePolarRain .and. UseOvation) then
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              PolarRainEminPwIn=PolarRainEMin,PolarRainEmaxPwIn=PolarRainEMax, &
              PolarRainEmeanPwIn=PolarRainEMean,&
              PolarRainEfluxPwIn=PolarRainEFlux,&
              OvationEminPwIn=OvationEmin,      &
              OvationEmaxPwIn=OvationEmax)
      elseif(UseFixedPrecip) then
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              PrecipEminPwIn=PrecipEnergyMin,PrecipEmaxPwIn=PrecipEnergyMax, &
              PrecipEmeanPwIn=PrecipEnergyMean,PrecipEfluxPwIn=PrecipEnergyFlux)
      elseif(UsePolarRain) then
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              PolarRainEminPwIn=PolarRainEMin,PolarRainEmaxPwIn=PolarRainEMax, &
              PolarRainEmeanPwIn=PolarRainEMean,&
              PolarRainEfluxPwIn=PolarRainEFlux)
      elseif(UseOvation) then
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD,&
              OvationEminPwIn=OvationEmin,      &
              OvationEmaxPwIn=OvationEmax)
      else
-        call init_pwom_stet_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD)
+        call init_pwom_se_coupling(IsVerboseSTET,nAlt,nLine,iLineGlobal,ALTD)
      end if
   end if
 end subroutine PW_initialize

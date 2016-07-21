@@ -35,12 +35,6 @@ subroutine twostream_init(Coord_D,Ap_I,F107,F107A, TimeIn)
 !  !define the electric field 
 !  Efield_IC(:,:)=0.0
 !
-!  ! after electric field definition we can finish setting up grid
-!  if (DoIncludePotential) then
-!     do iLine=1,nLine
-!        call update_grid(iLine,Coord_ID(iLine,:),DoOnlySpatial=.true.)
-!     enddo
-!  endif
 
   !\
   ! Set the background arrays, sources, and locations

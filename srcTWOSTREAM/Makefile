@@ -17,7 +17,8 @@ MODULES = \
 	ModSeCross.o\
 	ModBackground.o\
 	ModElecTrans.o\
-	twostream_init.o
+	twostream_init.o\
+	ModCouplePWOMtoTWOSTREAM.o
 
 
 
@@ -31,7 +32,7 @@ DEPEND:
 	@${SCRIPTDIR}/depend.pl ${SEARCH} ${EXEOBJECTS} 
 
 
-MY_LIB = ${LIBDIR}/libTWOSTREAM.a
+MY_LIB = ${LIBDIR}/libSE.a
 
 LIB:	DEPEND
 	make ${MY_LIB}

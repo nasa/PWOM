@@ -25,10 +25,11 @@ contains
     real, parameter :: cGperCm3toKgperM3 = 1.0e3,cM3toCm3 = 1.0e6, &
          cCmToM=1.0e-2, cMtoCm=1.0e2
     real, allocatable:: Rho_G(:), dRhoDr_C(:)
-    real :: Ewave=50.0e-3 !V/m
+    real :: Ewave=250.0e-3 !V/m
     integer :: iAlt,iIon,iAlt1,iAlt2,nWindow=10
     real :: dnAlt
-    real,parameter :: AltRef = 8000.0e3 !reference altitude in meters
+    real,parameter :: AltRef = 4000.0e3 !reference altitude in meters
+    integer, parameter :: iAltRef=190
     real :: RhoRef ! rho at reference altitude [kg m^-3]
     real :: dRhoDrCentral,dRhoDrUpwind,B0ref
     !---------------------------------------------------------------------------
@@ -43,7 +44,7 @@ contains
     end do
     
     ! Set density at reference altitude (assuming 8000km for reference)
-    RhoRef=Rho_G(nAlt)
+    RhoRef=Rho_G(iAltRef)
 
     ! Get the background B in Tesla at the wave reference altitude
     call get_b0(AltRef,B0ref)

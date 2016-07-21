@@ -128,8 +128,10 @@ subroutine set_grid_dimensions_default
   !    nEnergy=94
 
   ! Energy grid for only photoelectrons
+
   nEnergy=299
   EnergyMax=300.5
+
 
   ! Energy grid for precipitation
 !  nEnergy=999  

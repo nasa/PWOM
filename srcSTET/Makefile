@@ -36,7 +36,7 @@ DEPEND:
 	@${SCRIPTDIR}/depend.pl ${SEARCH} ${EXEOBJECTS} 
 
 
-MY_LIB = ${LIBDIR}/libSTET.a
+MY_LIB = ${LIBDIR}/libSE.a
 
 LIB:	DEPEND
 	make ${MY_LIB}

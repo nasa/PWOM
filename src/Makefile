@@ -1,6 +1,6 @@
 include ../Makefile.def
 
-SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR} -I${STETDIR}
+SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR} -I${STETDIR} -I${TWOSTREAMDIR}
 
 include ../Makefile.conf
 
@@ -94,7 +94,7 @@ ${EXE}:	${EXEOBJECTS}
 PWOM_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES  \
-		-lTIMING  -lSTET -lSHARE\
+		-lTIMING  -lSE -lSHARE\
 		${Lflag1}
 
 PWOM_for_Darwin:
@@ -104,7 +104,7 @@ PWOM_for_Darwin:
 		ar -x ${LIBDIR}/libEMPIRICALUA.a; \
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a
-		ar -x ${LIBDIR}/libSTET.a
+		ar -x ${LIBDIR}/libSE.a
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
 	rm -rf Tmp_
 

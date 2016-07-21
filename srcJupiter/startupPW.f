@@ -13,7 +13,7 @@ C
       use ModNumConst, ONLY:cTwoPi
       use ModPhotoElectron
       use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine
-      use ModCouplePWOMtoSTET, only: get_stet_for_pwom
+      use ModCouplePWOMtoSE, only: get_se_for_pwom
 C
       NPT1=14
       NPT2=16
@@ -186,7 +186,7 @@ C                                                                      C
       NDensity_CI(1:nDim,CH4_)= XCH4(1:NDIM)
 
 
-      !get the SE fluxes from STET first (call here to get Ionization rate
+      !get the SE fluxes from SE first (call here to get Ionization rate
       if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
       if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
       if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
@@ -199,7 +199,7 @@ C                                                                      C
       
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
      &     .and.DoCoupleSTET) then 
-         call get_stet_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
+         call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
      &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
      &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
