@@ -17,6 +17,7 @@ Module ModElecTrans
   real,public,allocatable :: TotalIonizationRate_C(:) 
 
   !Precipitation info
+  real,allocatable :: PrecipCombinedPhi_I(:)
   logical, public :: UsePrecipitation = .false.
   real   , public :: PrecipEmin, PrecipEmax,PrecipEmean,PrecipEflux
   !Polar Rain info
@@ -102,8 +103,9 @@ contains
   !
   SUBROUTINE ETRANS
     use ModSeGrid, only: NBINS=>nEnergy, JMAX=>nAlt,Alt_C,&
-         ENER=>EnergyGrid_I, DEL=>DeltaE_I,nAltExtended,DeltaPot_C
-    use ModSeCross,only: IIMAXX,SIGI,SIGA,SIGS,SIGEX,NEI,WW,PE,PIN
+         ENER=>EnergyGrid_I, DEL=>DeltaE_I,nAltExtended,DeltaPot_C,IsVerbose
+    use ModSeCross,only: IIMAXX,SIGIX,SIGA,SIGS,SIGEX,SEC,NEI,WW,PE,PIN
+!    use ModSeCross,only: IIMAXX,SIGIX=>SIGI,SIGA,SIGS,SIGEX,NEI,WW,PE,PIN
     use ModSeBackground,only:dip, NMAJ=>nNeutralSpecies, ZE=>eThermalDensity_C,&
          ZTE=>eThermalTemp_C,PESPEC=>ePhotoProdSpec_IC,ZMAJ=>NeutralDens_IC
     !      use cglow, only: nmaj,jmax,nw,nst,nbins,nei,nf,lmax,nc,nex
@@ -130,7 +132,10 @@ contains
     real PHITOP(NBINS),EFRAC, SION(NMAJ,JMAX), &
          UFLX(NBINS,JMAX), DFLX(NBINS,JMAX), AGLW(NEI,NMAJ,JMAX), &
          EHEAT(JMAX), TEZ(JMAX)
-    
+    real :: PolarRainPhi_I(NBINS),PrecipPhi_I(NBINS)
+    real :: OvationDiffPhi_I(NBINS),OvationWavePhi_I(NBINS),&
+         OvationMonoPhi_I(NBINS)
+
     real    PROD(JMAX), EPROD(JMAX), T1(JMAX), T2(JMAX), TSA(NMAJ), &
          PRODUP(JMAX,NBINS), PRODWN(JMAX,NBINS), &
          PHIUP(JMAX), PHIDWN(JMAX), TSIGNE(JMAX), TAUE(JMAX), &
@@ -155,10 +160,67 @@ contains
     logical :: DoIterateFlux=.true.
     ! this should be adjusted...planet specific
     real,allocatable:: potion(:)
+
     !  DATA potion/16.,16.,18./
     !------------------------------------------------------------------------
-    DeltaPot_C(:)=4.0
+    !DeltaPot_C(:)=0.0
     DiffMax=1.0
+    
+    !set the precipition arrays
+    if (.not.allocated(PrecipCombinedPhi_I))&
+         allocate(PrecipCombinedPhi_I(NBINS))
+    if (UsePrecipitation) then
+       call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
+    else
+       PrecipPhi_I(:)=0.0
+    endif
+    
+    if (UsePolarRain) then
+       call maxt(PolarRainEflux, PolarRainEmean, ENER, DEL,0, 0.0, 0.0, &
+            PolarRainPhi_I)
+    else
+       PolarRainPhi_I(:)=0.0
+    endif
+    
+    if (UseOvation) then
+       call maxt(EfluxDiff, EMeanDiff, ENER, DEL,0, 0.0, 0.0, &
+            OvationDiffPhi_I)
+       call maxt(EfluxWave, EMeanWave, ENER, DEL,0, 0.0, 0.0, &
+            OvationWavePhi_I)
+       call maxt(0.0, 1.0, ENER, DEL,0, EfluxMono, EmeanMono, &
+            OvationMonoPhi_I)
+    else
+       OvationDiffPhi_I(:)=0.0
+       OvationWavePhi_I(:)=0.0
+       OvationMonoPhi_I(:)=0.0
+    endif
+    
+    !now combine the different types of precipitation
+    PrecipCombinedPhi_I(:)=0.0
+    do iEnergy=1,nBINS
+       PrecipCombinedPhi_I(iEnergy)=0.0
+       if (ENER(iEnergy)>PrecipEmin .and. ENER(iEnergy)<PrecipEmax) then
+          PrecipCombinedPhi_I(iEnergy)=&
+               PrecipCombinedPhi_I(iEnergy)+PrecipPhi_I(iEnergy)
+       endif
+       if (ENER(iEnergy)>PolarRainEmin .and. ENER(iEnergy)<PolarRainEmax) then
+          PrecipCombinedPhi_I(iEnergy)=&
+               PrecipCombinedPhi_I(iEnergy)+PolarRainPhi_I(iEnergy)
+       endif
+       if (ENER(iEnergy)>OvationEmin .and. ENER(iEnergy)<OvationEmax) then
+          PrecipCombinedPhi_I(iEnergy)=&
+               PrecipCombinedPhi_I(iEnergy)+OvationDiffPhi_I(iEnergy)&
+               +OvationWavePhi_I(iEnergy)+OvationMonoPhi_I(iEnergy)
+       endif
+    enddo
+    if (UseOvation .or. UsePrecipitation .or. UsePolarRain) then
+       PHITOP(:)=PrecipCombinedPhi_I(:)
+    else
+       PHITOP(:)=0.0
+    endif
+    
+    write(*,*)2.0*3.14*sum(PHITOP(:)*DEL(:))*AVMU
+    
     do while (DiffMax >0.1 .and. DoIterateFlux)
        
        !reflect solution below max potential drop
@@ -167,7 +229,11 @@ contains
              PHITOP(iEnergy)=LastPhiUp(iEnergy,JMAX)
              !write(*,*) 'E,Phi',ENER(iEnergy),PhiUp(iEnergy)
           else
-             PHITOP(iEnergy)=0.0
+             if (UseOvation .or. UsePrecipitation .or. UsePolarRain) then
+                PHITOP(iEnergy)=PrecipCombinedPhi_I(iEnergy)
+             else
+                PHITOP(iEnergy)=0.0
+             endif
           end if
        enddo
        
@@ -505,8 +571,8 @@ contains
           DO  K = 1, IIMAXX(J) ! iimaxx set near exsect.f:424
              DO  N = 1, NMAJ
                 DO  I = 1, JMAX
-                   !SECP(N,I) = SEC(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
-                   SECP(N,I) = SIGI(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
+                   SECP(N,I) = SEC(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
+                   !SECP(N,I) = SIGIX(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !call get_secprod(J,N,ZMAJ(N,I),PHIUP(I) + PHIDWN(I),SECP(N,I)
                    !    if (isnan(sec(n,k,j))) stop 'etrans: NaN in SEC'
                    !    if (isnan(zmaj(n,i))) stop 'etrans: NaN in ZMAJ'
@@ -598,7 +664,7 @@ contains
        !check convergence
        DiffMax= &
             maxval(DiffMax_I)
-       write(*,*) 'DiffMax',DiffMax
+       if (IsVerbose)write(*,*) 'DiffMax',DiffMax
        
     end do !end while
     !call plot_omni_iono(time,uFlux_IC,dFlux_IC)
@@ -707,14 +773,14 @@ contains
   !        use ModSeGrid,      ONLY: nEnergy, DeltaE_I,EnergyGrid_I,BINNUM
   !        use ModMath,        ONLY: midpnt_int
   !        use ModNumConst,    ONLY: cPi
-  !        use ModSeCross,     ONLY: SIGS,SIGI,SIGA
+  !        use ModSeCross,     ONLY: SIGS,SIGIX,SIGA
   !
   !        IMPLICIT NONE
   !        integer, intent(in) :: iEnergyIn,iNeutral
   !        real   , intent(in) :: NeutralDens,NetFlux
   !        !incomming crossections
   !!        real   , intent(in) :: SIGS(nNeutral,nEnergy)
-  !!        real   , intent(in) :: SIGI(nNeutral,nEnergy,nEnergy)
+  !!        real   , intent(in) :: SIGIX(nNeutral,nEnergy,nEnergy)
   !!        real   , intent(in) :: SIGA(nNeutral,nEnergy,nEnergy)
   !        !outgoing electron production rate
   !        real   , intent(out):: SecProdTotal
@@ -735,7 +801,7 @@ contains
   !           
   !           DO jj=LL,nEnergy
   !              SecProd(jj)=&
-  !                   SecProd(jj)+NeutralDens_I(n)*SIGI(n,iEnergyIn,jj)*NetFlux
+  !                   SecProd(jj)+NeutralDens_I(n)*SIGIX(n,iEnergyIn,jj)*NetFlux
   !           enddo
   !        END IF
   !        ! energy-integrated secondary production per species into Qe
@@ -941,7 +1007,8 @@ contains
     enddo ALT
 
     ! Map flux above calculation using Liouville's theorem
-    call map_flux(AVMU,uFlux_IC-dFlux_IC)
+!    call map_flux(AVMU,uFlux_IC-dFlux_IC)
+    call map_flux(AVMU,uFlux_IC)
 !    do iAlt=1,nAltExtended
 !       write(*,*) 'Alt_C(iAlt)*1.0e-5,NumberDens_C(iAlt),NumberFlux_C(iAlt)',&
 !            AltExtended_C(iAlt)*1.0e-5,NumberDens_C(iAlt),NumberFlux_C(iAlt)
@@ -969,6 +1036,8 @@ contains
     real,allocatable :: NumDensIntegrand_I(:) !integrand of number density
     real,allocatable :: NumFluxIntegrand_I(:)!integrand of number flux
     real, parameter :: cCmToM=1e-2
+    logical :: DoReflect
+    integer :: nReflect
     !-----------------------------------------------------------------------
 
     if (.not.allocated(NumDensIntegrand_I))allocate(NumDensIntegrand_I(nEnergy))
@@ -997,6 +1066,7 @@ contains
           nPAforInt=0
           dmu0_I(:)=0.0
           mu0_I(:)=0.0
+          nReflect=0
           PA_LOOP: do iPA =1,nPA
              !mu0=sqrt(1-(B0*E/(B(s)[E-e(dPfhi(s)-dPhi0)])) (1-mu^2)))
              !mu0=sqrt(1-(B0*(B(s))) (1-mu^2)))
@@ -1016,18 +1086,30 @@ contains
                 mu0_I(iPA) = -99.0 
              endif
              !write(*,*) 'mu_I(iPA),mu0_I(iPA)',mu_I(iPA),mu0_I(iPA)
+             !check if this pitch angle and energy will reflect
+             call check_will_reflect(iEnergy,iAlt,mu_I(iPA),DoReflect)
+ !            write(*,*) 'EnergyGrid_I(iEnergy),mu_I(iPA),DoReflect',&
+ !                 EnergyGrid_I(iEnergy),mu_I(iPA),DoReflect
+             if (DoReflect) then
+                nReflect=nReflect+1
+             endif
           enddo PA_LOOP
          
           !fill in last delta for mu
-          dmu0_I(nPAforInt)=0.0!dmu0_I(nPAforInt-1)
+          if (nPAforInt>1) dmu0_I(nPAforInt)=0.0!dmu0_I(nPAforInt-1)
           !set the Kinetic Energy array for this altitude
           KE_I(iEnergy) = EnergyGrid_I(iEnergy)-DeltaPot_C(iAlt)
-          if (KE_I(iEnergy) <0.0 .or. nPAforInt==1) then
+          if (KE_I(iEnergy) <0.0 .or. nPAforInt<=1) then
              !when KE is less than 0 then set KE to 0 and there is no 
              ! contribution to the flux
              KE_I(iEnergy)=0.0
+             dKE_I(iEnergy)=0.0
              UpFlux_I(iEnergy) = 0.0
              DnFlux_I(iEnergy) = 0.0
+             NumDensIntegrand_I(iEnergy) = 0.0
+             NumFluxIntegrand_I(iEnergy) = 0.0
+             cycle ENERGY_LOOP
+
           else
              !get mu0 integral
 !             CALL midpnt_int(IntMu0,&
@@ -1037,17 +1119,26 @@ contains
              IntdMu0=sum(dmu0_I(1:nPAforInt))
              UpOmni_I(iEnergy) = IntdMu0*uFlux_IC(iEnergy,nAlt)/AVMU
              UpFlux_I(iEnergy) = IntMu0*uFlux_IC(iEnergy,nAlt)/AVMU
-             !write(*,*) 'iAlt,IntdMu0,IntMu0',iAlt,IntdMu0,IntMu0
-             !if total potential drop to top of the grid is greater than the 
-             ! Energy at base then set DnFlux to UpFlux
-             if(DeltaPot_C(nAltExtended)>EnergyGrid_I(iEnergy)) then
-                DnFlux_I(iEnergy) = UpFlux_I(iEnergy)
-                DnOmni_I(iEnergy) = UpOmni_I(iEnergy)
-             else
-                DnFlux_I(iEnergy) = 0.0
-                DnOmni_I(iEnergy) = 0.0
-             endif
-             
+
+             !set downward flux due to reflection and PA change
+             if(nReflect==nPA) then
+                 DnFlux_I(iEnergy) = 0.0
+                 DnOmni_I(iEnergy) = 0.0
+              else
+                 !nPAforInt=nPA-nReflect
+                 if(nPA-nReflect>=nPAforInt) then
+                    DnFlux_I(iEnergy) = 0.0
+                    DnOmni_I(iEnergy) = 0.0
+                 else
+                    IntMu0=sum(mu0_I(nPA-nReflect:nPAforInt)&
+                         *dmu0_I(nPA-nReflect:nPAforInt))
+                    IntdMu0=sum(dmu0_I(nPA-nReflect:nPAforInt))
+                    DnOmni_I(iEnergy) = &
+                         IntdMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
+                    DnFlux_I(iEnergy) = &
+                         IntMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
+                 endif
+              endif
           endif
  !         write(*,*) 'IntMu0',IntMu0
  !         write(*,*) 'nPAforInt',nPAforInt
@@ -1056,8 +1147,7 @@ contains
                /sqrt(KE_I(iEnergy))
           NumFluxIntegrand_I(iEnergy) = &
                (UpFlux_I(iEnergy)-DnFlux_I(iEnergy))
-       
-          
+
           !set dKE_I
           if (iEnergy>1.and.iEnergy<nEnergy) &
                dKE_I(iEnergy-1)=KE_I(iEnergy)-KE_I(iEnergy-1)
@@ -1071,6 +1161,55 @@ contains
     enddo ALT_LOOP
     
   end subroutine map_flux
+
+  !=============================================================================
+  ! check if a given energy and PA will reflect above iAltIn
+  subroutine check_will_reflect(iEnergyIn,iAltIn,MuIn,DoReflect)
+    use ModSeGrid,     ONLY: nAlt, nAltExtended,nEnergy,&
+         EnergyGrid_I,DeltaE_I,AltExtended_C,DeltaPot_C    
+    use ModNumConst,    ONLY: cPi
+    
+    integer,    intent(in) :: iEnergyIn,iAltIn
+    real,    intent(in) :: MuIn
+    logical, intent(out):: DoReflect
+    integer :: iAlt,iEnergy,iPA, nPAforInt
+    real :: B0,Biono
+    integer, parameter :: nPA=90 ! number of PA
+    real :: PA_I(nPa) !array for PA
+    real :: mu0_I(nPA), mu_I(nPA),dmu0_I(nPA),alpha
+    real, parameter :: cCmToM=1e-2
+    !-----------------------------------------------------------------------
+    DoReflect=.false.
+
+    !mu = sqrt((mu0^2-1) * (B(s)[E-e(dPhi(s)-dPhi0)])/(B0*E)+1)
+    !set B at iono point
+    call get_b(AltExtended_C(iAltIn)*cCmToM,Biono)
+    ALT_LOOP: do iAlt=iAltIn+1,nAltExtended
+       !for a given pitchangle at iAlt find coresponding PA at nAlt 
+       call get_b(AltExtended_C(iAlt)*cCmToM,B0)
+       !B0=Biono
+       !mu0=sqrt(1-(B0*E/(B(s)[E-e(dPfhi(s)-dPhi0)])) (1-mu^2)))
+       !mu0=sqrt(1-(B0*(B(s))) (1-mu^2)))
+       !mu0=sqrt(1-alpha)
+       if (EnergyGrid_I(iEnergyIn)-DeltaPot_C(iAlt)>0)then
+          alpha = (1.0-MuIn**2.0)*(B0*EnergyGrid_I(iEnergyIn))&
+               /(Biono*(EnergyGrid_I(iEnergyIn)-DeltaPot_C(iAlt)))
+       else
+          alpha=2.0
+          DoReflect=.true.
+          return
+       endif
+       
+       if ((1.0-alpha)> 0.0) then
+          DoReflect=.false.
+       else
+          DoReflect=.true.
+          return
+       endif
+    enddo ALT_LOOP
+     
+    
+  end subroutine check_will_reflect
 
   !============================================================================
   subroutine get_b(AltRef, B0ref)

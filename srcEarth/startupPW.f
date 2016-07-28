@@ -308,7 +308,7 @@ C                                                                      C
       if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
       
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
-     &     .and.DoCoupleSTET) then
+     &     .and.DoCoupleSE) then
          If (UseOvation) then
             call read_ovation_all(Time)
             call get_ovation_point(SmLat,SmLon,EMeanDiff,EFluxDiff,
@@ -337,7 +337,7 @@ C                                                                      C
          call  get_ionization(nDim, AltD(1:nDim), IonRateO_C(1:nDim))
       endif
       
-      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
+      if((.not.DoCoupleSE) .or. (.not.UseFeedbackFromSE)) then
          SeDens_C(:)=0.0
          SeFlux_C(:)=0.0
          SeHeat_C(:)=0.0
@@ -363,7 +363,7 @@ C     DEFINE TOPSIDE ELECTRON HEAT FLUX AND PARAMETRIC HEAT SOURCES    C
 C                                                                      C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
-      if(DoCoupleSTET.and.UseFeedbackFromSTET) then
+      if(DoCoupleSE.and.UseFeedbackFromSE) then
          !When using stet the heatflux should be zero
          ETOP = 0.0
       else
@@ -549,13 +549,13 @@ C      READ(5,3) NCNPRT
       ALTMAX=ALTMAX/1.E5
       ETOP1=ETOP*1.23E-6/DRBND
 
-!      !get the SE fluxes from STET first
+!      !get the SE fluxes from SE first
 !      if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
 !      if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
 !      if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
 !      
 !      if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
-!     &     .and.DoCoupleSTET) then 
+!     &     .and.DoCoupleSE) then 
 !         call get_stet_for_pwom(Time,iLine,(/SmLat,SmLon/),
 !     &        State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
 !     &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C)
@@ -564,7 +564,7 @@ C      READ(5,3) NCNPRT
 !         !stop
 !      endif
 !      
-!      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
+!      if((.not.DoCoupleSE) .or. (.not.UseFeedbackFromSE)) then
 !         SeDens_C(:)=0.0
 !         SeFlux_C(:)=0.0
 !         SeHeat_C(:)=0.0

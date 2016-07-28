@@ -185,13 +185,13 @@ contains
     real :: UTsec
     !--------------------------------------------------------------------------
 
-    !get the SE fluxes from STET first
+    !get the SE fluxes from SE first
     if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
     if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
     if (.not.allocated(SeHeat_C)) allocate(SeHeat_C(nDim))
 
     if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))&
-         .and.DoCoupleSTET) then
+         .and.DoCoupleSE) then
        !get UT for current time
        CurrentTime=StartTime+Time
        call time_real_to_int(CurrentTime,iCurrentTime_I)
@@ -219,7 +219,7 @@ contains
 
     endif
 
-    if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
+    if((.not.DoCoupleSE) .or. (.not.UseFeedbackFromSE)) then
        SeDens_C(:)=0.0
        SeFlux_C(:)=0.0
        SeHeat_C(:)=0.0

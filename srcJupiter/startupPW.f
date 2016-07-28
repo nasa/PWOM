@@ -198,7 +198,7 @@ C                                                                      C
      &     allocate(TotalIonRate_IC(nIon-1,nDim))
       
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
-     &     .and.DoCoupleSTET) then 
+     &     .and.DoCoupleSE) then 
          call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
      &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
@@ -207,7 +207,7 @@ C                                                                      C
      &        SecIonRatePW_IC=SecIonRate_IC)
 
          TotalIonRate_IC(:,:) = PhotoIonRate_IC(:,:) + SecIonRate_IC(:,:)
-         ! Divide the Ionization rate from STET by oxygen density to get
+         ! Divide the Ionization rate from SE by oxygen density to get
          ! production in units of ions/cc/s rather than ions/s
          !IonRateO_C(1:nDim)=IonRateO_C(1:nDim)/XO(1:nDim)
       endif
@@ -217,7 +217,7 @@ C                                                                      C
       write(*,*) PhotoIonRate_IC(1:3,3),SecIonRate_IC(1:3,3)
       write(*,*) TotalIonRate_IC(1:3,3)
 !      stop
-      if((.not.DoCoupleSTET) .or. (.not.UseFeedbackFromSTET)) then
+      if((.not.DoCoupleSE) .or. (.not.UseFeedbackFromSE)) then
          SeDens_C(:)=0.0
          SeFlux_C(:)=0.0
          SeHeat_C(:)=0.0
@@ -239,7 +239,7 @@ CALEX of 20E-3 ergs cm^2 /s.
 C      ETOP=1.0E-3
 C      ETOP=20.0E-3   ! original value
 C      ETOP=1.0E-3    ! previously used
-      ETOP=0.0        ! set to zero for STET coupling
+      ETOP=0.0        ! set to zero for SE coupling
       ELFXIN=0.
 C
 C      ELFXIN=9.

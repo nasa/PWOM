@@ -148,9 +148,10 @@ contains
   ! subroutine that fills the neutral atmosphere and PE production spectrum
   subroutine get_neutrals_and_pe_spectrum(F107,F107A,AP)
     use ModSeGrid,      only: nAlt,nEnergy,Alt_C,IsVerbose
-    use ModSeProduction,only: RCOLUM,RCOLUM_ABOVE,ESPEC,SOLZEN,SSFLUX,&
+    use ModSeProduction,only: RCOLUM,RCOLUM_ABOVE,EPHOTO,SOLZEN,SSFLUX,&
                               init_production
-    use ModSeCross,     only: cross,cross_jupiter
+    use ModSeCross,     only: EXSECT,cross_jupiter
+!    use ModSeCross,     only: CROSS,cross_jupiter
     use EUA_ModMsis90,  only: GTD6,TSELEC
     use ModNumConst,    only: cDegToRad,cRadToDeg
     use ModPlanetConst, only: Planet_, NamePlanet_I
@@ -228,14 +229,14 @@ contains
          NeutralDens_IC(:,:),NeutralTemp_C(:),nAlt)    
     
     !  Calculate the photoelectron production spectrum
-    CALL ESPEC(NeutralDens_IC(:,:),ePhotoProdSpec_IC(:,:),&
+    CALL EPHOTO(NeutralDens_IC(:,:),ePhotoProdSpec_IC(:,:),&
          nAlt,0,SZA*cRadToDeg,Alt_C(1:nAlt)*cCmToKm,&
          nIons,PhotoIonRate_IC(:,:))
 
     ! set the cross sections (perhaps this should only be called once?)
     select case(NamePlanet_I(Planet_))
     case('EARTH')
-       call cross
+       call EXSECT
     case('JUPITER')
        call cross_jupiter(nNeutralSpecies)
     end select

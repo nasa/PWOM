@@ -4,6 +4,7 @@ CALEX then calculates the momentum and energy collision terms
       SUBROUTINE COLLIS(N,StateIn_GV)
       use ModCommonVariables
       use ModCommonPlanet,ONLY: HLPion1,HLPion2,HLPion3,HLPE
+      use ModPhotoElectron
       integer, intent(in) :: N
       real,    intent(in) :: StateIn_GV(-1:N+2,nVar)
       
@@ -220,6 +221,12 @@ CALEX the energy collision term
       Source_CV(I,pH2_) = 0.0
 
       Source_CV(I,pE_) = 0.0
+
+      if(UseFeedbackFromSE) then
+         !add the energy deposition from SEs
+         Source_CV(I,pE_) =Source_CV(I,pE_)+SeHeat_C(I)
+      endif
+
       do jSpecies=1,nSpecies
          if(Ion1_ /= jSpecies) Source_CV(I,pH3_) = Source_CV(I,pH3_) - dT_II(Ion1_,jSpecies)
      &  *HeatFlowCoef_II(Ion1_,jSpecies)*CollisionFreq_IIC(Ion1_,jSpecies,I)

@@ -9,17 +9,17 @@ module ModPhotoElectron
   !minimum thermal density of electrons [/cc]
   real :: eThermalDensMin=1.0
 
-  logical :: DoCoupleSTET = .true., UseFeedbackFromSTET=.true.
+  logical :: DoCoupleSE = .true., UseFeedbackFromSE=.true.
 
-  !Fixed precipitation to pass to STET
+  !Fixed precipitation to pass to SE
   logical :: UseFixedPrecip = .false.
   real :: PrecipEnergyMin, PrecipEnergyMax, PrecipEnergyMean, PrecipEnergyFlux
 
-  !PolarRain precipitation to pass to STET
+  !PolarRain precipitation to pass to SE
   logical :: UsePolarRain = .false.
   real :: PolarRainEMin, PolarRainEMax, PolarRainEMean, PolarRainEFlux
 
-  !Should STET be verbose with output?
-  logical :: IsVerboseSTET=.false.
+  !Should SE be verbose with output?
+  logical :: IsVerboseSE=.false.
 
 end module ModPhotoElectron

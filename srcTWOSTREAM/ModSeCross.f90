@@ -2,7 +2,8 @@
 Module ModSeCross
   private !except
   
-  public :: cross
+  public :: EXSECT
+
   public :: cross_jupiter
   !number of excited states
   integer, public,parameter :: NEI=10
@@ -10,10 +11,16 @@ Module ModSeCross
   !number of major neutral species
   integer, parameter :: NMAJ = 3
 
-
+  ! these used to be in the CXSECT common block
   ! crossesction that are calculated here for other parts of the code
   real, allocatable,public :: SIGS(:,:), &
-       SIGI(:,:,:), SIGA(:,:,:),SIGEX(:,:,:)
+       SIGIX(:,:,:), SIGA(:,:,:),SIGEX(:,:,:),SEC(:,:,:)
+
+  !arrays to hold elastic and inelastic backscatter ratios, used to be in CVSECT
+  ! PE     elastic backscatter probabilities for each species, energy
+  ! PI     inelastic  "
+  real,allocatable,public :: PE(:,:), PIN(:,:)
+
   
   integer, allocatable,public :: IIMAXX(:)
 
@@ -76,318 +83,401 @@ Module ModSeCross
          12.10,16.10,16.90,18.2,20.30,23.00,37.00, 0.,0.,0., &
          15.58,16.73,18.75,22.0,23.60,40.00, 0.00, 0.,0.,0./
 
-    !arrays to hold elastic and inelastic backscatter ratios
-    ! PE     elastic backscatter probabilities for each species, energy
-    ! PI     inelastic  "
-    real,allocatable,public :: PE(:,:), PIN(:,:)
   
 contains
-  
-  ! Subroutine CROSS, an adaptation from EXSECT to fit our "black
-  !*  box" approach to the problem.
-  !*  This subroutine can now handle a nonzero Emin (which it handled
-  !*  incorrectly before): 3/29/95      (M W Liemohn)
-  !
-  ! Adapted from Banks & Nagy 2-stream code by Stan Solomon, 1988
-  !
-  ! Calculates electron impact cross sections
-  !
-  ! Definitions:
-  ! SIGS   elastic cross sections for each species, energy; cm2
-  ! PE     elastic backscatter probabilities for each species, energy
-  ! PI     inelastic  "
-  ! SIGA   energy loss cross section for each species, loss, energy; cm2
-  ! WW     energy threshold for each excited state, species; eV
-  ! WW, AO, OMEG, ANU, BB: revised excitation cross section parameters,
-  !        from Green & Stolarski (1972) formula (W, A, omega, nu, gamma)
-  ! AUTO   autoionization coefs (= 0 as autoion. included in ion xsects)
-  ! THI    energy threshold for each ionized state, species; eV
-  ! AK, AJ, TS, TA, TB, GAMS, GAMB:  Jackman et al (1977) ioniz. params
-  ! ENER   energy grid; eV
-  ! DEL    energy grid spacing; eV
-  ! NNN    number of excited states for each species
-  ! NINN   number of ionized states for each species
-  ! NUM    number of points on elastic data trid for each species
-  ! EC     data energy grid of elastic xsects and backscatter ratios
-  !        for each species; eV
-  ! CC     elastic xsects on data grid for each species, cm2
-  ! CE     elastic backscat. probs on data grid for each species; cm2
-  ! CI     inelastic "
-  !
-  ! Array dimensions:
-  ! Elen   number of energy levels
-  ! NMAJ   number of major species
-  ! NEI    number of slots for excited and ionized states
-  !
-  !
-  SUBROUTINE CROSS
-    !
-!    INCLUDE 'numbers.h'
-    !
-!    COMMON /CXSECT/ SIGS(NMAJ,Elen), &
-!         SIGI(NMAJ,Elen,Elen), SIGA(NMAJ,Elen,Elen)
-    !
-!    COMMON /CXPARS/ WW(NEI,NMAJ), AO(NEI,NMAJ), OMEG(NEI,NMAJ), &
-!         ANU(NEI,NMAJ), BB(NEI,NMAJ), AUTO(NEI,NMAJ), &
-!         THI(NEI,NMAJ),  AK(NEI,NMAJ),   AJ(NEI,NMAJ), &
-!         TS(NEI,NMAJ),   TA(NEI,NMAJ),   TB(NEI,NMAJ), &
-!         GAMS(NEI,NMAJ), GAMB(NEI,NMAJ)
-    !
-    use ModSeGrid,only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I, &
-         Emin=>EnergyMin, BINNUM
-!    COMMON /CENERGY/ENER(Elen), DEL(Elen), Emin, Jo
-    !
 
-    DIMENSION NNN(NMAJ), NINN(NMAJ), NUM(NMAJ), &
-         EC(31,NMAJ), CC(31,NMAJ)
-    !
-    !      DATA QQN/6.51E-14/, NNN/8,7,7/, NINN/3,7,6/, NUM/31,28,28/
-    !  Changed to remove the N2 vibrational state.
-    DATA QQN/6.51E-14/, NNN/8,7,8/, NINN/3,7,6/, NUM/31,28,28/
+  ! Subroutine EXSECT
+!
+! This software is part of the GLOW model.  Use is governed by the Open Source
+! Academic Research License Agreement contained in the file glowlicense.txt.
+! For more information see the file glow.txt.
+!
+! Adapted from Banks & Nagy 2-stream code by Stan Solomon, 1988
+! Added high-energy relativistic cross section correction, SCS, 1999
+! Updated comments, SCS, 2002
+! Included in GLOW v. 0.97, SCS, 2005
+!
+! Calculates electron impact cross sections
+!
+! Definitions:
+! SIGS   elastic cross sections for each species, energy; cm2
+! PE     elastic backscatter probabilities for each species, energy
+! PI     inelastic  "
+! SIGA   energy loss cross section for each species, loss, energy; cm2
+! SEC    secondary production xsect for species, Esec, Epri; cm2
+! SIGEX  excitation xsect for each state, species, energy; cm2
+!     O states:   1D,   1S, 3s5S, 3s3S, 3p5P, 3p3P, 3d3D, 3s'3D
+!     O2 states:   a,    b, AA'c,    B,  9.9, Ryds,  vib
+!     N2 states: ABW,   B',    C, aa'w,  1Pu,   b', Ryds,  vib
+! SIGIX  ionization xsect for each state, species, energy; cm2
+!     O states:   4S,  2Do,  2Po
+!     O2 states:   X,    a,    A,    b,    B,   c,  37eV
+!     N2 states:   X,    A,    B,    D,    C, 40eV
+! IIMAX  number of bins for secondary production for each primary energy
+! WW     energy threshold for each excited state, species; eV
+! WW, AO, OMEG, ANU, BB: revised excitation cross section parameters,
+!        from Green & Stolarski (1972) formula (W, A, omega, nu, gamma)
+! AUTO   autoionization coefs (= 0 as autoion. included in ion xsects)
+! THI    energy threshold for each ionized state, species; eV
+! AK, AJ, TS, TA, TB, GAMS, GAMB:  Jackman et al (1977) ioniz. params
+! ENER   energy grid; eV
+! DEL    energy grid spacing; eV
+! NNN    number of excited states for each species
+! NINN   number of ionized states for each species
+! NUM    number of points on elastic data trid for each species
+! EC     data energy grid of elastic xsects and backscatter ratios
+!        for each species; eV
+! CC     elastic xsects on data grid for each species, cm2
+! CE     elastic backscat. probs on data grid for each species; cm2
+! CI     inelastic "
+!
+! Array dimensions:
+! NBINS  number of energy levels
+! NMAJ   number of major species
+! NEI    number of slots for excited and ionized states
+!
+!
+      SUBROUTINE EXSECT
+!      use cglow,only: nmaj,nei,nbins
+    use ModSeGrid,only:NBINS=>nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I
+      implicit none
 
-    DATA EC /      1.00,     2.00,     4.00,     6.00,     8.00, &
-         10.00,    12.00,    14.00,    16.00,    18.00, &
-         20.00,    30.00,    40.00,    50.00,    60.00, &
-         70.00,    80.00,    90.00,   100.00,   150.00, &
-         200.00,   300.00,   500.00,  1000.00,  2000.00, &
-         3000.00,  5000.00, 10000.00, 20000.00, 40000.00, &
-         50000.00, &
-         1.00,     2.00,     3.00,     5.00,     7.00, &
-         10.00,    15.00,    20.00,    30.00,    40.00, &
-         50.00,    70.00,   100.00,   150.00,   200.00, &
-         300.00,   400.00,   500.00,   600.00,   700.00, &
-         1000.00,  2000.00,  3000.00,  5000.00, 10000.00, &
-         20000.00, 40000.00, 50000.00,     0.00,     0.00, &
-         0.00, &
-         1.00,     2.00,     2.50,     3.00,     4.00, &
-         5.00,     6.00,     8.00,    10.00,    15.00, &
-         20.00,    30.00,    40.00,    50.00,    70.00, &
-         100.00,   200.00,   300.00,   500.00,   700.00, &
-         1000.00,  2000.00,  3000.00,  5000.00, 10000.00, &
-         20000.00, 40000.00, 50000.00,     0.00,     0.00, 0.0/
-    DATA CC /  5.00E-16, 6.00E-16, 7.50E-16, 7.60E-16, 7.70E-16, &
-         7.80E-16, 7.50E-16, 7.20E-16, 6.90E-16, 6.70E-16, &
-         6.50E-16, 5.60E-16, 4.60E-16, 4.00E-16, 3.50E-16, &
-         3.20E-16, 2.90E-16, 2.70E-16, 2.50E-16, 1.90E-16, &
-         1.50E-16, 1.20E-16, 8.00E-17, 5.00E-17, 3.02E-17, &
-         1.99E-17, 1.20E-17, 6.08E-18, 3.06E-18, 1.55E-18, &
-         1.24E-18, &
-         5.50E-16, 6.90E-16, 7.50E-16, 8.50E-16, 9.60E-16, &
-         1.00E-15, 1.00E-15, 9.00E-16, 8.30E-16, 7.70E-16, &
-         6.90E-16, 5.70E-16, 4.40E-16, 3.30E-16, 2.70E-16, &
-         2.10E-16, 1.80E-16, 1.60E-16, 1.40E-16, 1.30E-16, &
-         1.10E-16, 7.00E-17, 5.00E-17, 3.00E-17, 1.53E-17, &
-         7.72E-18, 3.90E-18, 3.13E-18, 0.00E+00, 0.00E+00, &
-         0.00E+00, &
-         9.00E-16, 2.27E-15, 2.52E-15, 1.93E-15, 1.32E-15, &
-         1.15E-15, 1.16E-15, 1.17E-15, 1.18E-15, 1.14E-15, &
-         1.13E-15, 9.50E-16, 8.60E-16, 7.30E-16, 5.90E-16, &
-         4.70E-16, 3.30E-16, 2.50E-16, 1.60E-16, 1.30E-16, &
-         1.10E-16, 6.35E-17, 4.18E-17, 2.54E-17, 1.28E-17, &
-         6.44E-18, 3.27E-18, 2.62E-18, 0.00E+00, 0.00E+00, 0.0/
+! Args:
+!      real,intent(in) :: ENER(NBINS),DEL(NBINS)
+! Local:
+      !integer inv !function
 
-    !allocate sig arrays if not already done
-    if (.not.allocated(SIGS)) allocate(SIGS(NMAJ,nEnergy)) 
-    if (.not.allocated(SIGI)) allocate(SIGI(NMAJ,nEnergy,nEnergy)) 
-    if (.not.allocated(SIGA)) allocate(SIGA(NMAJ,nEnergy,nEnergy)) 
-    if (.not.allocated(SIGEX)) allocate(SIGEX(NEI,NMAJ,nEnergy)) 
-    
-    !allocate IIMAXX array
-    if (.not.allocated(IIMAXX)) then
-       allocate(IIMAXX(nEnergy))
-       IIMAXX(:)=0
-    endif
-    call calc_backscatter
-    !
-    !
-    ! Zero energy loss xsect and secondary production xsect arrays:
-    !
-    DO I3=1,nEnergy
-       DO I2=1,nEnergy
-          DO I1=1,NMAJ
-             SIGA(I1,I2,I3)=0.0
-             SIGI(I1,I2,I3)=0.0
-          enddo
-       enddo
-    enddo
-    !
-    !
-    ! Interpolate elastic cross sections and backscatter ratios:
-    !
-    DO  IJ=1,NMAJ
-       DO   IV=1,nEnergy
+      real  AE!,sigion
+
+      real SIGI(NBINS), T12(NBINS), &
+       RATIO(NBINS), EC(31,NMAJ), CC(31,NMAJ), CE(31,NMAJ), CI(31,NMAJ), &
+       detj,e1,e2,eta,etj,ex,fac,ff,gama,sigg,t0,tmax,tmt,wag,we,wth1
+      integer i,i1,i2,i3,ibz,ie,iee,ii,ij,itmax,iv,j,jy,k,kk,kuk,kuk1, &
+       ml
+
+      real,parameter :: QQN=6.51E-14
+      integer NNN(NMAJ), NINN(NMAJ), NUM(NMAJ)
+
+      DATA NNN/8,7,8/
+      DATA NINN/3,7,6/
+      DATA NUM/31,28,28/
+!
+
+      DATA EC /      1.00,     2.00,     4.00,     6.00,     8.00, &
+                    10.00,    12.00,    14.00,    16.00,    18.00, &
+                    20.00,    30.00,    40.00,    50.00,    60.00, &
+                    70.00,    80.00,    90.00,   100.00,   150.00, &
+                   200.00,   300.00,   500.00,  1000.00,  2000.00, &
+                  3000.00,  5000.00, 10000.00, 20000.00, 40000.00, &
+                 50000.00, &
+                     1.00,     2.00,     3.00,     5.00,     7.00, &
+                    10.00,    15.00,    20.00,    30.00,    40.00, &
+                    50.00,    70.00,   100.00,   150.00,   200.00, &
+                   300.00,   400.00,   500.00,   600.00,   700.00, &
+                  1000.00,  2000.00,  3000.00,  5000.00, 10000.00, &
+                 20000.00, 40000.00, 50000.00,     0.00,     0.00, &
+                     0.00, &
+                     1.00,     2.00,     2.50,     3.00,     4.00, &
+                     5.00,     6.00,     8.00,    10.00,    15.00, &
+                    20.00,    30.00,    40.00,    50.00,    70.00, &
+                   100.00,   200.00,   300.00,   500.00,   700.00, &
+                  1000.00,  2000.00,  3000.00,  5000.00, 10000.00, &
+                 20000.00, 40000.00, 50000.00,     0.00,     0.00, 0.0/
+      DATA CC /  5.00E-16, 6.00E-16, 7.50E-16, 7.60E-16, 7.70E-16, &
+                 7.80E-16, 7.50E-16, 7.20E-16, 6.90E-16, 6.70E-16, &
+                 6.50E-16, 5.60E-16, 4.60E-16, 4.00E-16, 3.50E-16, &
+                 3.20E-16, 2.90E-16, 2.70E-16, 2.50E-16, 1.90E-16, &
+                 1.50E-16, 1.20E-16, 8.00E-17, 5.00E-17, 3.02E-17, &
+                 1.99E-17, 1.20E-17, 6.08E-18, 3.06E-18, 1.55E-18, &
+                 1.24E-18, &
+                 5.50E-16, 6.90E-16, 7.50E-16, 8.50E-16, 9.60E-16, &
+                 1.00E-15, 1.00E-15, 9.00E-16, 8.30E-16, 7.70E-16, &
+                 6.90E-16, 5.70E-16, 4.40E-16, 3.30E-16, 2.70E-16, &
+                 2.10E-16, 1.80E-16, 1.60E-16, 1.40E-16, 1.30E-16, &
+                 1.10E-16, 7.00E-17, 5.00E-17, 3.00E-17, 1.53E-17, &
+                 7.72E-18, 3.90E-18, 3.13E-18, 0.00E+00, 0.00E+00, &
+                 0.00E+00, &
+                 9.00E-16, 2.27E-15, 2.52E-15, 1.93E-15, 1.32E-15, &
+                 1.15E-15, 1.16E-15, 1.17E-15, 1.18E-15, 1.14E-15, &
+                 1.13E-15, 9.50E-16, 8.60E-16, 7.30E-16, 5.90E-16, &
+                 4.70E-16, 3.30E-16, 2.50E-16, 1.60E-16, 1.30E-16, &
+                 1.10E-16, 6.35E-17, 4.18E-17, 2.54E-17, 1.28E-17, &
+                 6.44E-18, 3.27E-18, 2.62E-18, 0.00E+00, 0.00E+00, 0.0/
+      DATA CE /   0.50000,  0.49500,  0.46800,  0.43600,  0.42000, &
+                  0.40500,  0.37000,  0.36000,  0.34000,  0.33000, &
+                  0.32000,  0.27000,  0.24000,  0.22000,  0.20000, &
+                  0.18000,  0.17000,  0.16000,  0.15000,  0.13000, &
+                  0.11500,  0.09000,  0.06800,  0.04600,  0.02400, &
+                  0.01660,  0.01000,  0.00510,  0.00255,  0.00125, &
+                  0.00100, &
+                  0.50000,  0.50000,  0.49000,  0.44500,  0.42700, &
+                  0.40500,  0.36800,  0.34300,  0.31600,  0.28900, &
+                  0.25800,  0.22000,  0.18400,  0.16400,  0.13300, &
+                  0.11000,  0.10000,  0.09200,  0.08500,  0.08000, &
+                  0.06800,  0.03700,  0.02600,  0.01600,  0.00800, &
+                  0.00400,  0.00200,  0.00160,  0.00000,  0.00000, &
+                  0.00000, &
+                  0.50000,  0.50000,  0.50000,  0.49000,  0.46800, &
+                  0.44500,  0.43600,  0.42000,  0.40500,  0.36800, &
+                  0.34300,  0.31600,  0.28900,  0.25800,  0.22000, &
+                  0.18400,  0.14000,  0.11000,  0.08400,  0.07400, &
+                  0.06300,  0.03400,  0.02400,  0.01500,  0.00740, &
+                  0.00370,  0.00180,  0.00140,  0.00000,  0.00000, 0.0/
+      DATA CI /   0.60000,  0.60000,  0.60000,  0.60000,  0.60000, &
+                  0.60000,  0.55000,  0.46000,  0.40000,  0.36000, &
+                  0.32000,  0.22000,  0.15000,  0.10000,  0.08200, &
+                  0.07000,  0.06100,  0.05400,  0.05000,  0.04400, &
+                  0.03800,  0.02800,  0.02000,  0.01050,  0.00600, &
+                  0.00400,  0.00250,  0.00130,  0.00060,  0.00030, &
+                  0.00025, &
+                  0.50000,  0.50000,  0.50000,  0.50000,  0.48000, &
+                  0.44000,  0.36000,  0.28000,  0.20000,  0.14000, &
+                  0.10000,  0.07000,  0.05000,  0.04600,  0.04300, &
+                  0.03700,  0.03200,  0.02800,  0.02400,  0.02100, &
+                  0.01600,  0.00900,  0.00620,  0.00400,  0.00200, &
+                  0.00100,  0.00050,  0.00040,  0.00000,  0.00000, &
+                  0.00000, &
+                  0.50000,  0.50000,  0.50000,  0.50000,  0.50000, &
+                  0.50000,  0.50000,  0.50000,  0.50000,  0.50000, &
+                  0.44000,  0.30000,  0.20000,  0.13000,  0.09000, &
+                  0.06000,  0.05000,  0.04200,  0.03200,  0.02500, &
+                  0.02000,  0.01100,  0.00800,  0.00500,  0.00250, &
+                  0.00120,  0.00060,  0.00050,  0.00000,  0.00000, 0.0/
+      !allocate sig arrays if not already done
+    if (.not.allocated(SIGS)) allocate(SIGS(NMAJ,NBINS)) 
+    if (.not.allocated(SIGIX)) allocate(SIGIX(NEI,NMAJ,NBINS)) 
+    if (.not.allocated(SIGA)) allocate(SIGA(NMAJ,NBINS,NBINS)) 
+    if (.not.allocated(SIGEX)) allocate(SIGEX(NEI,NMAJ,NBINS)) 
+    if (.not.allocated(SEC)) allocate(SEC(NMAJ,NBINS,NBINS)) 
+    if (.not. allocated(PE)) allocate(PE(NMAJ,NBINS))
+    if (.not. allocated(PIN)) allocate(PIN(NMAJ,NBINS))
+    if (.not. allocated(IIMAXX)) allocate(IIMAXX(NBINS))
+
+!
+!
+! Interpolate elastic cross sections and backscatter ratios:
+!
+      DO 90 IJ=1,NMAJ
+        DO  80 IV=1,NBINS
           EX=ENER(IV)
-          DO  II=1,NUM(IJ)
-             IF (EC(II,IJ) .GT. EX) GOTO 60
-          end DO
+          DO 50 II=1,NUM(IJ)
+            IF (EC(II,IJ) .GT. EX) GOTO 60
+   50     CONTINUE
           SIGS(IJ,IV)=CC(NUM(IJ),IJ)*(EC(NUM(IJ),IJ)/EX)**0.8
-          IF(IJ.EQ.1) &
-               SIGS(IJ,IV)=CC(NUM(IJ),IJ)*(EC(NUM(IJ),IJ)/EX)**2
-          cycle
-60        I=II-1
+          IF(IJ.EQ.1) SIGS(IJ,IV)=CC(NUM(IJ),IJ)*(EC(NUM(IJ),IJ)/EX)**2
+          PE(IJ,IV) = CE(NUM(IJ),IJ)* (EC(NUM(IJ),IJ)/EX)
+          PIN(IJ,IV) = CI(NUM(IJ),IJ)* (EC(NUM(IJ),IJ)/EX)
+          GOTO 80
+   60     I=II-1
           IF (I .LE. 0) THEN
-             SIGS(IJ,IV)=CC(II,IJ)
+            SIGS(IJ,IV)=CC(II,IJ)
+            PE(IJ,IV)=CE(II,IJ)
+            PIN(IJ,IV)=CI(II,IJ)
           ELSE
-             FAC = ALOG (EX/EC(I,IJ)) / ALOG (EC(II,IJ)/EC(I,IJ))
-             SIGS(IJ,IV) = EXP (ALOG (CC(I,IJ)) &
-                  + ALOG (CC(II,IJ)/CC(I,IJ)) * FAC)
+            FAC = log (EX/EC(I,IJ)) / log (EC(II,IJ)/EC(I,IJ))
+            SIGS(IJ,IV) = EXP (log (CC(I,IJ)) &
+                               + log (CC(II,IJ)/CC(I,IJ)) * FAC)
+            PE(IJ,IV) = EXP (log (CE(I,IJ)) &
+                             + log (CE(II,IJ)/CE(I,IJ)) * FAC)
+            PIN(IJ,IV) = EXP (log (CI(I,IJ)) &
+                             + log (CI(II,IJ)/CI(I,IJ)) * FAC)
           ENDIF
-       enddo
-    enddo
-    !
-    !
-    ! Calculate electron impact excitation cross sections (put into SIGA):
-    !
-    DO  JY=1,nEnergy
-       ETJ=ENER(JY)
-       DO  I=1,NMAJ
-          DO  J=1,NNN(I)
-             ! difference between energy and threshold
-             ETA = ETJ - WW(J,I)
-             IF (ETA .GT. 0.) THEN
-                !when energy exceeds the threshold 
-                WE = WW(J,I) / ETJ
-                SIGG = QQN * AO(J,I) * (WE**OMEG(J,I) / WW(J,I)**2) &
-                     * (1.0 - WE**BB(J,I)) ** ANU(J,I)
-                IF (SIGG .LT. 1.E-30) SIGG = 0.0
-                !save excitation crossection
-                SIGEX(J,I,JY) = SIGG
-                
-                !find closest energy bins bracketing (Energy-threshold)
-                IE = INV (nEnergy,ETA,JY,ENER,Emin)
-                IEE = IE - 1
-                ! K is shifted index. Note that second index in SIGA is measured relative 
-                ! to the index of the energy bin cooresponding to E-threshold
-                K = JY - IE
-                KK = JY - IEE
-                IF (IE .EQ. JY) THEN
-                   !when shifted index is at 0 (when energybin cooresponds to index)
-                   IF (JY .EQ. 1) THEN
-                      !special case when energy index is at bottom of energy grid
-                      SIGA(I,1,JY)=SIGA(I,1,JY)+SIGG*WW(J,I)/(.5*DEL(JY))
-                   ELSE
-                      !exactly on an energy bin but not at the bottom
-                      SIGA(I,1,JY)=SIGA(I,1,JY) &
-                           +SIGG*WW(J,I)/(ETJ-ENER(JY-1))
-                   END IF
-                ELSE
-                   IF (IE .LE. 1 .OR. ETA.LE.Emin) THEN
-                      !special case when index is less than bottom or energy grid
-                      ! when difference between threshold and energy is very small
-                      SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG
-                   ELSE
-                      ! usual case where you are interpolating between two bins
-                      FF = (ENER(IE)-ETA) / (ENER(IE)-ENER(IEE))
-                      FF = 1.0 - ABS(FF)
-                      SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG * FF
-                      SIGA(I,KK,JY) = SIGA(I,KK,JY) + SIGG * (1.0-FF)
-                   END IF
-                END IF
-             END IF
-          enddo
-       enddo
-    enddo
-    !
-    !
-    ! Loop over energy:
-    !
-    DO  JY=1,nEnergy
-       !
-       ETJ=ENER(JY)
-       DETJ=DEL(JY)
-       !
-       !
-       ! Loop over species:
-       !
-       DO  I=1,NMAJ
-          !
-          !
-          ! Loop over ion states:
-          !
-          DO  ML=1,NINN(I)
-             !
-             !
-             ! Calculate cross-section for production of secondaries into each
-             ! bin from 1 to ITMAX and store in SIGI(II). Also store the average
-             ! energy of the secondaries in T120:
-             !
-             WAG = THI(ML,I)
-             TMAX = (ETJ-WAG) / 2.
-             IF (TMAX .LE. 0.) cycle
-             ITMAX = INV (nEnergy,TMAX,JY,ENER,Emin)
-             IF (.not.(ITMAX.EQ.0 .OR. TMAX.LE.Emin))then
-                TMT=0.
-                I1=0
-                DO  WHILE (TMT.EQ.0.)
-                   I1=I1+1
-                   TMT = ENER(I1)+DEL(I1)/2.0
-                   IF (TMT.LE.Emin) TMT=0.
-                   IF (I1.EQ.nEnergy .AND. TMT.EQ.0.) TMT=Emin
-                enddo
-                IF (TMAX .LT. TMT) TMT = TMAX
-                SIGI(I,I1,JY) = SIGI(I,I1,JY) &
-                     + SIGION(I,ML,ETJ,Emin,TMT,T120)
-                TMT = ENER(I1) + DEL(I1) / 2.
-                IF (TMAX .GT. TMT) THEN
-                   IF (TMAX .LE. ENER(I1+1)) ITMAX = I1+1
-                   DO  II=I1+1,ITMAX
-                      E1 = ENER(II) - DEL(II) / 2.
-                      E2 = E1 + DEL(II)
-                      IF (E2 .GT. TMAX) E2 = TMAX
-                      IF (E1 .LE. E2) SIGI(I,II,JY) = SIGI(I,II,JY) &
-                           + SIGION(I,ML,ETJ,E1,E2,T120)
-                   enddo
-                ENDIF
-             endif
-             
-             ! Added for etrans calculation. Basically keep track of largest 
-             ! index intwo which 
-!             IIMAXX(JY)=max(IIMAXX(JY),ITMAX+1)
-!             if (IIMAXX(JY)<ITMAX+1) IIMAXX(JY)=ITMAX+1
-             IIMAXX(JY)=ITMAX
+   80   CONTINUE
+   90 CONTINUE
+!
+!
+! Calculate electron impact excitation and ionization cross sections:
+!
+      DO 140 I=1,NMAJ
+        DO 140 K=1,NEI
+          DO 140 J=1,NBINS
+          IF (ENER(J).GT.WW(K,I) .AND. WW(K,I).GT.0.001) THEN
+            WE = WW(K,I) / ENER(J)
+            SIGEX(K,I,J) = QQN * AO(K,I) &
+                             * (WE**OMEG(K,I) / WW(K,I)**2) &
+                             * (1.0 - WE**BB(K,I)) ** ANU(K,I)
+            IF (SIGEX(K,I,J) .LT. 1.E-30) SIGEX(K,I,J) = 0.0
+          ELSE
+            SIGEX(K,I,J) = 0.0
+          ENDIF
+          IF (ENER(J).GT.THI(K,I) .AND. THI(K,I).GT.0.001) THEN
+            AE = AK(K,I)/ENER(J) * log(ENER(J)/AJ(K,I))
+            GAMA = GAMS(K,I) * ENER(J) / (ENER(J)+GAMB(K,I))
+            T0 = TS(K,I) - (TA(K,I)/(ENER(J)+TB(K,I)))
+            SIGIX(K,I,J) = 1.E-16 * AE * GAMA &
+                          * ( ATAN(((ENER(J)-THI(K,I))/2.-T0)/GAMA) &
+                             +ATAN(T0/GAMA) )
+            IF (SIGIX(K,I,J) .LT. 1.E-30) SIGIX(K,I,J) = 0.0
+          ELSE
+            SIGIX(K,I,J) = 0.0
+          ENDIF
+  140 CONTINUE
+!
+!
+! Obtain high-energy correction factors:
+!
+      CALL HEXC(ENER,SIGIX,RATIO)
+      DO 142 J=1,NBINS
+        DO 142 I=1,NMAJ
+          DO 142 K=1,NEI
+            SIGIX(K,I,J)=SIGIX(K,I,J)/RATIO(J)
+  142 CONTINUE
+!
+!
+! Zero energy loss xsect and secondary production xsect arrays:
+!
+      DO 145 I1=1,NMAJ
+      DO 145 I2=1,NBINS
+      DO 145 I3=1,NBINS
+        SIGA(I1,I2,I3)=0.0
+        SEC(I1,I2,I3)=0.0
+  145 CONTINUE
+!
+!
+! Loop over energy:
+!
+      DO 500 JY=1,NBINS
+!
+      KUK=0
+      KUK1=0
+      ETJ=ENER(JY)
+      DETJ=DEL(JY)
+!
+!
+! Loop over species:
+!
+      DO 400 I=1,NMAJ
+!
+!
+! Loop over excited states:
+!
+      DO 200 J=1,NNN(I)
+!
+!
+! Calculate energy loss from JY to J-K for each species.
+! The cross secton is divided proportionally between bin INV and bin
+! INV-1, the two bins closest to J-K:
+!
+      SIGG = SIGEX(J,I,JY)
+      ETA = ETJ - WW(J,I)
+      IF (ETA .GT. 0.) THEN
+        IE = INV (ETA,JY,ENER)
+        IEE = IE - 1
+        IF (IEE .LT. 1) IEE=IE
+        K = JY - IE
+        KK = JY - IEE
+        IF (KK .GE. KUK) KUK = KK
+        IF (IE .EQ. JY) THEN
+          IF (JY .EQ. 1) THEN
+            SIGA(I,1,JY) = SIGA(I,1,JY) + SIGG
+          ELSE
+            SIGA(I,1,JY) = SIGA(I,1,JY) + SIGG * (DETJ/DEL(JY-1)) &
+                          * WW(J,I) / (ENER(JY)-ENER(JY-1))
+          ENDIF
+        ELSE
+          IF (IE .EQ. 1) THEN
+!           SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG * 2.*ETA*DETJ/DEL(1)**2
+            SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG * DETJ/DEL(1)
+          ELSE
+            FF = (ENER(IE)-ETA) / (ENER(IE)-ENER(IEE))
+            FF = 1.0 - ABS(FF)
+            SIGA(I,K,JY) = SIGA(I,K,JY) + SIGG * FF * DETJ/DEL(IE)
+            SIGA(I,KK,JY)= SIGA(I,KK,JY) + SIGG * (1.0-FF)*DETJ/DEL(IEE)
+          ENDIF
+          WAG=WW(J,I)-THI(1,I)
+          IF (WAG .GT. 0. .AND. AUTO(J,I) .GT. 0.) THEN
+            IBZ = INV (WAG,JY,ENER)
+            SEC(I,IBZ,JY) = SEC(I,IBZ,JY)+SIGG*(DETJ/DEL(IBZ))*AUTO(J,I)
+            IF(IBZ.GE.KUK1)KUK1=IBZ
+          ENDIF
+        ENDIF
+      ENDIF
+  200 CONTINUE
+!
+!
+! Loop over ion states:
+!
+      DO 300 ML=1,NINN(I)
+!
+      DO 210 II=1,NBINS
+      SIGI(II) = 0.0
+      T12(II) = 0.0
+  210 CONTINUE
+!
+!
+! Calculate cross-section for production of secondaries into each
+! bin from 1 to ITMAX and store in SIGI(II).  Apply relativistic correction.
+! Also store the average energy of the secondaries in T12(II):
+!
+      WAG = THI(ML,I)
+      TMAX = (ETJ-WAG) / 2.
+      if (tmax .gt. 1.e6) tmax=1.e6
+      IF (TMAX .LE. 0.) GOTO 300
+      ITMAX = INV (TMAX,JY,ENER)
+      IF (ITMAX .GE. KUK1) KUK1 = ITMAX + 1
+      TMT = ENER(1) + DEL(1) / 2.0
+      IF (TMAX .LT. TMT) TMT = TMAX
+      SIGI(1) = SIGION(I,ML,ETJ,0.0,TMT,T12(1)) / RATIO(JY)
+      TMT = ENER(1) + DEL(1) / 2.
+      IF (TMAX .GT. TMT) THEN
+        IF (TMAX .LE. ENER(2)) ITMAX = 2
+        DO 220 II=2,ITMAX
+        E1 = ENER(II) - DEL(II) / 2.
+        E2 = E1 + DEL(II)
+        IF (E2 .GT. TMAX) E2 = TMAX
+        IF(E1 .LE. E2)SIGI(II)=SIGION(I,ML,ETJ,E1,E2,T12(II))/RATIO(JY)
+  220   CONTINUE
+      ENDIF
+!
+!
+! Add the secondary production cross-section to SEC; calculate
+! the ionization energy loss cross-section and add to SIGA:
+!
+      DO 250 II=1,ITMAX
+      SEC(I,II,JY) = SEC(I,II,JY) + SIGI(II) * DETJ / DEL(II)
+      if (isnan(sec(i,ii,jy))) stop 'exsect: NaN in SEC'
+      WTH1 = T12(II) + WAG
+      ETA = ETJ - WTH1
+      IF (ETA .GT. 0.) THEN
+        IE = INV (ETA,JY,ENER)
+        IEE = IE - 1
+        K = JY - IE
+        KK = JY - IEE
+        IF (IEE .LT. 1) IEE = IE
+        IF (IE .EQ. JY) THEN
+          SIGA(I,1,JY) = SIGA(I,1,JY) + SIGI(II) * (DETJ/DEL(JY-1)) &
+                        * WTH1 / (ENER(JY)-ENER(JY-1))
+        ELSE
+          IF (KK .GE. KUK) KUK = KK
+          IF (IE .EQ. 1) THEN
+!           SIGA(I,K,JY) = SIGA(I,K,JY)+2.*ETA*SIGI(II)*DETJ/DEL(1)**2
+            SIGA(I,K,JY) = SIGA(I,K,JY)+SIGI(II)*DETJ/DEL(1)
+          ELSE
+            FF = (ENER(IE)-ETA) / (ENER(IE)-ENER(IEE))
+            FF = 1.0 - ABS(FF)
+            SIGA(I,K,JY) = SIGA(I,K,JY) + FF*SIGI(II)*DETJ/DEL(IE)
+            SIGA(I,KK,JY)=SIGA(I,KK,JY)+(1.0-FF)*SIGI(II)*DETJ/DEL(IEE)
+          ENDIF
+        ENDIF
+      ENDIF
+!
+  250 CONTINUE
+!
+  300 CONTINUE
+!
+  400 CONTINUE
+!
+      IIMAXX(JY) = KUK1
+!
+  500 CONTINUE
+!
+      END SUBROUTINE EXSECT
+!
+!
+!
 
-             !
-             ! Put degradation cross sections into SIGA
-             !
-             ETA=TMAX               ! Lowest primary energy after collision
-             ETB=ETJ-WAG            ! Highest primary energy after collision
-             ITMAX=BINNUM(ETA)
-             ITMIN=BINNUM(ETB)
-             IF (ITMAX.EQ.0 .OR. ETA.LE.Emin) THEN
-                E1=ETB-Emin
-                IF (E1.LT.0.) E1=0.
-                E2=TMAX
-                SIGA(I,JY,JY)=SIGA(I,JY,JY)+SIGION(I,ML,ETJ,E1,E2,T120)
-                ITMAX=1
-                TMAX=ETB-Emin
-             END IF
-             IF (ITMIN.EQ.0 .OR. ETB.LE.Emin) cycle
-             DO  II=ITMIN,ITMAX,-1
-                E1=ETB-(ENER(II)+.5*DEL(II))
-                E2=E1+DEL(II)
-                IF (E1.LT.0.) E1=0.
-                IF (II.EQ.ITMAX) E2=TMAX
-                IF (E2.LE.1.E-10) cycle
-                SIGG=SIGION(I,ML,ETJ,E1,E2,T120)
-                IF (II.EQ.JY) THEN
-                   SIGA(I,1,JY)=SIGA(I,1,JY) &
-                        +SIGG*(WAG+T120)/(ETJ-ENER(JY-1))
-                ELSE
-                   SIGA(I,JY-II,JY)=SIGA(I,JY-II,JY)+SIGG
-                END IF
-             enddo
-             !
-             !
-          enddo           ! ion states
-          !
-       enddo           ! species
-       !
-    enddo            ! energy
-    !
+  
 
-!    call plot_diffion_cross
-    RETURN
-  END SUBROUTINE CROSS
   !
   !
   !
@@ -451,27 +541,30 @@ contains
   ! Function INV finds the bin number closest to energy ETA on grid ENER.
   ! Bin INV or INV-1 will contain ETA.
   !
-  FUNCTION INV (nEnergy,ETA,JY,ENER,Emin)
+  pure integer FUNCTION INV (ETA,JY,ENER)
+    use ModSeGrid,only:NBINS=>nEnergy
+    implicit none
     !
-!    INCLUDE 'numbers.h'
-    DIMENSION ENER(nEnergy)
-    !
-    IF (ETA .LE. Emin) THEN
-       INV = 0
+    ! Args:
+    real,intent(in) :: ETA,ENER(NBINS)
+    integer,intent(in) :: JY
+    ! Local:
+    integer iv
+    
+    IF (ETA .LT. 0.) THEN
+       INV = -1
     ELSE
-       DO  IV=1,JY
+       DO IV=1,JY
           IF (ETA .LE. ENER(IV)) then 
              INV=IV
              return
-          else
-             INV=JY
           endif
        enddo
+       IV = JY
     ENDIF
     !
-    RETURN
-  END FUNCTION INV
-
+  END function inv
+!
   !=============================================================================
   subroutine cross_jupiter(nNeutralSpecies)
     
@@ -482,12 +575,12 @@ contains
     
     !allocate sig arrays if not already done
     if (.not.allocated(SIGS)) allocate(SIGS(nNeutralSpecies,nEnergy)) 
-    if (.not.allocated(SIGI)) allocate(SIGI(nNeutralSpecies,nEnergy,nEnergy)) 
+    if (.not.allocated(SIGIX)) allocate(SIGIX(nNeutralSpecies,nEnergy,nEnergy)) 
     if (.not.allocated(SIGA)) allocate(SIGA(nNeutralSpecies,nEnergy,nEnergy)) 
     
     ! currently just set crossections to zero. 
     SIGS(:,:)=0.0
-    SIGI(:,:,:)=0.0
+    SIGIX(:,:,:)=0.0
     SIGA(:,:,:)=0.0
 
     write(*,*) 'Neutrals: ',nNeutralSpecies
@@ -496,19 +589,19 @@ contains
 
        write(*,*) 'getting H2 cross'
        call get_excitation_crossection('H2', SIGA(H2_,:,:))
-       call get_crossection_diffion('H2', SIGI(H2_,:,:), SIGA(H2_,:,:))
+       call get_crossection_diffion('H2', SIGIX(H2_,:,:), SIGA(H2_,:,:))
        call get_scattering_crossection('H2',SIGS(H2_,:))
        write(*,*) 'getting He cross'
        call get_excitation_crossection('He', SIGA(He_,:,:))
-       call get_crossection_diffion('He', SIGI(He_,:,:), SIGA(He_,:,:))
+       call get_crossection_diffion('He', SIGIX(He_,:,:), SIGA(He_,:,:))
        call get_scattering_crossection('He',SIGS(He_,:))
        write(*,*) 'getting H cross'
        call get_excitation_crossection('H', SIGA(H_,:,:))
-       call get_crossection_diffion('H',  SIGI(H_,:,:), SIGA(H_,:,:))
+       call get_crossection_diffion('H',  SIGIX(H_,:,:), SIGA(H_,:,:))
        call get_scattering_crossection('H',SIGS(H_,:))
        write(*,*) 'getting CH4 cross'
        call get_excitation_crossection('CH4', SIGA(CH4_,:,:))
-       call get_crossection_diffion('CH4',SIGI(CH4_,:,:), SIGA(CH4_,:,:))
+       call get_crossection_diffion('CH4',SIGIX(CH4_,:,:), SIGA(CH4_,:,:))
        call get_scattering_crossection('CH4',SIGS(CH4_,:))
        
     end do
@@ -595,7 +688,8 @@ contains
              !find closest energy bins bracketing (Energy-threshold)
              !could prob use iBin = BINNUM(DeltaE) but would make a small difference
              !in interpolation
-             iBinHigh = INV(nEnergy,DeltaE,iEnergy,EnergyGrid_I,Emin)
+!             iBinHigh = INV(nEnergy,DeltaE,iEnergy,EnergyGrid_I,Emin)
+             iBinHigh = INV(DeltaE,iEnergy,EnergyGrid_I)
              iBinLow  = iBinHigh - 1
              ! Find shifted indices. Note that second index in SIGA is measured relative 
              ! to the index of the energy bin cooresponding to E-threshold
@@ -1116,7 +1210,7 @@ contains
           ! set plot state
           do iNeutral=1,nNeutral
              PlotState_IIV(iEnergySecondary,iEnergyPrimary,iNeutral) = &
-                  SIGI(iNeutral,iEnergySecondary,iEnergyPrimary)
+                  SIGIX(iNeutral,iEnergySecondary,iEnergyPrimary)
           enddo
        enddo
     enddo
@@ -1243,6 +1337,92 @@ contains
        enddo ENERGY
     enddo NEUTRAL
   end subroutine calc_backscatter
+  
+  ! Subroutine HEXC
+  !
+  ! High Energy Cross Section Correction
+  ! Calculates ratio of low energy (non-relativistic) to high energy
+  ! (relativistic) ionization cross sections, based on N2.
+  ! Extends to 1 GeV.
+  !
+  ! Originally coded by Ann Windnagel, 11/98
+  ! Re-written by Stan Solomon, 2/99
+  ! Re-designed with table lookup, SCS, 4/99
+  ! Updated comments, SCS, 4/02
+  ! References:
+  !   Porter et al., J. Chem. Phys., 65, 154, 1976.
+  !   Rieke and Prepejchal, Phys. Rev. A, 6, 1507, 1990.
+  !   Saksena et al., Int. Jour. of Mass Spec. & Ion Proc., 171, L1, 1997.
+  
+  
+  SUBROUTINE HEXC(ENER,SIGIX,RATIO)
+    use ModSeGrid,only:NBINS=>nEnergy
+    !      use cglow,only: nmaj,nei,nbins
+    implicit none
+    
+    !
+    ! Args:
+    real,intent(in) :: ENER(NBINS),SIGIX(NEI,NMAJ,NBINS)
+    real,intent(out) :: RATIO(NBINS)
+    !
+    ! Local:
+    real  TOTX(NBINS), TOTNEW(NBINS), EGR(13), SGR(13)
+    integer  k,i,kg
+    !real :: TERPOO !function
+    DATA EGR/1.E4,      2.E4,      5.E4,      1.E5,      2.E5, &
+         3.E5,      5.E5,      1.E6,      2.E6,      5.E6, &
+         1.E7,      1.E8,      1.E9/
+    DATA SGR/1.20E-17,  7.03E-18,  3.37E-18,  1.96E-18,  1.26E-18, &
+         1.05E-18,  9.50E-19,  9.00E-19,  9.00E-19,  9.40E-19, &
+         1.00E-18,  1.26E-18,  1.59E-18/
+    
+    
+    ! Calculate total low-energy cross section for N2:
+    
+    DO K = 1,NBINS
+       TOTX(K) = 0.
+       DO I = 1,NEI
+          TOTX(K) = TOTX(K) + SIGIX(I,3,K)
+       enddo
+    enddo
+    
+    
+    ! Calculate high-energy cross section for N2, using tabulated values:
+    
+    DO K=1,NBINS
+       IF (ENER(K) .GE. EGR(1)) THEN
+          DO KG=1,12
+             IF (ENER(K) .GE. EGR(KG) .AND. ENER(K) .LT. EGR(KG+1)) &
+                  TOTNEW(K)=TERPOO(ENER(K),EGR(KG),EGR(KG+1),SGR(KG),SGR(KG+1))
+          enddo
+       ELSE
+          TOTNEW(K)=TOTX(K)
+       ENDIF
+    enddo
+    
+    
+    ! Calculate ratio (=1 < 10 keV):
+
+    DO K = 1,NBINS
+       IF (ENER(K) .GE. EGR(1)) THEN
+          RATIO(K) = TOTX(K)/TOTNEW(K)
+          !         IF (RATIO(K) .GT. 1.) RATIO(K) = 1.
+       ELSE
+          RATIO(K) = 1.
+       ENDIF
+    enddo
+    
+  END SUBROUTINE HEXC
+  
+  
+  
+  pure real FUNCTION TERPOO(X,X1,X2,Y1,Y2)
+    implicit none
+    ! Args:
+    real,intent(in) :: x,x1,x2,y1,y2
+    
+    TERPOO = EXP ( log(Y1) + log(X/X1)*log(Y2/Y1)/log(X2/X1) )
+  END function terpoo
 
 
 end Module ModSeCross

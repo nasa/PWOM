@@ -15,7 +15,7 @@ subroutine PW_set_parameters(NameAction)
        PrecipEnergyMean, PrecipEnergyFlux,UseFixedPrecip, &
        PolarRainEMin, PolarRainEMax, &
        PolarRainEMean, PolarRainEFlux,UsePolarRain, &
-       DoCoupleSTET, UseFeedbackFromSTET,IsVerboseSTET,DtGetSe
+       DoCoupleSE, UseFeedbackFromSE,IsVerboseSE,DtGetSe
   use ModOvation, ONLY: UseOvation,DoPlotOvation,OvationEmin,OvationEmax,&
        DoPlotOvation
 
@@ -212,10 +212,10 @@ subroutine PW_set_parameters(NameAction)
            write(*,*) "PW_ERROR: read indices was NOT successful"
         endif
 
-     case('#STET')
-        call read_var('DoCoupleSTET', DoCoupleSTET)
-        call read_var('UseFeedbackFromSTET', UseFeedbackFromSTET)
-        call read_var('IsVerboseSTET', IsVerboseSTET)
+     case('#SE')
+        call read_var('DoCoupleSE', DoCoupleSE)
+        call read_var('UseFeedbackFromSE', UseFeedbackFromSE)
+        call read_var('IsVerboseSE', IsVerboseSE)
         call read_var('DtGetSe', DtGetSe)
         
 
@@ -226,8 +226,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('PrecipEnergyMean',PrecipEnergyMean)        
         call read_var('PrecipEnergyFlux',PrecipEnergyFlux)        
 
-!        if(.not.DoCoupleSTET) &
-!             write(*,*) 'PW_WARNING: #SETPRECIP invoked but STET not coupled'
+!        if(.not.DoCoupleSE) &
+!             write(*,*) 'PW_WARNING: #SETPRECIP invoked but SE not coupled'
      case('#OVATION')
         call read_var('UseOvation',  UseOvation)
         call read_var('DoPlotOvation',  DoPlotOvation)

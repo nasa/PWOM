@@ -204,6 +204,7 @@ rundir:
 		cp ${PWDIR}/data_local/input/${PLANET}/North.dat .;\
 		cp -r ${PWDIR}/srcSTET/IRI_DATA .;\
 		cp ${PWDIR}/srcSTET/nightside_fluxes/*dat .
+		cp ${PWDIR}/srcTWOSTREAM/*dat .
 	@(if [ "$(STANDALONE)" != "NO" ]; then \
 		cd ${RUNDIR}; \
 			ln -s ${BINDIR}/PWOM.exe .; \
