@@ -1,9 +1,11 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 SHELL=/bin/sh
 
 # Fortran language related part of Makefile.conf: Makefile.Linux.f95
+FORTRAN_COMPILER_NAME=f95
 #
 #	Space Weather Modeling Framework (SWMF) 
 #	NAG f95 Fortran 90/95 Compiler
@@ -21,10 +23,9 @@ PRECISION  = ${DOUBLEPREC}
 MPILIB = 
 #MPILIB = -L${LIBDIR} -lNOMPI
 
-# This is the search path for used modules
-# SEARCH_EXTRA should be set in the individual Makefiles
-
-SEARCH = -I${SHAREDIR} ${SEARCH_EXTRA}
+# Define where modules are stored and add it to the search path
+# INCL_EXTRA can be defined to add more search directories.
+SEARCH =  -mdir ${INCLDIR} -I${INCLDIR} ${INCL_EXTRA}
 
 DEBUGFLAG = -C -gline -nan
 DEBUG     = 
@@ -78,8 +79,7 @@ BLAS  = lapack.o blas.o
 .ftn.o:
 	${COMPILE.f77} ${Cflag3} -132 $<
 
-clean:	
+cleanfiles:	
 	rm -f *~ core *.o *.mod fort.* a.out *.exe *.a *.so *.protex
 
 
-# keep this line

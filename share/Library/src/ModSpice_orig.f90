@@ -18,9 +18,9 @@ module ModSpice
 
   ! Number of seconds between SWMF and SPICE base times:
   ! SWMF: 1965-01-01T00:00:00
-  ! SPICE: 2000-01-01T11:58:56
+  ! SPICE: 2000-01-01T00:00:00
   ! SpiceTime = SwmfTime + DtSpiceSwmf
-  real, parameter,  public::   DtSpiceSwmf = -1104494359.0 
+  real, parameter,  public::   DtSpiceSwmf = -1104494336.0 !spice includes leap second correction
 
   ! Local variables
   logical     :: DoInitialize = .true.
@@ -41,17 +41,17 @@ contains
        RETURN
     end if
 
-    tStartSpice = tStart
+    tStartSpice = tStart+DtSpiceSwmf
 
     NameDir = 'Param/Spice/'
     if(present(NameDirIn))then
-       if(NameDirIn /= '') NameDir = NameDirIn // '/'
+       if(NameDirIn /= '') NameDir = trim(adjustl(NameDirIn)) // '/'
     end if
 
-    CALL FURNSH(NameDir//'naif0010.tls')
-    CALL FURNSH(NameDir//'pck00010.tpc')
-    CALL FURNSH(NameDir//'msgr_de405_de423s.bsp')
-    CALL FURNSH(NameDir//'MSO.tf')
+    CALL FURNSH(trim(adjustl(NameDir))//'naif0010.tls')
+    CALL FURNSH(trim(adjustl(NameDir))//'pck00010.tpc')
+    CALL FURNSH(trim(adjustl(NameDir))//'msgr_de405_de423s.bsp')
+    CALL FURNSH(trim(adjustl(NameDir))//'MSO.tf')
 
     DoInitialize = .false.
 

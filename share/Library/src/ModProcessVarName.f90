@@ -15,17 +15,17 @@ module ModProcessVarName
   end interface
   
 
-  integer,parameter :: nVarMax = 100   ! maximum number of state variables
-  integer,parameter :: nSubstance = 31 ! number of distinct fluids/species
+  integer, parameter:: nVarMax = 100   ! maximum number of state variables
+  integer, parameter:: nSubstance = 34 ! number of distinct fluids/species
 
-  ! Number of state variables associated with each substance to be standarized
-  integer,parameter :: nVarPerSubstance = 7
+  ! Number of state variables associated with each substance to be standardized
+  integer, parameter:: nVarPerSubstance = 7
 
   ! Number of allowed alternative names for each variable
-  integer  :: nSynonym = 3
+  integer, parameter:: nSynonym = 3
 
   ! State variables not associated with a specific fluid/ specie
-  integer,parameter  :: nVarExtra = 11
+  integer,parameter  :: nVarExtra = 14
 
   ! Named indices for all substances (species or fluids)
   integer, parameter :: &
@@ -37,32 +37,35 @@ module ModProcessVarName
        Op_   = 6,  &
        O2p_  = 7,  & 
        He_   = 8,  &
-       OHp_  = 9,  &
-       N_    = 10, &
-       COp_  = 11, &
-       CO2p_ = 12, &
-       H2O_  = 13, &
-       H2Op_ = 14, &
-       H3Op_ = 15, &
-       Mp_   = 16, &
-       Lp_   = 17, &
-       MHCp_ = 18, &
-       HHCp_ = 19, &
-       HNIp_ = 20, &
-       Sw_   = 21, &
-       Iono_ = 22, &
-       Neu1_ = 23, &
-       Neu2_ = 24, &
-       Neu3_ = 25, &
-       Neu4_ = 26, &
-       Pui1_ = 27, &
-       Pui2_ = 28, &
-       Pui3_ = 29, &
-       Pui4_ = 30, &
-       Main_ = 31 ! main component, MHD/HD
+       He2p_ = 9,  &
+       OHp_  = 10, &
+       N_    = 11, &
+       Np_   = 12, &
+       COp_  = 13, & 
+       CO2p_ = 14, & 
+       H2O_  = 15, & 
+       H2Op_ = 16, & 
+       H3Op_ = 17, & 
+       Mp_   = 18, & 
+       Lp_   = 19, & 
+       MHCp_ = 20, & 
+       HHCp_ = 21, & 
+       HNIp_ = 22, & 
+       Sw_   = 23, & 
+       Iono_ = 24, & 
+       Neu1_ = 25, & 
+       Neu2_ = 26, & 
+       Neu3_ = 27, & 
+       Neu4_ = 28, & 
+       Pui1_ = 29, & 
+       Pui2_ = 30, & 
+       Pui3_ = 31, &
+       Pui4_ = 32, &
+       El_   = 33, &
+       Main_ = 34 ! main component, MHD/HD
 
   ! String array storing the standard names of all substances
-  character(len = 6) :: NameSubstance_I(nSubstance) = (/ &
+  character(len=6):: NameSubstance_I(nSubstance) = (/ &
        'H   ',  &
        'Hp  ',  &
        'HpSw',  &
@@ -71,8 +74,10 @@ module ModProcessVarName
        'Op  ',  &
        'O2p ',  & 
        'He  ',  &
+       'He2p',  &
        'OHp ',  &
        'N   ',  &
+       'Np  ',  &
        'COp ',  &
        'CO2p',  &
        'H2O ',  &
@@ -93,6 +98,7 @@ module ModProcessVarName
        'Pui2',  &
        'Pui3',  &
        'Pui4',  &
+       'El  ',  &
        '    '  /) ! main component, MHD / HD 
           
   ! named indices for basic state variables associated with a substance
@@ -120,6 +126,9 @@ module ModProcessVarName
        'bx   ', &
        'by   ', &
        'bz   ', &
+       'ex   ', &
+       'ey   ', &
+       'ez   ', &
        'pe   ', &
        'te0  ', &
        'ew   ', &
@@ -133,6 +142,9 @@ module ModProcessVarName
        'Bx   ', &
        'By   ', &
        'Bz   ', &
+       'Ex   ', &
+       'Ey   ', &
+       'Ez   ', &
        'Pe   ', &
        'Te0  ', &
        'Ew   ', &
@@ -197,19 +209,21 @@ contains
     !
     !    where:
     !    - nSubstance is the number of possible species/ fluids
-    !    - nVarPerSubstance enumarates the variables associated with each substance.
+    !    - nVarPerSubstance enumarates the variables associated 
+    !              with each substance.
     !    - nSynonym is the number of alternative names representing the same
     !              physical quantity, used by different ModEquation files.
     !
     ! 2. Look up the elements of NameVar_V and replace them with standard names
     !    The look up procedure in the dictionary is done by 
     !    call find_substance_replace_name
-    !    Once a specific NameVarIn is found to be identical to a dictionary item:
-    !    it is replaced with SubstanceStandardName_II(iSubstance,iVarPerSubstance)
+    !    Once a specific NameVarIn is found to be identical to a dictionary 
+    !    item, it is replaced with 
+    !        SubstanceStandardName_II(iSubstance,iVarPerSubstance)
     !
     ! 3. The number of fluids and species found are returned by 
     !    nDensity and nSpeed.
- 
+
     integer                   :: nDistinctSubstanceVar_I(nVarPerSubstance)
     character(len=15)                 :: NameVarIn
     integer                           :: iName, iVar, iSubstanceFound = 0
@@ -241,7 +255,7 @@ contains
              CYCLE NAMELOOP
           end if
        end do
-    
+
        ! check dictionary ( loop over density, momentum. pressure, energy)
        do iVar = 1, nVarPerSubstance 
           call find_substance_replace_name
@@ -252,7 +266,7 @@ contains
              CYCLE NAMELOOP
           end if
        end do
-       
+
        ! variable name may correspond to numbered wave/material
        ! These names are created  in BATSRUS:MH_set_parameters 
        ! and need not be changed
@@ -261,13 +275,13 @@ contains
           IsFoundVar = .true.
           CYCLE NAMELOOP
        end if
-       
-       if (lge(NameVarIn, 'm01') .and. lle(NameVarIn, 'm99')) then          
+
+       if (lge(NameVarIn, 'm1') .and. lle(NameVarIn, 'm9')) then
           nMaterial = nMaterial + 1
           IsFoundVar = .true.
           CYCLE NAMELOOP
        end if
- 
+
        if(.not. IsFoundVar) then 
           write(*,*) 'ERROR: Var name not in dictionary: ',NameVarIn
           write(*,*) 'Please use standard variable names in ModEquation '// &
@@ -278,7 +292,7 @@ contains
        end if
 
     end do NAMELOOP
-   
+
     nDensity = nDistinctSubstanceVar_I(Rho_)
     nSpeed   = nDistinctSubstanceVar_I(RhoUx_)
     nP       = nDistinctSubstanceVar_I(P_)
@@ -442,7 +456,15 @@ contains
     Dictionary_III(Neu1_, RhoUz_, 2) = 'neumz'
     Dictionary_III(Neu1_, p_,     2) = 'neup'
     Dictionary_III(Neu1_, Energy_,2) = 'neue'
-   
+
+    ! Create Alternate names for arbitrary neutral
+    Dictionary_III(Neu1_, Rho_,   3) = 'Neu1Rho'
+    Dictionary_III(Neu1_, RhoUx_, 3) = 'Neu1Mx'
+    Dictionary_III(Neu1_, RhoUy_, 3) = 'Neu1My'
+    Dictionary_III(Neu1_, RhoUz_, 3) = 'Neu1Mz'
+    Dictionary_III(Neu1_, p_,     3) = 'Neu1P'
+    Dictionary_III(Neu1_, Energy_,3) = 'Neu1E'
+
     ! Outer Heliosphere Pop2 / arbitrary neutral
     Dictionary_III(Neu2_, Rho_,   2) = 'ne2rho'
     Dictionary_III(Neu2_, RhoUx_, 2) = 'ne2mx'

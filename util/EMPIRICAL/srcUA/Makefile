@@ -3,13 +3,13 @@
 
 include ../../../Makefile.def
 include ../../../Makefile.conf
-include Makefile.RULES
 
 MY_LIB = ${LIBDIR}/libEMPIRICALUA.a
 
 OBJECTS =\
 	ModIri90.o\
-        ModMsis90.o
+	ModMsis90.o\
+        ModMsis00.o
 
 LIB:
 	make ${MY_LIB}
@@ -20,6 +20,8 @@ LIB:
 ${MY_LIB}:  ${OBJECTS}
 	rm -f ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
+
+clean: cleanfiles
 
 distclean: clean
 

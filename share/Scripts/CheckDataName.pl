@@ -1,5 +1,6 @@
 #!/usr/bin/perl -s
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan, 
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 #BOP
 #!ROUTINE: CheckDataName.pl
@@ -57,7 +58,7 @@ my $method = "$part(_$part)*";
 my $ValidMethodName = "($ValidComp)?$method";
 
 # Valid module name: CON_main IE_ModMain ModSize
-my $ValidModuleName = "(CON_$method|BATL_$method|($ValidComp)?Mod($Part)+)";
+my $ValidModuleName = "([A-Z]+_$method|($ValidComp)?Mod($Part)+)";
 
 # Valid non-module file names: CON_main.f90 IE_set_param.F90 set_b0.f90
 my $ValidMethodFileName = "$ValidMethodName\.[fF]90";
@@ -72,11 +73,14 @@ my $ValidScalarName = "($ValidComp)?$FirstPart($Part)*";
 # Valid array variable names: VariableName IE_GridSize_C State_VGB
 my $ValidArrayName = "${ValidScalarName}_[A-Z]+";
 
-# Valid named index name: Rho_ x_ AnyName_
-my $ValidNamedIndex = "$FirstPart($Part)*_|[A-Z][A-Z]_";
+# Valid named index name: Rho_ rho_ x_ AnyName_ GM_ j0_ nJp1_
+my $ValidNamedIndex = "[a-zA-Z]([a-zA-Z0-9])*_";
+
+# Valid fraction name: c1over3
+my $ValidFraction = 'c\d+over\d+';
 
 # Valid first name parts depending on variable/function type:
-my %ValidPart1 = ('integer'   => '(D?[i-nI-N]|Max|Min|Ijk)\d*',
+my %ValidPart1 = ('integer'   => '(D?[i-nI-N]|Max|Min|Ijk|Int)\d*',
 		  'logical'   => '(Is|Use|Used|Unused|Do|Done)\d*',
 		  'character' => '(Name|Type|String)\d*'
 		  );
@@ -331,10 +335,13 @@ sub check_variables{
 
 	print "Type = '$Type' Var = '$Var' nDim = '$nDim'\n" if $Debug;
 
-	my $NamedIndex = $Parameter and $Type eq 'integer' and $nDim == 0;
-
 	# Check for a possible named index
-	next if $NamedIndex and $Var =~ /^$ValidNamedIndex/;
+	my $NamedIndex = $Parameter and $Type eq 'integer' and $nDim == 0;
+	next if $NamedIndex and $Var =~ /^$ValidNamedIndex$/;
+
+	# Check for special real constants like c1over3
+	my $RealConstant = $Parameter and $Type eq 'real' and $nDim == 0;
+	next if $RealConstant and $Var =~ /^$ValidFraction$/;
 
         # Check if this is a declaration for the function return value
         next if lc($Var) eq lc($Function); # ignore 
@@ -349,6 +356,8 @@ sub check_variables{
 			"   $ValidScalarName\n";
 		    print "   or a named index should match:\n".
 			"   $ValidNamedIndex\n" if $NamedIndex;
+		    print "   or a real parameter fraction should match:\n".
+			"   $ValidFraction\n" if $RealConstant;
 		}
 		next;
 	    }

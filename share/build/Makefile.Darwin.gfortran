@@ -1,9 +1,11 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 SHELL=/bin/sh
 
 # Fortran language related part of Makefile.conf: Makefile.Darwin.gfortran
+FORTRAN_COMPILER_NAME=gfortran
 #
 #	Space Weather Modeling Framework (SWMF) 
 #	GNU gfortran (gfortran) Fortran 90/95 Compiler
@@ -21,12 +23,11 @@ PRECISION  = ${DOUBLEPREC}
 MPILIB = 
 #MPILIB = -L${LIBDIR} -lNOMPI
 
-# This is the search path for used modules
-# SEARCH_EXTRA should be set in the individual Makefiles
+# Define where modules are stored and add it to the search path
+# INCL_EXTRA can be defined to add more search directories.
+SEARCH = -J${INCLDIR} ${INCL_EXTRA}
 
-SEARCH = -I${SHAREDIR} ${SEARCH_EXTRA}
-
-DEBUGFLAG = -C -g3 -fbacktrace -ffpe-trap=invalid,zero,overflow -fbounds-check #-finit-real=nan
+DEBUGFLAG = -C -g -fbacktrace -ffpe-trap=invalid,zero,overflow -fcheck=all
 DEBUG     = 
 
 ## To profile the code with shark and view source code, set the DEBUG command below.
@@ -70,7 +71,7 @@ BLAS  = lapack.o blas.o
 	${COMPILE.f90} ${Cflag3} $<
 
 .F90.o:
-	cpp -P -DsysDarwin -DcompGFORTRAN $*.F90 | grep -v '^#' > $*.f95
+	cpp -C -P -DsysDarwin -DcompGFORTRAN -lang-c $*.F90 | grep -v '^#' > $*.f95
 	${COMPILE.f90} -o $*.o ${Cflag3} $*.f95
 	rm -f $*.f95
 
@@ -83,10 +84,9 @@ BLAS  = lapack.o blas.o
 .ftn.o:
 	${COMPILE.f77} ${Cflag3} -ffixed-line-length-132 $<
 
-clean:	
+cleanfiles:	
 	rm -f *~ core *.o *.mod fort.* a.out *.exe *.a *.so *.protex
 
 
-# keep this line
 
 

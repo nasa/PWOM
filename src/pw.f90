@@ -150,12 +150,12 @@ end subroutine initial_line_location
 !=============================================================================
 
 subroutine move_line
-  use ModNumConst, ONLY: cTwoPi, cRadToDeg
+  use ModNumConst, ONLY: cPi, cTwoPi, cRadToDeg,cDegToRad
   use ModPWOM
   use ModIoUnit, ONLY: UnitTmp_, io_unit_new
   use ModInterpolate, ONLY: bilinear
   implicit none
-  real :: a
+  real :: a,sTheta
   character(len=*), parameter :: NameSub = 'PW_move_line'
   logical :: DoTest, DoTestMe
   !---------------------------------------------------------------------------
@@ -163,20 +163,33 @@ subroutine move_line
 
   ! Get the velocity of field line advection from a
   ! bilinear interpolation.
- 
+  !N. Perlongo 2015 - sTheta variable keeps southern hemisphere in domain
+  if (ThetaLine_I(iLine) > 90 * cDegToRad) then
+     sTheta = 180*cDegToRad-ThetaLine_I(iLine)
+  else
+     sTheta = ThetaLine_I(iLine)
+  endif
+
+
   UthetaLine_I(iLine) = bilinear(uExBtheta_C,1,nPhi,1,nTheta, &
-       (/ PhiLine_I(iLine)/Dphi+1.0,ThetaLine_I(iLine)/Dtheta+1.0 /) )
-  
+       (/ PhiLine_I(iLine)/Dphi+1.0,sTheta/Dtheta+1.0 /) )
   UphiLine_I(iLine)   = bilinear(uExBphi_C  ,1,nPhi,1,nTheta, &
-       (/ PhiLine_I(iLine)/Dphi+1.0,ThetaLine_I(iLine)/Dtheta+1.0 /) )
+       (/ PhiLine_I(iLine)/Dphi+1.0,sTheta/Dtheta+1.0 /) )
 
   JrLine_I(iLine)     = bilinear(Jr_G, 0,nPhi+1,0,nTheta+1, &
-       (/ PhiLine_I(iLine)/Dphi+1.0,ThetaLine_I(iLine)/Dtheta+1.0 /) )
+       (/ PhiLine_I(iLine)/Dphi+1.0,sTheta/Dtheta+1.0 /) )
   AvELine_I(iLine)     = bilinear(AvE_G, 0,nPhi+1,0,nTheta+1, &
-       (/ PhiLine_I(iLine)/Dphi+1.0,ThetaLine_I(iLine)/Dtheta+1.0 /) )
+       (/ PhiLine_I(iLine)/Dphi+1.0,sTheta/Dtheta+1.0 /) )
   EfluxLine_I(iLine)     = bilinear(Eflux_G, 0,nPhi+1,0,nTheta+1, &
-       (/ PhiLine_I(iLine)/Dphi+1.0,ThetaLine_I(iLine)/Dtheta+1.0 /) )
+       (/ PhiLine_I(iLine)/Dphi+1.0,sTheta/Dtheta+1.0 /) )
 
+
+  !N. Perlongo 2015 - Correction for wrong Utheta direction in southern hemisphere
+  if (.NOT.IsNorth_I(iLine)) then
+      UthetaLine_I(iLine)= -1*UthetaLine_I(iLine)
+  !   UphiLine_I(iLine)= -1*UphiLine_I(iLine)
+  endif
+ 
   ! save ExB velocity to get joule heating
   if (UseJouleHeating) then
      uJoule2 = (&
@@ -224,6 +237,8 @@ subroutine move_line
      write(*,*) NameSub, ': DtHorizontal=',DtHorizontal
      write(*,*) NameSub, ': xyzLine   =',xLine_I(iLine), &
           yLine_I(iLine), zLine_I(iLine)
+     write(*,*) NameSub, ': UthetaLine=',  UthetaLine_I(iLine)
+    write(*,*) NameSub, ': UphiLine=', UphiLine_I(iLine)
   end if
   
   ! Get new angles from new XYZ positions.Use Theta=arccos(Z/R) and
@@ -243,7 +258,7 @@ subroutine move_line
   ! Deal with posibility that phi is negative
   if (PhiLine_I(iLine) .lt. 0.0) then
      write(*,*) 'TTT',PhiLine_I(iLine)
-     PhiLine_I(iLine) = PhiLine_I(iLine) + 6.283185
+     PhiLine_I(iLine) = PhiLine_I(iLine) + cTwoPi
      write(*,*) 'TTTT',PhiLine_I(iLine)
      write(*,*) xLine_I(iLine),yLine_I(iLine),zLine_I(iLine)
      call con_stop('Error: Phi is negative')

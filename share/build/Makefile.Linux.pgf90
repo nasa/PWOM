@@ -1,4 +1,5 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 #BOP
 #!ROUTINE: share/build/Makefile.Linux.pgf90 - one of the original files for Makefile.conf
@@ -28,6 +29,7 @@
 SHELL=/bin/sh
 
 # Fortran language related part of Makefile.conf: Makefile.Linux.pgf90
+FORTRAN_COMPILER_NAME=pgf90
 #
 #	Space Weather Modeling Framework (SWMF) 
 #	Portland Group Fortran 90 (pgf90) compiler
@@ -47,6 +49,12 @@ COMPILE.f90     = ${CUSTOMPATH_F}pgf90
 # The compiler used for linking the executables
 #
 LINK.f90	= ${CUSTOMPATH_MPI}mpif90
+
+#
+# Use LINK.f90 with the following flag 
+# to link C main code with Fortran libraries
+#
+NOMAINFLAG = -Mnomain
 
 # 
 # The archive program to build lib*.a libraries
@@ -76,9 +84,8 @@ MPILIB =
 #
 # This is the search path for used modules
 #
-# SEARCH_EXTRA should be given in the individual Makefiles
-
-SEARCH = -I${SHAREDIR} ${SEARCH_EXTRA}
+# INCL_EXTRA can be defined to add more search directories.
+SEARCH = -module ${INCLDIR} ${INCL_EXTRA}
 
 #
 # Flags used for debugging. 
@@ -157,8 +164,7 @@ BLAS  = lapack.o blas.o
 # The clean target removes all temporary files created during normal editing, compilation, running,
 # production of documentation, etc. Put here all extensions relevant for the OS and COMPILER.
 #
-clean:	
+cleanfiles:	
 	rm -f *~ core *.o *.mod fort.* a.out *.exe *.a *.so *.protex
 
 #EOC
-# keep this line

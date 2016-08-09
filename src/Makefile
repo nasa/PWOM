@@ -1,6 +1,7 @@
 include ../Makefile.def
 
-SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR} -I${STETDIR} -I${TWOSTREAMDIR}
+SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR}\
+	    -I../srcSTET -I../srcTWOSTREAM
 
 include ../Makefile.conf
 
@@ -60,10 +61,11 @@ LIBOBJECTS = ${MODULES} ${METHODS}
 EXEOBJECTS = main.o ${LIBOBJECTS}
 
 DEPEND:
-	@${SCRIPTDIR}/depend.pl ${SEARCH} ${EXEOBJECTS} 
+	@${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${EXEOBJECTS} 
 
 
 MY_LIB = libPWOM.a
+LIBSE  = ${LIBDIR}/libSE.a
 
 LIB:	DEPEND
 	make ${MY_LIB}
@@ -71,8 +73,8 @@ LIB:	DEPEND
 	@echo ${MY_LIB} has been brought up to date.
 	@echo
 
-${MY_LIB}: ${LIBOBJECTS} ${MAKEFILE_COMP_SELECT}
-	rm -f ${MY_LIB}
+${MY_LIB}: ${LIBSE} ${LIBOBJECTS}
+	cp -f ${LIBSE} ${MY_LIB}
 	${AR} ${MY_LIB} ${LIBOBJECTS}
 
 main.o: ${LIBSHARE}
@@ -83,29 +85,24 @@ PWOM:	DEPEND
 	@make ${EXE}
 	@echo "PWOM.exe has been created"
 
-#${EXE}:	${EXEOBJECTS}
-#	@(if [ ${OS} = "Darwin" ];         then make PWOM_for_Darwin; \
-#	else                                    make PWOM_general; fi)
-
-
 ${EXE}:	${EXEOBJECTS}
-	make PWOM_general
-
-PWOM_general:
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
-		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES  \
-		-lTIMING  -lSE -lSHARE\
-		${Lflag1}
-
-PWOM_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_
 	cd Tmp_; \
 		ar -x ${LIBDIR}/libEMPIRICALIE.a; \
 		ar -x ${LIBDIR}/libEMPIRICALUA.a; \
 		ar -x ${LIBDIR}/libINDICES.a; \
-		ar -x ${LIBDIR}/libSHARE.a
+		ar -x ${LIBDIR}/libSHARE.a; \
 		ar -x ${LIBDIR}/libSE.a
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+
+PWOM_from_lib:	${EXEOBJECTS}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
+		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES  \
+		-lTIMING  -lSE -lSHARE\
+		${Lflag1}
+
+
+clean: cleanfiles
 	rm -rf Tmp_
 
 distclean: clean

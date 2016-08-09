@@ -31,7 +31,7 @@ module ModReadParam
   ! to the processors that belong to the MPI communicator iComm, which
   ! is an optional argument of subroutine read\_file.
   ! The text buffer contains at most MaxLine=1000 lines, which are at most
-  ! lStringLine=100 character long. Normally only the control component
+  ! lStringLine=200 character long. Normally only the control component
   ! calls {\bf read\_file}.
   !
   ! {\bf Subroutine read\_init} can select a part of the text buffer
@@ -138,7 +138,7 @@ module ModReadParam
 
   !USES:
   use ModMpi
-  use ModIoUnit, ONLY: io_unit_new, STDOUT_
+  use ModIoUnit, ONLY: io_unit_new, StdIn_, StdOut_
 
   implicit none
 
@@ -147,7 +147,7 @@ module ModReadParam
   private ! except
 
   !PUBLIC DATA MEMBERS:
-  integer, parameter, public :: lStringLine=100 ! Max length of input lines
+  integer, parameter, public :: lStringLine=200 ! Max length of input lines
 
   !PUBLIC MEMBER FUNCTIONS:
   public :: read_file         ! Read text string from parameter file and bcast
@@ -214,12 +214,13 @@ contains
   subroutine read_file(NameFile, iCommIn, NameRestartFile)
 
     !INPUT ARGUMENTS:
-    character (len=*), intent(in):: NameFile ! Name of the base param file
+    ! Name of the base param file
+    character (len=*), optional, intent(in):: NameFile 
     integer, optional, intent(in):: iCommIn  ! MPI communicator for broadcast
 
     ! Name of the restart file to be read if a #RESTART command is found
-    character (len=*), intent(in), optional :: NameRestartFile 
-
+    character (len=*), intent(in), optional :: NameRestartFile
+    
     !EOP
     integer, parameter :: MaxNestedFile = 10
 
@@ -229,10 +230,13 @@ contains
 
     integer :: iUnit_I(MaxNestedFile)
 
-    integer :: iFile, i, iError, iProc, iComm
+    integer :: iFile, i, iError, iProc, nProc, iComm
 
     logical :: IsFound
 
+    ! If true, then read for stdin.
+    logical:: DoReadStdin
+    
     logical :: Done=.false., DoInclude
     !-----------------------------------------------------------------------
     if(Done)call CON_stop(NameSub//&
@@ -244,20 +248,31 @@ contains
        iComm = MPI_COMM_WORLD
     end if
 
-    ! Get processor rank
-    call MPI_comm_rank(iComm,iProc,iError)
+    ! If no file name is given, read from STDIN
+    DoReadStdIn = .not. present(NameFile)
+    
+    ! Get processor rank and number of processors
+    if(iComm == MPI_COMM_SELF)then
+       iProc = 0
+       nProc = 1
+    else
+       call MPI_comm_rank(iComm, iProc, iError)
+       call MPI_comm_size(iComm, nProc, iError)
+    end if
 
-    !\
     ! Read all input file(s) into memory and broadcast
-    !/
-    if(iProc==0)then
-       nLine=0
-       inquire(file=NameFile,EXIST=IsFound)
-       if(.not.IsFound)call CON_stop(NameSub//' SWMF_ERROR: '//&
-            trim(NameFile)//" cannot be found")
-       iFile=1
-       iUnit_I(iFile)=io_unit_new()
-       open(iUnit_I(iFile),file=NameFile,status="old")
+    if(iProc == 0)then
+       iFile = 1
+       nLine = 0
+       if(DoReadStdin) then
+          iUnit_I(iFile) = StdIn_
+       else 
+          inquire(file=NameFile,EXIST=IsFound)
+          if(.not.IsFound)call CON_stop(NameSub//' SWMF_ERROR: '//&
+               trim(NameFile)//" cannot be found")
+          iUnit_I(iFile)=io_unit_new()
+          open(iUnit_I(iFile),file=NameFile,status="old")
+       endif
        do
           read(iUnit_I(iFile),'(a)',ERR=100,END=100) StringLine
           NameCommand=StringLine
@@ -282,7 +297,11 @@ contains
                 write(*,*) NameSub,&
                      " ERROR: could not read logical after #RESTART command",&
                      " at line ",nLine+1
-                call CON_stop("Correct "//trim(NameFile))
+                if(DoReadStdIn)then
+                   call CON_stop("Correct input")
+                else
+                   call CON_stop("Correct "//trim(NameFile))
+                end if
              end if
              if(DoInclude)then
                 StringLine = NameRestartFile
@@ -326,17 +345,20 @@ contains
        if(nLine==0)call CON_stop(NameSub// &
             " SWMF_ERROR: no lines of input read")
     end if
-    ! Broadcast the number of lines and the text itself to all processors
-    call MPI_Bcast(nLine,1,MPI_INTEGER,0,iComm,iError)
+    
+    if(nProc > 1)then
+       ! Broadcast the number of lines and the text itself to all processors
+       call MPI_Bcast(nLine,1,MPI_INTEGER,0,iComm,iError)
 
-    if(iError>0)call CON_stop(NameSub// &
-         " MPI_ERROR: number of lines could not be broadcast")
+       if(iError>0)call CON_stop(NameSub// &
+            " MPI_ERROR: number of lines could not be broadcast")
 
-    call MPI_Bcast(StringLine_I,lStringLine*nLine,MPI_CHARACTER,&
-         0,iComm,iError)
+       call MPI_Bcast(StringLine_I,lStringLine*nLine,MPI_CHARACTER,&
+            0,iComm,iError)
 
-    if(iError>0)call CON_stop(NameSub// &
-         " MPI_ERROR: text could not be broadcast")
+       if(iError>0)call CON_stop(NameSub// &
+            " MPI_ERROR: text could not be broadcast")
+    end if
 
     if(iProc==0)write(*,'(a,i4,a)') NameSub// &
          ': read and broadcast nLine=',nLine,' lines of text'
@@ -371,7 +393,7 @@ contains
     ! Set command counter to zero for a new session
     if(iSessionNew > iSession) iCommand = 0
 
-    iSession     = iSessionNew
+    iSession = iSessionNew
 
     if(present(NameCompIn))then
        NameComp = NameCompIn
@@ -387,9 +409,9 @@ contains
     if(present(iIoUnitIn))then
        iIoUnit   = iIoUnitIn
     else
-       iIoUnit   = STDOUT_
+       iIoUnit   = StdOut_
     end if
-    if(iIoUnit==STDOUT_ .and. len_trim(NameComp)>0 )then
+    if(iIoUnit == StdOut_ .and. len_trim(NameComp) > 0)then
        StringPrefix = NameComp//': '
     else
        StringPrefix = ''

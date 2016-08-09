@@ -1,4 +1,5 @@
 # C language related part of Makefile.conf: Makefile.gcc_mpicc
+C_COMPILER_NAME=gcc_mpicc
 
 COMPILE.c     = gcc
 COMPILE.mpicc = mpicc
@@ -6,15 +7,14 @@ COMPILE.mpicxx= mpicxx
 
 CPPLIB = -lstdc++ -lmpi_cxx
 
-DEBUGC = 
-#DEBUGC = -g
+#DEBUGC =  -g 
 
 .SUFFIXES: .c .cpp
 
-FLAGC = ${SEARCH_C} -c ${OPT3} ${DEBUGC}
+FLAGC = ${SEARCH_C} ${FLAGC_EXTRA} -c ${OPT3} ${DEBUGC}
 
 .c.o:
-	${COMPILE.c} ${FLAGC} $<
+	${COMPILE.c} ${FLAGC} $< -o $@
 
 .cpp.o:
-	${COMPILE.mpicxx} ${FLAGC} $<
+	${COMPILE.mpicxx} ${FLAGC} $< -o $@

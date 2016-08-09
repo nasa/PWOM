@@ -12,10 +12,10 @@ include Makefile.DEPEND
 OBJECTS = \
 	PW_wrapper.o
 
-SEARCH_EXTRA = -I${COUPLERDIR} -I${LIBRARYDIR} -I../src
+SEARCHDIR = -I${SHAREDIR} -I${COUPLERDIR} -I${LIBRARYDIR} -I../src
 
 DEPEND:
-	@perl ${SCRIPTDIR}/depend.pl ${SEARCH} ${OBJECTS}
+	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS}
 
 #
 #	Making executables and libraries
@@ -30,9 +30,11 @@ LIB:	DEPEND
 
 PWOM_LIB = ../src/libPWOM.a 
 
-${MY_LIB}: ${PWOM_LIB} ${OBJECTS} ${MAKEFILE_COMP_SELECT}
+${MY_LIB}: ${PWOM_LIB} ${OBJECTS}
 	cp -f ${PWOM_LIB} ${MY_LIB}
 	${AR} ${MY_LIB} ${OBJECTS}
+
+clean: cleanfiles
 
 distclean: clean
 	rm -f Makefile.DEPEND

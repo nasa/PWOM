@@ -21,13 +21,13 @@ module EEE_ModCommonVariables
   !\
   ! My processor number
   !/
-  integer :: iProc
+  integer :: iProc = 0
 
   !\
   ! Physics variables global to EEE
   !/
-  real :: g,inv_g,gm1,inv_gm1
-  real :: Gbody
+  real :: g = 5./3., inv_g = 3./5., gm1 = 2./3., inv_gm1 = 3./2.
+  real :: Gbody = -cGravitation*mSun*cProtonMass/(cBoltzmann*1.5e6)
 
   ! Named indexes for I/O variable units
   integer, parameter :: nIoUnit = 15
@@ -62,6 +62,9 @@ module EEE_ModCommonVariables
   
   ! Use shear-flow boundary condition, use arcade magnetic field
   logical:: UseShearFlow = .false., UseArch = .false.
+
+  ! Use CMS nonlinear force free model
+  logical:: UseCms = .false.
 
   ! Add flux rope as an initial condition or apply boundary conditions only
   logical:: DoAddFluxRope = .false.

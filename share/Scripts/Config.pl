@@ -1,12 +1,17 @@
-#!/usr/bin/perl -i
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#!/usr/bin/perl
+#  Copyright (C) 2002 Regents of the University of Michigan, 
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
+
+# Allow in-place editing
+$^I = "";
+
 use strict;
 
 # Default compiler per machine or OS
 my %Compiler = (
-		"Linux"               => "f95",
-		"Darwin"              => "f95",
+		"Linux"               => "nagfor",
+		"Darwin"              => "nagfor",
 		"OSF1"                => "f90",
 		"IRIX64"              => "f90",
 		"AIX"                 => "xlf90",
@@ -21,12 +26,17 @@ my %Compiler = (
 		"ubgl"                => "mpxlf90,mpxlc",
 		"jaguarpf-ext"        => "ifortftn",
                 "kraken-gsi"          => "ifortftn",
-                "yslogin"             => "ifortmpif90,icc",
-                "h2ologin"            => "crayftn,cc",
+                "yslogin"             => "ifortmpif90,iccmpicxx",
+                "h2ologin"            => "ifortftn,intelcc",
+                "cetuslac"            => "mpixlf2008,mpixlc",
+                "miralac"             => "mpixlf2008,mpixlc",
 		);
 
 my $WARNING_='share/Scripts/Config.pl WARNING:';
 my $ERROR_  ='share/Scripts/Config.pl ERROR:';
+
+my $ErrorCode;   # Return value of system(...)
+my $IsStrict=1;  # If true, shell_command will stop on error
 
 # Obtain $OS, $DIR, and the machine name and provide it to caller script
 our $OS  = `uname`    or die "$ERROR_ could not obtain OS\n"; chop $OS;
@@ -83,15 +93,25 @@ our $NewGridSize;           # New grid size to be set in caller code
 our $Hdf5;                  # True if HDF5  lib is enabled
 our $Hypre;                 # True if HYPRE lib is enabled
 our $Spice;                 # True if SPICE lib is enabled
+our $Fishpak;               # True if Fishpak lib is enabled
 
-# The name of the parallel HDF5 Fortran compiler
+# The name of the parallel HDF5 Fortran and C compilers
 my $H5pfc = "h5pfc";
+my $H5pcc = "h5pcc";
 
 # This string should be added into Makefile.conf when HYPRE is enabled
 my $HypreDefinition = "# HYPRE library definitions
 HYPRELIB     = -L\${UTILDIR}/HYPRE/lib -lHYPRE
 HYPRESEARCH  = -I\${UTILDIR}/HYPRE/include
 ";             	    
+
+# This string should be added into Makefile.conf when Fishpak is enabled
+my $FishpakDefinition = "# Fishpak library definitions                               
+FISHPAKSEARCH  = -I\${UTILDIR}/FISHPAK/lib
+FISHPAKLIB     = -L\${UTILDIR}/FISHPAK/lib -lFISHPAK           
+";
+
+
 
 # Default precision for installation
 my $DefaultPrecision = 'double';
@@ -104,6 +124,7 @@ my $NewDebug;
 my $NewMpi;
 my $NewHdf5;
 my $NewHypre;
+my $NewFishpak;
 my $NewSpice;
 my $IsCompilerSet;
 my $Debug;
@@ -114,7 +135,6 @@ my $MpiCompiler;
 my $MpiHeaderFile = "share/Library/src/mpif.h";
 my $Optimize;
 my $ShowCompiler;
-my $ShowMpi;
 
 # Obtain current settings
 &get_settings_;
@@ -145,7 +165,9 @@ foreach (@Arguments){
     if(/^-hdf5$/i)            {$NewHdf5="yes";                  next};
     if(/^-nohdf5$/i)          {$NewHdf5="no";                   next};
     if(/^-hypre$/i)           {$NewHypre="yes";                 next};
+    if(/^-fishpak$/i)         {$NewFishpak="yes";               next};
     if(/^-nohypre$/i)         {$NewHypre="no";                  next};
+    if(/^-nofishpak$/i)       {$NewFishpak="no";                next};
     if(/^-spice=(.*)$/i)      {$NewSpice=$1;                    next};
     if(/^-nospice$/i)         {$NewSpice="no";                  next};
     if(/^-O[0-5]$/i)          {$NewOptimize=$_;                 next};  
@@ -203,8 +225,11 @@ if($ShowCompiler){
 # Execute the actions in the appropriate order
 &install_code_ if $Install;
 
+# Change to the main directory of the SWMF if called from a component
+chdir "../.." if $IsComponent;
+
 # Check if Makefile.def is up to date
-if(-f $MakefileDef and not $IsComponent){
+if(-f $MakefileDef){
     my @Stat = stat $MakefileDef;
     my $Time = $Stat[9];
     @Stat = stat $MakefileDefOrig;
@@ -215,7 +240,7 @@ if(-f $MakefileDef and not $IsComponent){
 }
 
 # Check if Makefile.conf is up to date
-if(-f $MakefileConf and not $IsComponent){
+if(-f $MakefileConf){
     my @Stat = stat $MakefileConf;
     my $Time = $Stat[9];
     foreach ("$OS.$Compiler", $CompilerC){
@@ -245,14 +270,18 @@ if($NewPrecision and $NewPrecision ne $Precision){
 &set_mpi_ if $NewMpi and $NewMpi ne $Mpi;
 
 # Link with HDF5 library is required
-&set_hdf5_ if $Install or $NewHdf5 and $NewHdf5 ne $Hdf5;
+&set_hdf5_ 
+    if ($Install and not $IsComponent) or ($NewHdf5 and $NewHdf5 ne $Hdf5);
 
 # Link with HYPRE library is required
 &set_hypre_ if $NewHypre and $NewHypre ne $Hypre;
 
+# Link with FISHPAK library is required 
+&set_fishpak_ if $NewFishpak and $NewFishpak ne $Fishpak;
+
 # Link with SPICE library is required
-&set_spice_ if ($Install or $NewSpice and $NewSpice ne $Spice) 
-    and not $IsComponent;
+&set_spice_ 
+    if ($Install and not $IsComponent) or ($NewSpice and $NewSpice ne $Spice);
 
 # Get new settings
 &get_settings_;
@@ -262,6 +291,11 @@ if($NewPrecision and $NewPrecision ne $Precision){
 
 # Recreate Makefile.RULES with the current settings
 &create_makefile_rules;
+
+# Return into the component directory
+chdir $DIR if $IsComponent;
+
+# DO NOT USE exit HERE as this code is called from other perl scripts!
 
 ##############################################################################
 sub get_settings_{
@@ -288,12 +322,13 @@ sub get_settings_{
 	  $OS         = $1 if /^\s*OS\s*=\s*(\w+)/;
       }
       close(MAKEFILE);
-  }
+    }
 
     $Debug     = "no";
     $Mpi       = "yes";
     $Hdf5      = "no";
     $Hypre     = "no";
+    $Fishpak   = "no";
     $Spice     = "no";
   TRY:{
       # Read information from $MakefileConf
@@ -318,12 +353,13 @@ sub get_settings_{
 	  $Precision = lc($1) if /^\s*PRECISION\s*=.*(SINGLE|DOUBLE)PREC/;
           $Debug = "yes" if /^\s*DEBUG\s*=\s*\$\{DEBUGFLAG\}/;
 	  $Mpi   = "no"  if /^\s*MPILIB\s*=.*\-lNOMPI/;
-	  $Hdf5  = "yes" if /^\s*LINK\.f90\s*=.*$H5pfc/;
+	  $Hdf5  = "yes" if /^\# HDF5=YES/;
 	  $Hypre = "yes" if /^\s*HYPRELIB/;
+	  $Fishpak = "yes" if /^\s*FISHPAKLIB/;
 	  $Spice = "$1"  if /^\s*SPICELIB\s*=\s*(\S*)/;
           $Optimize = $1 if /^\s*OPT[0-5]\s*=\s*(-O[0-5])/;
       }
-  }
+    }
     close(MAKEFILE);
 
     # Fix these if the Fortran language and C language lines were missing
@@ -370,6 +406,7 @@ Debugging flags:   $Debug
 Linked with MPI:   $Mpi
 Linked with HDF5:  $Hdf5
 Linked with HYPRE: $Hypre
+Linked with FISHPAK: $Fishpak
 Linked with SPICE: $Spice
 ";
 
@@ -409,6 +446,7 @@ sub install_code_{
 	    # Try to use generic Makefile with provided compiler
 	    warn "$WARNING_: $Makefile was not found,".
 		" using generic $MakefileConfOrig.conf\n";
+	    sleep 10;
 	    $Makefile = "$MakefileConfOrig.conf";
 	    open(IN, $Makefile) or die "$ERROR_ $Makefile is missing\n";
 	    open(OUT, ">$MakefileConf") 
@@ -427,6 +465,16 @@ sub install_code_{
             &shell_command("cat $Makefile >> $MakefileConf");
 	}else{
 	    die "$ERROR_ could not find $Makefile\n";
+	}
+
+	# Remove -lmpicxx from CPPLIB definition in Makefile.conf if not needed
+	my $remove_mpicxx = (`mpicxx -show` !~ /\-lmpi_cxx/);
+	if($remove_mpicxx){
+	    @ARGV = ($MakefileConf);
+	    while(<>){
+		s/ -lmpi_cxx// if /^CPPLIB/;
+		print;
+	    }
 	}
     }
 
@@ -489,6 +537,8 @@ sub set_debug_{
 	@ARGV = ($MakefileConf);
 	while(<>){
 	    s/^(\s*DEBUG\s*=).*/$1 $DEBUG/;
+	    s/^#(DEBUGC\s*=)/$1/ if $Debug eq "yes";
+	    s/^(DEBUGC\s*=)/#$1/ if $Debug eq "no";
 	    print;
 	}
     }
@@ -507,7 +557,7 @@ sub set_mpi_{
     $Mpi = $NewMpi;
 
     if($Mpi eq "no" and $Install){
-	&shell_command("cp share/include/mpif.h $MpiHeaderFile");
+	&shell_command("cp share/include/nompif.h $MpiHeaderFile");
 	$MpiCompiler = '${COMPILE.f90}';
     }
 
@@ -530,6 +580,19 @@ sub set_mpi_{
 		s/^\s*M/\#M/ if /lNOMPI/ eq ($Mpi eq "yes");
 		s/^\#\s*M/M/ if /lNOMPI/ eq ($Mpi eq "no");
 	    }
+	    
+	    # Always compile with the NOMPI library if code is installed
+	    # without MPI (so that PostIDL compiles).
+	    if(/^Lflag2\s+=/){
+		s/=\s*(.*)/= \$\{Lflag1} \# $1/ if $Mpi eq "no";
+		s/= \$\{Lflag1} \#/=/        if $Mpi eq "yes";
+	    }
+
+	    # Comment/uncomment mpi_cxx library
+	    if(/mpi_cxx/){
+		s/ \-lmpi_cxx/ \#\-lmpi_cxx/ if $Mpi eq "no";
+		s/ \#\-lmpi_cxx/ \-lmpi_cxx/ if $Mpi eq "yes";
+	    }
 	    print;
 	}
     }
@@ -547,11 +610,23 @@ sub set_mpi_{
 
 sub set_hdf5_{
 
-    $NewHdf5="no" if $Install and not $NewHdf5;
-
+    $NewHdf5=$Hdf5 if $Install and not $NewHdf5;
+    
+    if($NewHdf5 eq "yes" and $Compiler =~ /(cray|ifort)ftn/ and not `which h5dump`){
+	# On Bluewaters the HDF5 module does not load h5pfc or h5pcc
+	# It uses ftn and CC for compilation
+	print "Warning: h5dump is not in path. Load parallel hdf5 module!/\n";
+	return;
+    }
     # Check if HDF5 module is loaded
-    if($NewHdf5 eq "yes" and not `which $H5pfc`){
-        print "Warning: $H5pfc is not in path. Load parallel hdf5 module!/\n";
+    if($NewHdf5 eq "yes" and $Compiler !~  /(cray|ifort)ftn/ and not `which $H5pfc`){
+	print "Warning: $H5pfc is not in path. ".
+	    "Load parallel hdf5 module!/\n";
+	return;
+    }
+
+    if($NewHdf5 eq "yes" and $Compiler !~  /(cray|ifort)ftn/ and not `which $H5pcc`){
+	print "Warning: $H5pcc is not in path. Load parallel hdf5 module!/\n";
         return;
     }
 
@@ -561,25 +636,49 @@ sub set_hdf5_{
     print "Enabling HDF5 library in $MakefileConf\n" if $Hdf5 eq "yes";
     print "Disabling Hdf5 library in $MakefileConf\n" if $Hdf5 eq "no";
     if(not $DryRun){
+
+	# For the NAG compiler find the HDF5 include directory from h5pfc -show
+	my $H5include;
+	$H5include = $1 if ($Compiler eq "f95" or $Compiler eq "nagfor") 
+	    and `$H5pfc -show` =~ /( \-I\S+)/;
+
 	@ARGV = ($MakefileConf);
 	while(<>){
 	    if($Hdf5 eq "yes"){
 		# Modify linker definition to use h5pfc
-		s/^(LINK\.f90\s*=\s*\$\{CUSTOMPATH_\w+\})(.*)/$1$H5pfc \#$2/;
+		s/^(LINK\.f90\s*=\s*\$\{CUSTOMPATH_\w+\})(.*)/$1$H5pfc \#$2/
+		    unless /\#/ or $Compiler =~  /(cray|ifort)ftn/;
+
+		# Add a comment about HDF5 being set
+		s/^(LINK\.f90.*)/$1\n\# HDF5=YES/;
+
 		# For pgf90 the F90 compiler has to be changed too
-		s/^(COMPILE\.f90\s*=.*)(pgf90)/$1$H5pfc \#$2/;
+		s/^(COMPILE\.f90\s*=.*)(pgf90)/$1$H5pfc \#$2/
+		    unless /\#/;
+
+		# Change the parallel C++ compiler too
+		s/^(COMPILE\.mpicxx\s*=\s*)(.*)/$1$H5pcc \#$2/
+		    unless /\#/ or $CompilerC =~ /(cray|intel)cc/;
+
+		# Add the h5pfc include directory to search path for hdf5.mod
+		s/\s+$/$H5include\n/ if /^SEARCH\b/ and $H5include
+		    and not /$H5include/;
 	    }else{
 		# Undo the modifications
-		s/$H5pfc \#(.*)/$1/;
+		s/($H5pfc|$H5pcc) \#//;
+		s/$H5include// if $H5include;
+		s/^\# HDF5=YES\n//;
 	    }
 	    print;
 	}
     }
 
+    # PGF90 modules include HDF5 info if compiled with h5pfc
+    &shell_command("make clean") if not $Install and $Compiler eq 'pgf90';
+
     my @files = glob("src/*Hdf5_orig.f90 ".
 		     "??/*/src/*Hdf5_orig.f90 ".
-		     "share/*/src/ModHdf5Utils_orig.f90 ".
-		     "../../share/*/src/ModHdf5Utils_orig.f90");
+		     "share/*/src/ModHdf5Utils_orig.f90 ");
     foreach my $file (@files){
 	my $outfile = $file;
 	$outfile =~ s/_orig//;
@@ -588,6 +687,7 @@ sub set_hdf5_{
 	print "set_hdf5_: cp $infile $outfile\n";
 	&shell_command("cp $infile $outfile");
     }
+
 }
 
 ##############################################################################
@@ -596,8 +696,22 @@ sub set_hypre_{
 
     # Check if library is present
     if($NewHypre eq "yes" and not -d "util/HYPRE"){
-	print "Warning: util/HYPRE is missing. Use cd util; cvs co HYPRE/\n";
+	print "Warning: util/HYPRE is missing. Use cd util; cvs co HYPRE\n";
 	return;
+    }
+
+    if($NewHypre eq "yes" and not -e "util/HYPRE/lib/libHYPRE.a"){
+	$IsStrict = 0;
+	&shell_command("cd util/HYPRE; make install");
+	$IsStrict = 1;
+	if($ErrorCode){
+	    print "$ERROR cd util/HYPRE; make install failed with ".
+		"error $ErrorCode\n";
+	    print "!!! renaming util/HYPRE to util/HYPRE_FAILED !!!\n";
+	    shell_command("rm -rf util/HYPRE_FAILED; ",
+			  "mv util/HYPRE util/HYPRE_FAILED");
+	    return;
+	}
     }
 
     # $Hypre will be $NewHypre after changes
@@ -614,8 +728,6 @@ sub set_hypre_{
 	    print;
 	}
     }
-    &shell_command("cd util/HYPRE; make install") if $Hypre eq "yes"
-	and not -e "util/HYPRE/lib/libHYPRE.a";
 
     my @files = glob("src/*Hypre_orig.f90 ??/*/src/*Hypre_orig.f90");
     foreach my $file (@files){
@@ -630,6 +742,47 @@ sub set_hypre_{
 }
 
 ##############################################################################
+
+sub set_fishpak_{
+
+    # Check if library is present 
+    if($NewFishpak eq "yes" and not -d "util/FISHPAK"){
+        print "Warning: util/FISHPAK is missing. Use cd util; cvs co FISHPAK\n";
+        return;
+    }
+
+    if($NewFishpak eq "yes" and not -e "util/FISHPAK/lib/libFISHPAK.a"){
+        $IsStrict = 0;
+        &shell_command("cd util/FISHPAK; make install");
+        $IsStrict = 1;
+        if($ErrorCode){
+            print "$ERROR cd util/FISHPAK; make install failed with ".
+                "error $ErrorCode\n";
+            print "!!! renaming util/FISHPAK to util/FISHPAK_FAILED !!!\n";
+            shell_command("rm -rf util/FISHPAK_FAILED; ",
+                          "mv util/FISHPAK util/FISHPAK_FAILED");
+            return;
+        }
+    }
+
+    # $Fishpak will be $NewFishpak after changes                                     
+    $Fishpak = $NewFishpak;
+
+    print "Enabling FISHPAK library in $MakefileConf\n" if $Fishpak eq "yes";
+    print "Disabling FISHPAK library in $MakefileConf\n" if $Fishpak eq "no";
+    if(not $DryRun){
+        @ARGV = ($MakefileConf);
+        while(<>){
+            # Add/remove Fishpak related definitions after MPILIB                                          
+            $_ .= $FishpakDefinition if $Fishpak eq "yes" and /-lNOMPI/;
+            $_ = "" if $Fishpak eq "no" and /FISHPAK/i;
+            print;
+        }
+    }
+
+}
+
+############################################################################## 
 
 sub set_spice_{
 
@@ -708,8 +861,7 @@ sub set_optimization_{
 
 sub create_makefile_rules{
 
-    my @InFile = glob("src*/$MakefileRules.all */*/src*/$MakefileRules.all ".
-		      "../../share/Library/src*/$MakefileRules.all");
+    my @InFile = glob("src*/$MakefileRules.all */*/src*/$MakefileRules.all");
 
     return unless @InFile;
 
@@ -818,8 +970,10 @@ sub shell_command{
 
     return if $DryRun;
 
-    system($command)
-	and die "$ERROR Could not execute command=$command\n";
+    $ErrorCode = system($command) / 256; 
+
+    die "$ERROR Could not execute command=$command: code = $ErrorCode\n"
+	if $ErrorCode and $IsStrict;
 }
 
 ##############################################################################

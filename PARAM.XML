@@ -344,22 +344,22 @@ execution. Tmax sets the stop time in timeaccurate mode. and MaxStep sets the
 maximum number of iterations for non-timeaccurate mode.
 </command>
 
-<command name="STET">
-	<parameter name="DoCoupleSTET" type="logical" default="T" />
-	<parameter name="UseFeedbackFromSTET" type="logical" default="T" />
-	<parameter name="IsVerboseSTET" type="logical" default="F" />
+<command name="SE">
+	<parameter name="DoCoupleSE" type="logical" default="T" />
+	<parameter name="UseFeedbackFromSE" type="logical" default="T" />
+	<parameter name="IsVerboseSE" type="logical" default="F" />
 	<parameter name="DtGetSe" type="real" min="-1" default="120.0" />
-#STET
-T		DoCoupleSTET
-T		UseFeedbackFromSTET
-F		IsVerboseSTET
+#SE
+T		DoCoupleSE
+T		UseFeedbackFromSE
+F		IsVerboseSE
 120		DtGetSe
 
-#STET commands DoCoupleSTET and UseFeedbackFromSTET tells if you should include 
-STET coupling (works for Earth and Jupiter) and if feedback should be included. 
-IsVerboseSTET option tells if STET should write lots of output 
+#SE commands DoCoupleSE and UseFeedbackFromSE tells if you should include 
+SE coupling (works for Earth and Jupiter) and if feedback should be included. 
+IsVerboseSE option tells if SE should write lots of output 
 (good for debugging one line) or run quietly (good for lots of lines). DtGetSe 
-tells how frequently STET should be called.
+tells how frequently SE should be called.
 </command>
 
 
