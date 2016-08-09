@@ -1,9 +1,11 @@
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan,
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 SHELL=/bin/sh
 
 # Fortran language related part of Makefile.conf: Makefile.Linux.crayftn
+FORTRAN_COMPILER_NAME=crayftn
 #
 #	Space Weather Modeling Framework (SWMF) 
 #	Cray Fortran (ftn) Compiler with FTN for linking
@@ -21,10 +23,9 @@ PRECISION  = ${DOUBLEPREC}
 MPILIB =
 #MPILIB = -L${LIBDIR} -lNOMPI
 
-# This is the search path for used modules
-# SEARCH_EXTRA should be set in the individual Makefiles
-
-SEARCH = -I${SHAREDIR} ${SEARCH_EXTRA}
+# Enable creating .mod files and define where to put them and search for them.
+# INCL_EXTRA can be defined to add more search directories.
+SEARCH = -e m -J ${INCLDIR} ${INCL_EXTRA}
 
 DEBUGFLAG = -g
 DEBUG     = 
@@ -33,7 +34,7 @@ DEBUG     =
 OPT0 = -O0
 OPT1 = -O1
 OPT2 = -O2
-OPT3 = -O3,fp3
+OPT3 = -O3
 OPT4 = -O4
 
 CFLAG = ${SEARCH} -c ${DEBUG}
@@ -78,8 +79,7 @@ BLAS  = lapack.o blas.o
 .ftn.o:
 	${COMPILE.f77} ${Cflag3} -f fixed $<
 
-clean:	
+cleanfiles:	
 	rm -f *~ core *.o *.mod fort.* a.out *.exe *.a *.so *.il *.protex
 
 
-# keep this line

@@ -1,7 +1,6 @@
 include ../Makefile.def
 
-SEARCH_EXTRA = -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR} \
-	-I${LIBDIR}
+SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRICALUADIR}
 
 include ../Makefile.conf
 
@@ -12,7 +11,6 @@ include Makefile.RULES
 MODULES = \
 	ModGrid.o\
 	geomag.o\
-	iri90.o\
 	ModSeProduction.o\
 	ModSeCross.o\
 	ModBackground.o\
@@ -70,6 +68,8 @@ TWOSTREAM_for_Darwin:
 		ar -x ${LIBDIR}/libSHARE.a
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
 	rm -rf Tmp_
+
+clean: cleanfiles
 
 distclean: clean
 

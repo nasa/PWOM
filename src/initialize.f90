@@ -33,7 +33,7 @@ subroutine PW_initialize
   !***************************************************************************
   !  Set the number of fieldlines that each processor solves for
   !***************************************************************************
-  write(*,*) 'iProc,nProc,nTotalLine',iProc,nProc,nTotalLine
+  
   if (nTotalLine < nProc) &
        call con_stop(&
        "PW ERROR:nTotalLine<nProc. Reduce number of procs for PW in LAYOUT.in")
@@ -75,6 +75,7 @@ subroutine PW_initialize
        State_CVI(nAlt,nVar,nLine),&
        GeoMagLat_I(nLine),GeoMagLon_I(nLine),          &
        ThetaLine_I(nLine), PhiLine_I(nLine),           &
+       ThetaLineOld_I(nLine), PhiLineOld_I(nLine),           &
        xLine_I(nLine),yLine_I(nLine),zLine_I(nLine),          &
        xLineOld_I(nLine),yLineOld_I(nLine),zLineOld_I(nLine), &
        UthetaLine_I(nLine),UphiLine_I(nLine),          &

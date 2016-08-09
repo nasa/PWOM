@@ -133,7 +133,7 @@ program pw
        OmegaLine_I, JrLine_I, iThetaLine_I,iPhiLine_I,    &
        NameRestartIn, NameRestart, NameGraphics,          &
        NameOutput,  iUnitRestart, iUnitRestartIn,         &
-       iUnitGraphics,iUnitOutput, iLineGlobal)
+       iUnitGraphics,iUnitOutput, iLineGlobal,IsNorth_I)
   
 
   call MPI_FINALIZE(errcode)

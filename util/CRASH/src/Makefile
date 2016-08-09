@@ -54,7 +54,7 @@ OBJECTS_EXE= test_ionization.o test_godunov.o test_Fermi.o test_absorption.o \
 
 
 DEPEND:
-	@perl ${SCRIPTDIR}/depend.pl ${SEARCH} ${OBJECTS} ${OBJECTS_EXE} 
+	@perl ${SCRIPTDIR}/depend.pl ${SEARCHDIR} ${OBJECTS} ${OBJECTS_EXE} 
 
 
 
@@ -250,6 +250,8 @@ test_abs:
 	  ${SCRIPTDIR}/DiffNum.pl -t -r=1.0e-8 -a=1.0e-13 test_result test_ref > test_abs.diff
 	  ls -l *.diff
 	  rm -f test_re*
+
+clean: cleanfiles
 
 distclean: clean 
 	rm -f Makefile.DEPEND Makefile.RULES; \

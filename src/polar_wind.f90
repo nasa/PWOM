@@ -1,3 +1,5 @@
+!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine polar_wind
 
   ! Discussion:
@@ -41,8 +43,7 @@ subroutine polar_wind
        TypeSolver=TypeSolver,                                      &
        DToutput=DToutput,DoLog=DoLog,&
        nStep=nStep,Dt=DtVariable,AvE=AveIE,Eflux=EfluxIE)
-
-  print *,'Line ',iline
+  
   ! If using variable timestep, then set Dt=Dt(Last line call)
   if (IsVariableDt) then
      Dt = DtVariable

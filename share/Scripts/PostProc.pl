@@ -1,20 +1,22 @@
 #!/usr/bin/perl -s
-#  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+#  Copyright (C) 2002 Regents of the University of Michigan, 
+#  portions used with permission 
 #  For more information, see http://csem.engin.umich.edu/tools/swmf
 
-my $Help    = ($h or $H or $help);
-my $Verbose = ($v or $verbose);
-my $Gzip    = ($g or $gzip);
-my $Repeat  = ($r or $repeat);
-my $Stop    = ($s or $stop or 2);
-my $Concat  = ($c or $cat and not $Repeat);
-my $MakeMovie = ($m or $movie or $M or $MOVIE);
+my $Help          = ($h or $H or $help);
+my $Verbose       = ($v or $verbose);
+my $Gzip          = ($g or $gzip);
+my $Repeat        = ($r or $repeat);
+my $Stop          = ($s or $stop or 2);
+my $Concat        = ($c or $cat and not $Repeat);
+my $MakeMovie     = ($m or $movie or $M or $MOVIE);
 my $KeepMovieOnly = ($M or $MOVIE);
-my $nThread = ($n or 4);
-my $Rsync   = ($rsync or $sync);
-my $AllParam = ($param or $allparam);
-my $Pattern  = $p;
-
+my $nThread       = ($n or 4);
+my $Rsync         = ($rsync or $sync);
+my $AllParam      = ($param or $allparam);
+my $Pattern       = $p;
+my $Format        = ($f or $format);
+    
 use strict;
 use File::Find;
 
@@ -57,6 +59,10 @@ if($KeepMovieOnly){
     $MovieFlag = '-m';
 }
 
+# Set sleep option 
+my $SleepFlag; 
+$SleepFlag = '-s=10' if $Repeat;
+
 # Name of the plot directories for various components
 my %PlotDir = (
     "EE"     => "EE/IO2",
@@ -66,7 +72,9 @@ my %PlotDir = (
     "OH"     => "OH/IO2",
     "IM"     => "IM/plots,IM/output",
     "PW"     => "PW/plots",
+    "PC"     => "PC/plots", 
     "PS"     => "PS/Output",
+    "PT"     => "PT/plots",
     "RB"     => "RB/plots",
     "SC"     => "SC/IO2",
     "UA"     => "UA/Output,UA/data",
@@ -114,8 +122,10 @@ REPEAT:{
 		&shell("./pION");
 	    }
             &concat_sat_log if $Concat;
+	}elsif( $Dir =~ /^PC$/ ){
+	    &shell("./pIDL $MovieFlag $SleepFlag -n=$nThread $Pattern $Format");
 	}elsif( $Dir =~ /^SC|IH|OH|GM|EE$/ ){
-	    &shell("./pIDL $MovieFlag -n=$nThread $Pattern");
+	    &shell("./pIDL $MovieFlag $SleepFlag -n=$nThread $Pattern $Format");
 	    if($Gzip){
 		&shell("./pTEC A g");
 	    }else{
@@ -206,8 +216,56 @@ foreach my $Dir (sort keys %PlotDir){
 	warn "$WARNING: no files were found in $PlotDir\n";
     }
 }
+
+# Copy and move some input and output files if present
+if(-f $ParamIn){
+    if($AllParam){
+	&shell_info("cp PARAM.* LAYOUT.* $NameOutput");
+    }else{
+	&shell_info("cp $ParamIn $NameOutput");
+    }
+}else{
+    warn "$WARNING: no $ParamIn file was found\n";
+}
+
+&read_runlog;
+
+if(-f "runlog"){
+    &shell_info("mv runlog $NameOutput");
+}elsif(glob("runlog_[0-9]*")){
+    &shell_info("mv runlog_[0-9]* $NameOutput");
+}else{
+    warn "$WARNING: no $RunLog file was found\n";
+}
+
+&shell_info("./Restart.pl -o $NameOutput/RESTART");
+
+if($Rsync){
+    &shell_info("rsync -avz $NameOutput/ $Rsync");
+    print "$INFO: rsync is complete\n";
+}
+
+exit 0;
+
 #############################################################
-sub readrunlog{
+sub shell{
+    my $command = join(" ",@_);
+    print "$command\n" if $Verbose;
+    my $result = `$command`;
+    print $result if $Verbose or $result =~ /error/i;
+}
+
+#############################################################
+sub shell_info{
+    my $command = join(" ",@_);
+    print "$INFO: $command\n";
+    my $result = `$command`;
+    print $result if $Verbose or $result =~ /error/i;
+}
+
+#############################################################
+
+sub read_runlog{
     # Read runlog and print out init time and runtime without init time
     my $timeinit;
     my $timerun;
@@ -239,54 +297,8 @@ sub readrunlog{
 	    " $timeinit $timerun\n" if $timeinit or $timerun;
     }
 }
+
 ##############################################################################
-
-# Copy and move some input and output files if present
-if(-f $ParamIn){
-    print "$INFO: cp $ParamIn $NameOutput/\n";
-    `cp $ParamIn $NameOutput/`;
-}else{
-    warn "$WARNING: no $ParamIn file was found\n";
-}
-
-readrunlog();
-
-if(-f "runlog"){
-    print "$INFO: mv runlog $NameOutput/\n";
-    `mv runlog $NameOutput`;
-}elsif(glob("runlog_[0-9]*")){
-    print "$INFO: mv runlog_[0-9]* $NameOutput/\n";
-    `mv runlog_[0-9]* $NameOutput`;
-}else{
-    warn "$WARNING: no $RunLog file was found\n";
-}
-
-# Files used for IPIC3D coupled runs
-`cp IPIC.in $NameOutput/`    if -f "IPIC.in";
-`mv runlog.bats $NameOutput` if -f "runlog.bats";
-`mv runlog.ipic $NameOutput` if -f "runlog.ipic";
-
-print "$INFO: Restart.pl -o $NameOutput/RESTART\n";
-&shell("./Restart.pl -o $NameOutput/RESTART");
-
-if($Rsync){
-    print "$INFO: rsync -avz $NameOutput $Rsync\n";
-    &shell("rsync -avz $NameOutput/ $Rsync");
-    print "$INFO: rsync is complete\n";
-}
-
-exit 0;
-
-#############################################################
-
-sub shell{
-    my $command = join(" ",@_);
-    print "$command\n" if $Verbose;
-    my $result = `$command`;
-    print $result if $Verbose;
-}
-
-#############################################################
 
 sub concat_sat_log{
 
@@ -302,10 +314,9 @@ sub concat_sat_log{
 	my $BaseName = $File;
 
 	# Remove extension
-	$BaseName =~ s/_n\d+\.(log|sat|mag)$// or
-	    $BaseName =~ s/_t[\d_]+\.(log|mag)$// or
+	$BaseName =~ s/_[ent][\d\-_]+\.(log|sat|mag)$// or
 	    die "$ERROR: file name $File does not match "
-	    .   "_nSTEPNUMBER.(log|sat) format\n";
+	    .   "_[ent]TIMESTAMP.(log|sat|mag) format\n";
 
 	# Check if there was another file with the same base name.
 	my $FirstFile = $FirstFile{$BaseName};
@@ -365,7 +376,7 @@ sub print_help{
 Usage:
 
    PostProc.pl [-h] [-v] [-c] [-g] [-m | -M] [-r=REPEAT [-s=STOP] | DIR] 
-               [-n=NTHREAD] [-p=PATTERN]
+               [-n=NTHREAD] [-p=PATTERN] [-param|-allparam]
 
    -h -help    Print help message and exit.
 
@@ -373,6 +384,9 @@ Usage:
 
    -c -cat     Concatenate series of satellite, log and magnetometer output
                files into one file. Cannot be used with the -r(epeat) option
+
+   -f=FORM     - overwrite the output format for pIDL with FORM that has the 
+   -format=FORM  following options: ascii, real4, real8, tec
 
    -g -gzip    Gzip the big ASCII files.
 
@@ -390,7 +404,8 @@ Usage:
 
    -p=PATTERN  Pass pattern to pIDL so it only processes the files that match.
 
-   -param      Will rsync PARAM.* and LAYOUT.* to rsync directory
+   -param      Copy and/or rsync PARAM.* and LAYOUT.* files.
+   -allparam   Same as -param.
 
    -rsync=TARGET Copy processed plot files into an other directory 
                (possibly on another machine) using rsync. The TARGET
@@ -420,9 +435,9 @@ PostProc.pl
 PostProc.pl -M -cat -n=8 RESULTS/run23
 
    Post-process the plot files, compress the ASCII files, rsync the results
-   to another machine and print verbose info:
+   and PARAM.* and LAYOUT.* files to another machine and print verbose info:
 
-PostProc.pl -g -rsync=ME@OTHERMACHINE:My/Results -v
+PostProc.pl -g -param -rsync=ME@OTHERMACHINE:My/Results -v
 
    Repeat post-processing every 360 seconds for files matching "IO2/x=",
    pipe standard output and error into a log file and stop after 3 days:
@@ -430,9 +445,10 @@ PostProc.pl -g -rsync=ME@OTHERMACHINE:My/Results -v
 PostProc.pl -r=360 -s=3 -p=IO2/x= >& PostProc.log &
 
    Collect processed output into a directory tree named OUTPUT/New
-   and rsync it into the run/OUTPUT/New directory on another machine:
+   and rsync it together with the PARAM.* and LAYOUT.* files 
+   into the run/OUTPUT/New directory on another machine:
 
-PostProc.pl -rsync=ME@OTHERMACHINE:run/OUTPUT/New OUTPUT/New'
+PostProc.pl -allparam -rsync=ME@OTHERMACHINE:run/OUTPUT/New OUTPUT/New'
 
 #EOC
     ,"\n\n";

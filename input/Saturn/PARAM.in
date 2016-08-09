@@ -8,6 +8,7 @@ T		SaveFirst
 
 #SCHEME
 Rusanov		TypeSolver
+Rusanov		TypeFlux
 0.01		DtVertical
 F		IsFullyImplicit
 T		IsPointImplicit
@@ -27,7 +28,7 @@ F		IsUseJr
 8		nTotalLine
 
 #STOP
-10.0		Tmax
+100.0		Tmax
 -1		MaxStep
 
 #STET

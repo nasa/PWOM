@@ -6,14 +6,12 @@ INSTALL_FILES = \
 
 install:
 	touch ${INSTALL_FILES}
-	@(if [ "${OS}" != "Darwin" ]; then \
-		rm -f Library/src/ModUtilities.f90; \
-	fi);
 
 clean:
 	cd Library/src; make clean
 	cd Library/test;make clean
 	cd Prologs;     make clean
+	rm -f include/*.mod
 
 distclean: clean
 	cd Library/src; make distclean

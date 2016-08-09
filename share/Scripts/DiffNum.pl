@@ -26,6 +26,13 @@ die "$ERROR: there should be two file arguments!\n" unless $#ARGV == 1;
 my $File1 = $ARGV[0];
 my $File2 = $ARGV[1];
 
+if(not -e $File1){
+    print "$ERROR: $File1 does not exist\n"; die "$ERROR\n";
+}
+if(not -e $File2){
+    print "$ERROR: $File2 does not exist\n"; die "$ERROR\n";
+}
+
 if(not -T $File1){
     print "$ERROR: $File1 is not an ASCII file\n"; die "$ERROR\n";
 }
@@ -80,6 +87,7 @@ my $nDiff=0;
        }
        print TEXT1 $Line1 if $TextDiff;
        $Line1 = <FILE1> or last SEARCH;
+       $Line1 = "" if $Line1 =~ /Mellanox|RDMA devices/;
        $OrigLine1 = $Line1;
        $iLine1++;
        redo SEARCH;
@@ -94,6 +102,7 @@ my $nDiff=0;
        }
        print TEXT2 $Line2 if $TextDiff;
        $Line2 = <FILE2> or last SEARCH;
+       $Line2 = "" if $Line2 =~ /Mellanox|RDMA devices/;
        $OrigLine2 = $Line2;
        $iLine2++;
        redo SEARCH;
