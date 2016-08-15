@@ -245,7 +245,7 @@ contains
        PHITOP(:)=0.0
     endif
     
-    write(*,*)2.0*3.14*sum(PHITOP(:)*DEL(:))*AVMU
+!    write(*,*)2.0*3.14*sum(PHITOP(:)*DEL(:))*AVMU
     
     do while (DiffMax >0.1 .and. DoIterateFlux)
        
@@ -1027,13 +1027,15 @@ contains
        enddo ENERGY
        CALL midpnt_int(NumberDens_C(iAlt),NumDensIntegrand_I,&
             EnergyGrid_I,1,nEnergy,nEnergy,1)
-       NumberDens_C(iAlt)=4.*cPi*1.7E-8*NumberDens_C(iAlt)
+!       NumberDens_C(iAlt)=4.*cPi*1.7E-8*NumberDens_C(iAlt)
+       NumberDens_C(iAlt)=1.7E-8*NumberDens_C(iAlt)
        
        ! calculate the number flux
 !       CALL midpnt_int(NumberFlux_C(iAlt),&
 !            uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt),&
 !            DeltaE_I,1,nEnergy,nEnergy,2)
-       NumberFlux_C(iAlt)=2.0*cPi*sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
+!       NumberFlux_C(iAlt)=2.0*cPi*sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
+       NumberFlux_C(iAlt)=sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
        
     enddo ALT
 
@@ -1085,7 +1087,7 @@ contains
        mu_I(iPA) = cos(PA_I(iPA))
     enddo
     
-    DeltaPot_C(:)=0.0
+!    DeltaPot_C(:)=0.0
 !    DeltaPot_C(:)=0.5*EnergyGrid_I(1)
 
     !mu = sqrt((mu0^2-1) * (B(s)[E-e(dPhi(s)-dPhi0)])/(B0*E)+1)
@@ -1189,8 +1191,11 @@ contains
        dKE_I(nEnergy)=dKE_I(nEnergy-1)
 
        !now integrate quantities for density and number flux
-       NumberDens_C(iAlt)=4.0*cPi*1.7E-8*sum(NumDensIntegrand_I*dKE_I)
-       NumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I*dKE_I)
+!       NumberDens_C(iAlt)=4.0*cPi*1.7E-8*sum(NumDensIntegrand_I*dKE_I)
+!       NumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I*dKE_I)
+
+       NumberDens_C(iAlt)=1.7E-8*sum(NumDensIntegrand_I*dKE_I)
+       NumberFlux_C(iAlt)=sum(NumFluxIntegrand_I*dKE_I)
 
        !get contribution from losscone filling aurora
        call map_precip(AVMU,PrecipCombinedPhi_I,PrecNumberDens_C,PrecNumberFlux_C)
@@ -1279,8 +1284,11 @@ contains
        dKE_I(nEnergy)=dKE_I(nEnergy-1)
 
        !now integrate quantities for density and number flux
-       PrecNumberDens_C(iAlt)=4.0*cPi*1.7E-8*sum(NumDensIntegrand_I(:)*dKE_I(:))
-       PrecNumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I(:)*dKE_I(:))
+!       PrecNumberDens_C(iAlt)=4.0*cPi*1.7E-8*sum(NumDensIntegrand_I(:)*dKE_I(:))
+!       PrecNumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I(:)*dKE_I(:))
+
+       PrecNumberDens_C(iAlt)=1.7E-8*sum(NumDensIntegrand_I(:)*dKE_I(:))
+       PrecNumberFlux_C(iAlt)=sum(NumFluxIntegrand_I(:)*dKE_I(:))
 
     enddo ALT_LOOP
     
