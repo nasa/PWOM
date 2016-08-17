@@ -865,10 +865,10 @@ contains
        if (NameNeutralSpecies.NE.'H') then
           !use the paper by Opal et al 1971 to set
           ! the differential ionization crossection
-          if(EnergyGrid_I(iEnergy)>=Ethreshold) then
+          if(EnergyGrid_I(iEnergy)>Ethreshold) then
              !set the Opal coef
              OpalCoef = SigTotalI(iEnergy)&
-                  /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethrehold)/(2.0*Ebar)))
+                  /(Ebar * atan((EnergyGrid_I(iEnergy)-Ethreshold)/(2.0*Ebar)))
           else
              ! when energy of primary is below threshold make sure coef is zero
              OpalCoef=0.0
@@ -906,19 +906,19 @@ contains
           !          E2Secondary=NewPrimaryELow
           ! Not sure about the right way to convert this to a single secondary energy...
           EnergySecondary=NewPrimaryELow
-          iEnergySec=BINNUM(EnergySecondary)
+          iEnergySec=max(BINNUM(EnergySecondary),1)
           SigDiffA(iEnergy,iEnergy) = SigDiffA(iEnergy,iEnergy) + &
                SigDiffI(iEnergySec,iEnergy)
           iEnergyLow=1
           NewPrimaryELow=NewPrimaryEHigh-EnergyMin
        END IF
        IF (iEnergyHigh.EQ.0 .OR. NewPrimaryEHigh.LE.EnergyMin) cycle
-       DO  iNewEnergy=iEnergyHigh,iEnergyLow,-1
+       DO  iNewEnergy=min(iEnergyHigh,nEnergy),iEnergyLow,-1
           ! Secondary energy = new total energy - new primary energy
           EnergySecondary = NewPrimaryEHigh - EnergyGrid_I(iNewEnergy)
           IF (iNewEnergy.EQ.iEnergyLow) EnergySecondary=NewPrimaryELow
           IF (EnergySecondary.LE.1.E-10) cycle
-          iEnergySec = BINNUM(EnergySecondary)
+          iEnergySec = max(BINNUM(EnergySecondary),1)
           SIGG=SigDiffI(iEnergySec,iEnergy)
           IF (iNewEnergy.EQ.iEnergy) THEN
              SigDiffA(1,iEnergy)=SigDiffA(1,iEnergy) &
