@@ -112,6 +112,7 @@ test:
 	-@(make test_earth)
 	-@(make test_restart)
 	-@(make test_earth_twostream)
+	-@(make test_jupiter_twostream)
 	-@(make clean)
 	-@(make test_earth_stet)
 
@@ -139,6 +140,17 @@ test_earth_twostream:
 	@echo "test_run..." >> test_Earth_twostream.diff
 	make test_run
 	@echo "test_check..." >> test_Earth_twostream.diff
+	make test_check SEDIR=TwoStream MYTEST=_twostream
+
+test_jupiter_twostream:	
+	@echo "starting..." > test_Jupiter_twostream_plots.diff
+	@echo "test_compile..." > test_Jupiter_twostream.diff
+	make test_compile PLANET=Jupiter
+	@echo "test_rundir..." >> test_Jupiter_twostream.diff
+	make test_rundir PARAMIN=PARAM.in.twostream
+	@echo "test_run..." >> test_Jupiter_twostream.diff
+	make test_run
+	@echo "test_check..." >> test_Jupiter_twostream.diff
 	make test_check SEDIR=TwoStream MYTEST=_twostream
 
 test_earth_stet:	
