@@ -67,7 +67,8 @@ contains
   subroutine fill_thermal_plasma_empirical(F107,F107A,t)
     use ModSeGrid, only: nAlt,Alt_C,IsVerbose
     use ModPlanetConst, only: Planet_, NamePlanet_I
-
+    use ModNumConst,  only: cDegToRad
+    
     real   , intent(in) :: F107, F107A, t
     real    :: factor
     integer :: iAlt
@@ -86,6 +87,7 @@ contains
           eThermalTemp_C(iAlt) = &
                eTemp_Jupiter(Alt_C(iAlt))
        end do
+       dip = 90.0*cDegToRad
     end select
     
     

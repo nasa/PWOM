@@ -283,6 +283,7 @@ contains
                              + log (CI(II,IJ)/CI(I,IJ)) * FAC)
           ENDIF
    80   CONTINUE
+        write(*,*) IJ,':',PIN(IJ,:)
    90 CONTINUE
 !
 !
@@ -575,33 +576,43 @@ contains
     
     !allocate sig arrays if not already done
     if (.not.allocated(SIGS)) allocate(SIGS(nNeutralSpecies,nEnergy)) 
-    if (.not.allocated(SIGIX)) allocate(SIGIX(nNeutralSpecies,nEnergy,nEnergy)) 
+    if (.not.allocated(SIGIX)) allocate(SIGIX(NEI,nNeutralSpecies,nEnergy)) 
     if (.not.allocated(SIGA)) allocate(SIGA(nNeutralSpecies,nEnergy,nEnergy)) 
+    if (.not.allocated(SIGEX)) allocate(SIGEX(NEI,nNeutralSpecies,nEnergy)) 
+    if (.not.allocated(SEC)) allocate(SEC(nNeutralSpecies,nEnergy,nEnergy))
+    if (.not. allocated(PE)) allocate(PE(nNeutralSpecies,nEnergy))
+    if (.not. allocated(PIN)) allocate(PIN(nNeutralSpecies,nEnergy))
+    if (.not. allocated(IIMAXX)) allocate(IIMAXX(nEnergy))
     
-    ! currently just set crossections to zero. 
-    SIGS(:,:)=0.0
-    SIGIX(:,:,:)=0.0
-    SIGA(:,:,:)=0.0
-
+    ! initialize crossections to zero. 
+    SIGS(:,:)    = 0.0
+    SIGIX(:,:,:) = 0.0
+    SIGA(:,:,:)  = 0.0
+    SIGEX(:,:,:) = 0.0
+    SEC(:,:,:)   = 0.0
+    PE(:,:)      = 0.5
+    PIN(:,:)     = 0.5
+    IIMAXX(:)    = 0.0
+    
     write(*,*) 'Neutrals: ',nNeutralSpecies
     
     do iNeutral = 1, nNeutralSpecies
 
        write(*,*) 'getting H2 cross'
        call get_excitation_crossection('H2', SIGA(H2_,:,:))
-       call get_crossection_diffion('H2', SIGIX(H2_,:,:), SIGA(H2_,:,:))
+       call get_crossection_diffion('H2', SEC(H2_,:,:), SIGA(H2_,:,:))
        call get_scattering_crossection('H2',SIGS(H2_,:))
        write(*,*) 'getting He cross'
        call get_excitation_crossection('He', SIGA(He_,:,:))
-       call get_crossection_diffion('He', SIGIX(He_,:,:), SIGA(He_,:,:))
+       call get_crossection_diffion('He', SEC(He_,:,:), SIGA(He_,:,:))
        call get_scattering_crossection('He',SIGS(He_,:))
        write(*,*) 'getting H cross'
        call get_excitation_crossection('H', SIGA(H_,:,:))
-       call get_crossection_diffion('H',  SIGIX(H_,:,:), SIGA(H_,:,:))
+       call get_crossection_diffion('H',  SEC(H_,:,:), SIGA(H_,:,:))
        call get_scattering_crossection('H',SIGS(H_,:))
        write(*,*) 'getting CH4 cross'
        call get_excitation_crossection('CH4', SIGA(CH4_,:,:))
-       call get_crossection_diffion('CH4',SIGIX(CH4_,:,:), SIGA(CH4_,:,:))
+       call get_crossection_diffion('CH4',SEC(CH4_,:,:), SIGA(CH4_,:,:))
        call get_scattering_crossection('CH4',SIGS(CH4_,:))
        
     end do
@@ -893,7 +904,7 @@ contains
        
        iEnergyLow=BINNUM(NewPrimaryELow)
        iEnergyHigh=BINNUM(NewPrimaryEHigh)
-       
+
        ! if NewPrimaryELow is below the EnergyMin then say that the primary
        ! loses all of its energy for all New Primary Energies from
        ! NewPrimaryELow to EnergyMin, which means Secondary Energies from
@@ -911,6 +922,7 @@ contains
                SigDiffI(iEnergySec,iEnergy)
           iEnergyLow=1
           NewPrimaryELow=NewPrimaryEHigh-EnergyMin
+          if (IIMAXX(iEnergy).LT.(iEnergySec + 1)) IIMAXX(iEnergy) = iEnergySec + 1
        END IF
        IF (iEnergyHigh.EQ.0 .OR. NewPrimaryEHigh.LE.EnergyMin) cycle
        DO  iNewEnergy=min(iEnergyHigh,nEnergy),iEnergyLow,-1
@@ -930,6 +942,7 @@ contains
              SigDiffA(iEnergy-iNewEnergy,iEnergy) = &
                   SigDiffA(iEnergy-iNewEnergy,iEnergy)+SIGG
           END IF
+          if (IIMAXX(iEnergy).LT.(iEnergySec + 1)) IIMAXX(iEnergy) = iEnergySec + 1
        enddo
        !
        !
@@ -1210,7 +1223,7 @@ contains
           ! set plot state
           do iNeutral=1,nNeutral
              PlotState_IIV(iEnergySecondary,iEnergyPrimary,iNeutral) = &
-                  SIGIX(iNeutral,iEnergySecondary,iEnergyPrimary)
+                  SEC(iNeutral,iEnergySecondary,iEnergyPrimary)
           enddo
        enddo
     enddo

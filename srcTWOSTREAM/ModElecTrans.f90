@@ -102,6 +102,7 @@ contains
   !
   !
   SUBROUTINE ETRANS
+    use ModPlanetConst, only: Planet_, NamePlanet_I
     use ModSeGrid, only: NBINS=>nEnergy, JMAX=>nAlt,Alt_C,&
          ENER=>EnergyGrid_I, DEL=>DeltaE_I,nAltExtended,DeltaPot_C,IsVerbose
     use ModSeCross,only: IIMAXX,SIGIX,SIGA,SIGS,SIGEX,SEC,NEI,WW,PE,PIN
@@ -168,7 +169,7 @@ contains
 
     LastPhiUp = 0.0
     LastPhiDwn = 0.0
-    
+
     !kludge
 !    UsePrecipitation=.true.
 !    PrecipEflux=2.0
@@ -197,14 +198,14 @@ contains
     else
        PrecipPhi_I(:)=0.0
     endif
-    
+
     if (UsePolarRain) then
        call maxt(PolarRainEflux, PolarRainEmean, ENER, DEL,0, 0.0, 0.0, &
             PolarRainPhi_I)
     else
        PolarRainPhi_I(:)=0.0
     endif
-    
+
     if (UseOvation) then
        call maxt(EfluxDiff, EMeanDiff, ENER, DEL,0, 0.0, 0.0, &
             OvationDiffPhi_I)
@@ -217,7 +218,7 @@ contains
        OvationWavePhi_I(:)=0.0
        OvationMonoPhi_I(:)=0.0
     endif
-    
+
     !now combine the different types of precipitation
     PrecipCombinedPhi_I(:)=0.0
     do iEnergy=1,nBINS
@@ -244,9 +245,9 @@ contains
     else
        PHITOP(:)=0.0
     endif
-    
+
 !    write(*,*)2.0*3.14*sum(PHITOP(:)*DEL(:))*AVMU
-    
+
     do while (DiffMax >0.1 .and. DoIterateFlux)
        
        !reflect solution below max potential drop
@@ -262,36 +263,36 @@ contains
              endif
           end if
        enddo
-       
+
        !allocate return vars and initiate to zero
        if (.not.allocated(HeatingRate_C))allocate(HeatingRate_C(nAltExtended))
        if (.not.allocated(SecondaryIonRate_IC))&
             allocate(SecondaryIonRate_IC(NMAJ,nAltExtended))
        if (.not.allocated(TotalIonizationRate_C))&
             allocate(TotalIonizationRate_C(nAltExtended))
-       
+
        HeatingRate_C(:)=0.0
        SecondaryIonRate_IC(:,:)=0.0
        TotalIonizationRate_C(:)=0.0
-       
+
        if(.not.allocated(potion)) then
           allocate(potion(nmaj))
           potion(1)=16.
           potion(2)=16.
           potion(3)=18.
        end if
-       
+
        ! allocate solver arrays
        if (.not.allocated(ALPHA)) allocate(ALPHA(JMAX), BETA(JMAX), GAMA(JMAX), &
             PSI(JMAX), DELZ(JMAX), DEL2(JMAX), DELA(JMAX), DELP(JMAX), &
             DELM(JMAX), DELS(JMAX), DEN(JMAX))
        
-       
+
        IERR = 0
        FAC = 0.
        SINDIP = SIN(DIP)
        RMUSIN = 1. / SINDIP / AVMU
-       
+
        ! set phitop
        !    PHITOP(:)=0.0
        
@@ -349,7 +350,7 @@ contains
        DO I=2,JMAX
           DELZ(I) = Alt_C(I)-Alt_C(I-1)
        End Do
-       
+
        DO I=1,JMAX-1
           DEL2(I) = DELZ(I)+DELZ(I+1)
           DELA(I) = DEL2(I)/2.
@@ -357,7 +358,7 @@ contains
           DELM(I) = DELA(I)*DELZ(I)
           DELS(I) = DELZ(I)*DELZ(I+1)
        End Do
-       
+
        DEL2(JMAX) = DEL2(JMAX-1)
        DELA(JMAX) = DELA(JMAX-1)
        DELP(JMAX) = DELP(JMAX-1)
@@ -369,7 +370,6 @@ contains
        ! Top of Energy loop:
        !
        ENERGY_LOOP: do J=NBINS,1,-1
-          
           !write(*,*) 'Working on energy bin',J
           !
           !
@@ -380,8 +380,9 @@ contains
              ! PROD(I) = (PESPEC(J,I)+SESPEC(J,I)) * RMUSIN / DEL(J)
              PROD(I) = (PESPEC(J,I)) * RMUSIN / DEL(J)
              EPROD(I) = EPROD(I) + PROD(I) * ENER(J) * DEL(J) / RMUSIN
+!             write(*,*) J,I,PESPEC(J,I),RMUSIN,DEL(J)
           End Do
-          !
+
           !
           ! Total energy loss cross section for each species:
           !
@@ -399,7 +400,7 @@ contains
                 TSA(I) = TSA(I) + SIGA(I,1,J) + 1.E-18
              End Do
           ENDIF
-          !
+          
           !
           ! Thermal electron energy loss:
           !
@@ -434,7 +435,6 @@ contains
              T2(I) = T2(I) * RMUSIN + TSIGNE(I)
           enddo
           !
-          !
           ! Bypass next section if local calculation was specified:
           !
           IF (.not.IsLocal) then
@@ -468,7 +468,7 @@ contains
                 !     call con_stop('etran: non-finite GAMA')
                 !  end if
              End DO
-             
+
              IF (ABS(BETA(2)) .LT. 1.E-20) THEN
                 BETA(2) = 1.E-20
                 IERR = 2
@@ -502,7 +502,7 @@ contains
                 !             if (IsDebug .and. .not.isfinite(phiup(i))) &
                 !      call con_stop('etrans: nonfinite PHIUP  (.not.IsLocal)')
              End DO
-             
+
              
           else
              !local calculation
@@ -520,7 +520,6 @@ contains
              End Do
              !
           endif
-          
           
           !
           !
@@ -568,7 +567,7 @@ contains
                      / DEL(KK))
              enddo
           endif
-          !
+
           !
           ! Electron heating rate:
           !
@@ -576,7 +575,7 @@ contains
           DO I = 1, JMAX
              EHEAT(I) = EHEAT(I) + TSIGNE(I) * (PHIUP(I)+PHIDWN(I)) * DAG**2
           End Do
-          !
+
           !
           ! Electron impact excitation rates:
           !
@@ -589,21 +588,21 @@ contains
                 enddo
              enddo
           enddo
-          
+
           !
           !
-          ! Calculate production of secondaries into K bin for energy J bin and
-          ! add to production:
+          ! Calculate production of secondaries into K bin
+          ! for primary energy J bin and add to production:
           !
           DO  K = 1, IIMAXX(J) ! iimaxx set near exsect.f:424
              DO  N = 1, NMAJ
-                DO  I = 1, JMAX
+                DO  I = 1, JMAX ! altitude step - JMAX has nothing to do with J!
                    SECP(N,I) = SEC(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !SECP(N,I) = SIGIX(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !call get_secprod(J,N,ZMAJ(N,I),PHIUP(I) + PHIDWN(I),SECP(N,I)
-                   !    if (isnan(sec(n,k,j))) stop 'etrans: NaN in SEC'
-                   !    if (isnan(zmaj(n,i))) stop 'etrans: NaN in ZMAJ'
-                   !     if (isnan(phiup(i))) stop 'etrans: NaN in PHIUP'
+                   if (isnan(sec(n,k,j))) stop 'etrans: NaN in SEC'
+                   if (isnan(zmaj(n,i))) stop 'etrans: NaN in ZMAJ'
+                   if (isnan(phiup(i))) stop 'etrans: NaN in PHIUP'
                    if (IsDebug .and. phidwn(i).gt.1e30) &
                         call con_stop('etrans.f: very large PHIDWN')
                    !                if (IsDebug .and. .not.isfinite(secp(n,i))) &
@@ -657,17 +656,20 @@ contains
        ! and total energy deposition:
        !
        EDEP = 0.
-       DO IM=1,JMAX
-          TEZ(IM) = EHEAT(IM)
-          DO II=1,NMAJ
-             TEZ(IM) = TEZ(IM) + SION(II,IM)*POTION(II)
-             DO IQ=1,NEI
-                TEZ(IM) = TEZ(IM) + AGLW(IQ,II,IM)*WW(IQ,II)
+       !Calculate energy deposition for Earth
+       if(NamePlanet_I(Planet_).EQ.'EARTH') then
+          DO IM=1,JMAX
+             TEZ(IM) = EHEAT(IM)
+             DO II=1,NMAJ
+                TEZ(IM) = TEZ(IM) + SION(II,IM)*POTION(II)
+                DO IQ=1,NEI
+                   TEZ(IM) = TEZ(IM) + AGLW(IQ,II,IM)*WW(IQ,II)
+                enddo
              enddo
+             EDEP = EDEP + TEZ(IM) * DELA(IM)
+             !       write(*,*)'total edep=', EDEP
           enddo
-          EDEP = EDEP + TEZ(IM) * DELA(IM)
-          !       write(*,*)'total edep=', EDEP
-       enddo
+       endif
        !
        !
        ! Calculate energy input, output, and fractional conservation:
@@ -739,7 +741,7 @@ contains
 !       if(IsDebug .and. .not.isfinite(d(i))) &
 !            error stop 'etrans:impit nonfinite D(I)'
     End Do
-    
+
     K(2) = (D(2) - C(2)*DEN(1)) / B(2)
     L(2) = A(2) / B(2)
 !    if (IsDebug .and. .not.isfinite(k(2))) then
@@ -748,7 +750,7 @@ contains
 !            DEN(1),B(2)
 !       error stop 'etrans:impit non-finite K(2)'
 !    end if
-    !      if (isnan(k(2))) stop 'etrans:impit NaN in K(2)'
+    if (isnan(k(2))) stop 'etrans:impit NaN in K(2)'
     
     DO I = 3, I1
        DEM = B(I) - C(I) * L(I-1)
@@ -759,14 +761,14 @@ contains
        
 !       if (IsDebug .and. .not. isfinite(K(i))) then
 !          write(*,*) k
-!          error stop 'etrans:impit NaN in K(i)'
+       if (isnan(K(I))) stop 'etrans:impit NaN in K(i)'
 !       end if
-       !        if (isnan(L(i))) stop'etrans:impit NaN in L(i)'
+       if (isnan(L(i))) stop'etrans:impit NaN in L(i)'
     End DO
     
     DEN(I1) = (K(I1) - L(I1)*FLUXJ) / (1. + L(I1)*FAC)
-    !      if (isnan(K(i1))) stop'etrans:impit NaN in K(i1)'
-    !      if (isnan(L(i1))) stop'etrans:impit NaN in L(i1)'
+    if (isnan(K(i1))) stop'etrans:impit NaN in K(i1)'
+    if (isnan(L(i1))) stop'etrans:impit NaN in L(i1)'
 !    if(IsDebug .and. .not.isfinite(den(i1))) &
 !         error stop 'impit nonfinite DEN(I1)'
     DEN(JMAX) = DEN(I1)
