@@ -52,3 +52,22 @@ unit_test_sample:
 
 #######################################################################
 
+OBJ_PUSHER = \
+	../ModParticle.o 
+
+
+unit_test_pusher_exe:
+	@(cd .. ;make ModParticle.o)
+	@make unit_test_pusher.o 
+	${LINK.f90} -o unit_test_pusher.exe ${OBJ_PUSHER} \
+		unit_test_pusher.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_pusher: 
+	@echo unit_test_pusher starting
+	@make unit_test_pusher_exe 
+	@echo ./unit_test_pusher_exe
+	-@(./unit_test_pusher_exe )
+
+#######################################################################
+
