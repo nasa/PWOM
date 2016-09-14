@@ -71,3 +71,24 @@ unit_test_pusher:
 
 #######################################################################
 
+#######################################################################
+
+OBJ_COULOMB_COLLISION = \
+	../ModParticle.o 
+
+
+unit_test_coulomb_collision_exe:
+	@(cd .. ;make ModParticle.o)
+	@make unit_test_coulomb_collision.o 
+	${LINK.f90} -o unit_test_coulomb_collision.exe ${OBJ_COULOMB_COLLISION} \
+		unit_test_coulomb_collision.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_coulomb_collision: 
+	@echo unit_test_coulomb_collision starting
+	@make unit_test_coulomb_collision_exe 
+	@echo ./unit_test_coulomb_collision_exe
+	-@(./unit_test_coulomb_collision_exe )
+
+#######################################################################
+
