@@ -18,6 +18,12 @@ Module ModParticle
      type(particle),pointer :: Particle 
   end type particleCellSpecies
 
+  !type for holding array of particles (mostly for bury and disinter)
+  type particleHolder
+     integer :: nParticleOnLine
+     type(particle), allocatable :: SavedParticles_I(:) 
+  end type particleHolder
+
   !array that holds the particles to push
   type(particle), target,allocatable :: Particles_I(:)
   
@@ -33,6 +39,11 @@ Module ModParticle
   !maximum number of particles before throwing an error (not set yet)
   integer :: MaxParticles
   
+  !how many lines do we have
+  integer :: nLine=1
+  
+  !hold the buried lines
+  type(particleHolder),allocatable :: BuriedParticles_I(:) 
   
   ! grid variables
   integer :: nAlt    ! points on grid
@@ -106,7 +117,7 @@ contains
        
        !set the relative weights of particles
        allocate(nNumPerParticle_I(nSpecies))
-       nNumPerParticle_I(:)=1.0e7
+       nNumPerParticle_I(:)=1.0e6
        
        !set plotting variables
        NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] nH[cm-3] uH[km/2] pH TH[k] g r'
@@ -196,11 +207,17 @@ contains
     use ModInterpolate, only: linear
     integer :: iParticle,iAlt
     real :: rCoord, Efield,acceleration,gravity,AltStart
+    
+    !interpolation variables
+    real :: xAlt, Dx1, Dx2
+    integer :: iMin,iMax
+
     real, parameter :: cMtoCm=1e2
     real, parameter :: cElecChargeCGS= 4.80320425e-10 !statcoulombs
     !--------------------------------------------------------------------------
 
-    !$OMP PARALLEL DO
+    !$OMP PARALLEL DO PRIVATE(AltStart,rCoord,gravity,Efield,acceleration,iAlt,&
+    !$OMP xAlt,iMin,iMax,Dx1,Dx2)
     do iParticle=1,nParticle
        AltStart=Particles_I(iParticle)%Alt
        !set the radial distance and the gravitational acceleration 
@@ -209,9 +226,19 @@ contains
        gravity=cMtoCm**3*cGravitation*mPlanet_I(Planet_)/rCoord**2
        
 
-       ! interpolate electric field to particle
+       ! interpolate electric field to particle (note ModInterpolate cannot be 
+       !used since it is not safe for multiple OpenMp threads. 
+       !note current interpolation only works for uniform grid
+       xAlt=(AltStart-Alt_G(-1))/dAlt_G(-1)-1.0
+       iMin=floor(xAlt)
+       iMax=ceiling(xAlt)
+       !set interpolation weights
+       Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+       !interpolate
+       Efield=Dx2*Efield_G(iMin)+Dx1*Efield_G(iMax)
+       
        !Efield= linear(Efield_G(:),-1,nAlt+1,Particles_I(iParticle)%Alt,Alt_G)
-        Efield=0.     
+       !Efield=0.     
        !determine acceleration (mirror force-gravity-eField)
        acceleration=1.5*Particles_I(iParticle)%vperp**2/rCoord - gravity&
             +Efield*(cElecChargeCGS/Mass_I(Particles_I(iParticle)%iSpecies))
@@ -982,12 +1009,12 @@ contains
     type(particleCellSpecies),allocatable :: CellParticles_I(:)
 
     real :: Theta,Phi
-    real :: RandNum,RandNum1,RandNum2
+!    real :: RandNum,RandNum1,RandNum2,RandNum3,RandNum4,RandNum5
     real :: variance
 
     real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2
 
-    real:: uBulkPar,uBulkPerp,Pressure,DensityMin
+    real:: uBulkPar,uBulkPerp,Pressure,DensityTotal
     real,allocatable::Density_I(:),Temp_I(:)
     real::Velx1,Vely1,Velz1,vmag1,Velx2,Vely2,Velz2,vmag2
     real::vperp1,vpar1,vperp2,vpar2
@@ -996,10 +1023,19 @@ contains
     real::RelVelx,RelVely,RelVelz,RelVelperp,RelVelMag
     integer :: iParticle, iCollider,iSpecies1,iSpecies2,iSpecies,jSpecies
     integer :: iParticleSpec,nParticleInCell
-
+    real,allocatable::RandNum_I(:),RandNum2_I(:), &
+         RandNum3_I(:),RandNum4_I(:), &
+         RandNum5_I(:),RandNum6_I(:)
     integer,allocatable:: Index_I(:),IndexPermuted_I(:),CoulLog_II(:,:)
     logical,allocatable:: DoSkip_I(:)
+    
+    !variables to hold the weights and things to calculate them
+    real :: N11,N12,N21,N22,N11w,N12w,N21w,N22w,P1,P2
+    real :: weight_II(2,2)
+    real :: SimPArticleRatio, DensityRatio
+
     logical :: DoTest=.false.
+  
     !---------------------------------------------------------------------------
     !find the total number of particles in the cell regardless of species
     nParticleInCell=0
@@ -1059,15 +1095,17 @@ contains
             Density_I(iSpecies),uBulkPar,uBulkPerp,Pressure,Temp_I(iSpecies))
        !since we are interested in minimum density only whenever density 
        ! comes back as 0 (or less than a tolerance) set to a large number
-       if (Density_I(iSpecies)<1.0e-10) Density_I(iSpecies)=1e99          
+       !if (Density_I(iSpecies)<1.0e-10) Density_I(iSpecies)=1e99          
     enddo
-
-    DensityMin = minval(Density_I)
     
+    !save the total density
+    DensityTotal = sum(Density_I(:))
+       
     do iSpecies=1,nSpecies
        do jSpecies=1,nSpecies
-          if(Temp_I(iSpecies)<1e-10.or.Temp_I(jSpecies)<1e-10) then
-             !In case of zero temperature 
+          if(Temp_I(iSpecies)<1e-10.or.Temp_I(jSpecies)<1e-10 &
+               .or. Density_I(iSpecies)<1e-10) then
+             !In case of zero temperature or density 
              CoulLog_II(iSpecies,jSpecies)=0.0
           else
              CoulLog_II(iSpecies,jSpecies)=23.0&
@@ -1079,12 +1117,65 @@ contains
           endif
        enddo
     enddo
-    deallocate(Density_I,Temp_I)
+    deallocate(Temp_I)
 
+    ! Now calculate correction weights from Miller and Combi 1994. Note that 
+    !this is only for two types of particles. If three are included then the 
+    !code would need to be generalized from what is presented in MC94. 
+    !the simplest would be to have two species with the same weights and 
+    !one with different, but for now we assume only two species.
+    DensityRatio=Density_I(1)/Density_I(2)
+    SimParticleRatio=nSortedParticle_II(1,iCell)&
+         /nSortedParticle_II(2,iCell)
+    !calculate the weighted and unweighted collision pairs
+    N11=(0.5*nParticleInCell)*(DensityRatio**2/(1.0+DensityRatio)**2)
+    N12=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
+    N21=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
+    N22=(0.5*nParticleInCell)*(1.0/(1.0+DensityRatio)**2)
+    
+    N11w=(0.5*nParticleInCell)*SimParticleRatio*DensityRatio&
+         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+    N12w=(0.5*nParticleInCell)*DensityRatio&
+         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+    N21w=(0.5*nParticleInCell)*SimParticleRatio&
+         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+    N22w=(0.5*nParticleInCell)&
+         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+    
+    weight_II(1,1)=N11w/N11
+    weight_II(1,2)=N12w/N12
+    weight_II(2,1)=N21w/N21
+    weight_II(2,2)=N22w/N22
+    
+    !write(*,*) weight_II(1,1),weight_II(1,2),weight_II(2,1),weight_II(2,2)
+    !stop
+    
+    !precompute random numbers for collisions (for optimizing openmp loop)
+    allocate(RandNum_I(nParticleInCell),RandNum2_I(nParticleInCell), &
+         RandNum3_I(nParticleInCell),RandNum4_I(nParticleInCell), &
+         RandNum5_I(nParticleInCell),RandNum6_I(nParticleInCell))
+    do iParticle=1,nParticleInCell
+       RandNum_I(iParticle) =random_real(iSeed)
+       RandNum2_I(iParticle)=random_real(iSeed)
+       RandNum3_I(iParticle)=random_real(iSeed)
+       RandNum4_I(iParticle)=random_real(iSeed)
+       RandNum5_I(iParticle)=random_real(iSeed)
+       RandNum6_I(iParticle)=random_real(iSeed)
+    enddo
+
+
+    !$OMP PARALLEL DO  PRIVATE(Velx2,Vely2,Velz2,Velx1,Vely1,&
+    !$OMP Velz1,DeltaRelVelx,&
+    !$OMP DeltaRelVely,DeltaRelVelz,Theta,variance,Phi,&
+    !$OMP RelVelPerp,RelVelMag,RelVelx,RelVely,RelVelz,phi1,phi2,&
+    !$OMP theta1,theta2,vmag1,vmag2,vperp1,vperp2,vpar1,vpar2,iSpecies1,&
+    !$OMP iSpecies2,iCollider,P1,P2)
+    
     ! Now for each pairing calculate the change in velocity for each particle 
     !using the method of Takizuka and Abe [1977] as modified by 
     !Miller and Combi [1994]  for particles not having equal weights.
     do iParticle=1,nParticleInCell
+
        !write(*,*) 'iParticle',iParticle
        !first check if particle collision pair was already considered
        if (DoSkip_I(iParticle)) cycle
@@ -1096,6 +1187,27 @@ contains
        iSpecies1=CellParticles_I(iParticle)%Particle%iSpecies
        iSpecies2=CellParticles_I(iCollider)%Particle%iSpecies
        
+       !save the minimume density between species
+        !DensityMin = min(Density_I(iSpecies1),Density_I(iSpecies2))
+       
+
+        !Based on the weights set the probability factors in the momentum 
+        !exchange equations
+        If(weight_II(1,1)>weight_II(2,2)) then
+           P1=1.0
+           if(RandNum6_I(iParticle)<=(weight_II(2,2)/weight_II(1,1))) then
+              P2=1.0
+           else
+              P2=0.0
+           endif
+        else
+           P2=1.0
+           if(RandNum6_I(iParticle)<=(weight_II(1,1)/weight_II(2,2))) then
+              P1=1.0
+           else
+              P1=0.0
+           endif
+        endif
        !save vpar and vperp for each particle
        vpar1=CellParticles_I(iParticle)%Particle%vpar
        vpar2=CellParticles_I(iCollider)%Particle%vpar
@@ -1112,11 +1224,9 @@ contains
        theta2=acos(vpar2/vmag2)
 
        !randomly choose phase (azimuthal angle) for each particle
-       RandNum=random_real(iSeed)
-       phi1=RandNum*cTwoPi
-       RandNum=random_real(iSeed)
-       phi2=RandNum*cTwoPi
-
+       phi1=RandNum_I(iParticle)*cTwoPi
+       phi2=RandNum2_I(iParticle)*cTwoPi
+       
        !get the vx,vy, and vz component for each particle z aligned w/ B
        Velx1=vmag1*sin(theta1)*cos(phi1)
        Vely1=vmag1*sin(theta1)*sin(phi1)
@@ -1144,8 +1254,7 @@ contains
        RelVelPerp=sqrt(RelVelx**2+RelVely**2)
        
        !choose the post collision phase in the frame of relative velocity
-       RandNum=random_real(iSeed)
-       Phi=RandNum*cTwoPi
+       Phi=RandNum3_I(iParticle)*cTwoPi
        
        !choose the scattering angle in the post collision (Theta). 
        !This is done by 
@@ -1158,20 +1267,35 @@ contains
        
        ! set variance (note we only assume singly charged particles
        !also note we use SI for this one and only formula instead of 
-       !cgs)
-       variance=cElectronCharge**4*cCm3ToM3*DensityMin*CoulLog_II(iSpecies1,iSpecies2)&
-            /(8.*cPi*cEps*cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)**2&
+       !cgs). Note MC94 uses total density instead of min density as used 
+       !by TA77 due to correction for different particle weights and pairing 
+       !statistics.
+       variance=(cElectronCharge**4*cCm3ToM3*DensityTotal&
+            *CoulLog_II(iSpecies1,iSpecies2))&
+            /(8.*cPi*cEps**2*(cGtoKg*ReducedMass_II(iSpecies1,iSpecies2))**2&
             *(RelVelMag*cCmToM)**3)*DtMove
-       
+
+       !modify the variance according to MC94
+       if (iSpecies1==iSpecies2) then
+          variance=variance/weight_II(iSpecies1,iSpecies2)
+       else
+          variance=variance&
+               /(weight_II(iSpecies1,iSpecies2)*weight_II(iSpecies2,iSpecies1))
+       endif
 
        !sample theta from the random distribution
-       RandNum1=random_real(iSeed)
-       RandNum2=random_real(iSeed)
-       Theta=2.0*atan(sqrt(-2.0*variance*log(RandNum1))*cos(cTwoPi*RandNum2))
+       Theta=2.0*atan(sqrt(-2.0*variance*log(RandNum4_I(iParticle)))&
+            *cos(cTwoPi*RandNum5_I(iParticle)))
        
        if(DoTest) then
           write(*,*) 'CoulLog_II(iSpecies1,iSpecies2)',CoulLog_II(iSpecies1,iSpecies2)
-          write(*,*)'theta',theta*180./3.14,variance
+          write(*,*) 'cElectronCharge',cElectronCharge
+          write(*,*) 'cCm3ToM3*DensityTotal',cCm3ToM3*DensityTotal
+          write(*,*) 'cEps',cEps
+          write(*,*) 'cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)',cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)
+          write(*,*) 'DtMove',DtMove
+          write(*,*) 'RelVelMag*cCmToM',RelVelMag*cCmToM
+          write(*,*)'theta,variance',theta*180./3.14,variance
           stop
        endif
        
@@ -1186,7 +1310,7 @@ contains
                -(RelVely/RelVelperp)*RelVelmag*sin(Theta)*sin(Phi)&
                -RelVelx*(1.0-cos(Theta))
           DeltaRelVely=(RelVely/RelVelperp)*RelVelz*sin(Theta)*cos(Phi)&
-               -(RelVelx/RelVelperp)*RelVelmag*sin(Theta)*sin(Phi)&
+               +(RelVelx/RelVelperp)*RelVelmag*sin(Theta)*sin(Phi)&
                -RelVely*(1.0-cos(Theta))
           DeltaRelVelz=-RelVelperp*sin(Theta)*cos(Phi)&
                -RelVelz*(1.0-cos(Theta))
@@ -1194,18 +1318,24 @@ contains
        
        !we can now update the post collision velocity of each particle
        Velx1=Velx1&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)*DeltaRelVelx
+            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)&
+            *P1*DeltaRelVelx
        Vely1=Vely1&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)*DeltaRelVely
+            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)&
+            *P1**DeltaRelVely
        Velz1=Velz1&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)*DeltaRelVelz
+            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)&
+            *P1*DeltaRelVelz
 
        Velx2=Velx2&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)*DeltaRelVelx
+            -ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)&
+            *P2*DeltaRelVelx
        Vely2=Vely2&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)*DeltaRelVely
+            -ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)&
+            *P2*DeltaRelVely
        Velz2=Velz2&
-            +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)*DeltaRelVelz
+            -ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies2)&
+            *P2*DeltaRelVelz
 
        !These updated velocities can now be converted back to vpar and vperp 
        !and stored back in their respective partiles
@@ -1216,18 +1346,63 @@ contains
        CellParticles_I(iCollider)%Particle%vperp=sqrt(Velx2**2+Vely2**2)
        
     enddo
-
+    
+    !$OMP END PARALLEL DO
+    
     !deallocate
-    deallocate(DoSkip_I,Index_I,IndexPermuted_I,CellParticles_I)
-       
+    deallocate(DoSkip_I,Index_I,IndexPermuted_I,CellParticles_I,Density_I)
+    deallocate(RandNum_I,RandNum2_I, &
+         RandNum3_I,RandNum4_I, &
+         RandNum5_I,RandNum6_I)
 
   end subroutine apply_coulomb_collision
 
   !============================================================================
-  ! atomic routine for collision of 2 particles
-  subroutine pair_collision
+  ! Bury particles on a line. Useful when considering multiple lines on a proc
+  subroutine bury_line(iLine)
+    integer, intent(in) :: iLine
+    logical,save :: IsFirstCall=.true.
+    !----------------------------------------------------------------------------
+
+    !on first call allocate array to bury particles
+    if (IsFirstCall) then
+       allocate(BuriedParticles_I(nLine))
+       IsFirstCall=.false.
+    endif
     
-  end subroutine pair_collision
+    !deallocate currently buried line in the array
+    if (allocated(BuriedParticles_I(iLine)%SavedParticles_I)) &
+         deallocate(BuriedParticles_I(iLine)%SavedParticles_I)
+    
+    !reallocate with the current number of particles
+    allocate(BuriedParticles_I(iLine)%SavedParticles_I(nParticle))
+
+    !now save particles and number on line for later use
+    BuriedParticles_I(iLine)%SavedParticles_I=Particles_I
+    BuriedParticles_I(iLine)%nParticleOnLine=nParticle
+    
+  end subroutine bury_line
+
+  !============================================================================
+  ! Disinter particles on a line.Useful when considering multiple lines on a proc
+  subroutine disinter_line(iLine)
+    integer, intent(in) :: iLine
+    !----------------------------------------------------------------------------
+
+    !set total number of particles to buried value
+    nParticle = BuriedParticles_I(iLine)%nParticleOnLine
+    
+    !deallocate current particle array and reallocate with number of particle on 
+    !the line
+    if (allocated(Particles_I)) &
+         deallocate(Particles_I)
+
+    allocate(Particles_I(nParticle))
+
+    !now load particles and number on line for later use
+    Particles_I=BuriedParticles_I(iLine)%SavedParticles_I
+    
+  end subroutine disinter_line
   !============================================================================
   ! unit test subroutine for sampling
   subroutine test_sample
@@ -1270,7 +1445,8 @@ contains
     character(len=100):: TypeGrid
     !--------------------------------------------------------------------------
     
-    nTime=1000
+!    nTime=1000
+    nTime=10000
     DtSavePlot=10
     nAltIn=10
     AltMin=1000.0e5
@@ -1333,53 +1509,119 @@ contains
   end subroutine test_pusher
   !============================================================================
   ! unit test for the application of coulomb collisions
+  ! use the relaxation problem outlined in Miller and Combi as a test case
+  ! this involves electrons and ions with reduced mass ratio so the 
+  ! initialization needs to be somewhat overwritten.
   subroutine test_coulomb_collision
-    integer :: nAltIn, iCell, iSpecies,nTime,iTime,iAltBC
-    real :: AltMin, AltMax, Density, uBulk, Temperature,DtSavePlot
+    use ModNumConst, ONLY: cPi,cTwoPi
+    use ModConst, ONLY: cEps,cElectronCharge,cBoltzmann
+    integer :: nAltIn, iCell,nTime,iTime,iAltBC
+    integer :: iSpeciesIon,iSpeciesElec
+    integer :: iSpecies,jSpecies
+    real :: TempIon0,TempElec0,TempIon,TempElec
+    real :: AltMin, AltMax, Density, uBulk, DtSavePlot
     character(len=100):: TypeGrid
     real :: densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp
+    real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2,ckToEv=.00008617328
+    real,parameter ::cElectronChargeCGS=1.602176487e-20
+    real :: nu0, nueq,dt,CoulLog
     !--------------------------------------------------------------------------
-    
-    nTime=1000
+!    nTime=10
+!    nTime=1000
+    nTime=10000
     DtSavePlot=10
     nAltIn=10
     AltMin=1000.0e5
     AltMax=1200.0e5
     TypeGrid='Uniform'
     iAltBC = 0
-    iSpecies=1
-    Density=1e5
+    iSpeciesIon=1
+    iSpeciesElec=2
+    Density=5e5
     uBulk=0.0
-    Temperature=10000.0
+!    TempIon0 =200.0/ckToEv!10000.0
+    TempIon0 =10000.0
+    TempElec0=0.5*TempIon0
+    
     write(*,*) 'init_particle'
+    Time=0.0
     
     call timing_start('init_particle')
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     call timing_stop('init_particle')
 
+    !overwrite masses from init since we are using H+ and e- 
+    Mass_I(iSpeciesIon)=1.66054e-24
+    Mass_I(iSpeciesElec)=0.25*Mass_I(iSpeciesIon)
+
+    !recalculate the reduced mass with these new masses
+    do iSpecies=1,nSpecies
+       do jSpecies=1,nSpecies
+          ReducedMass_II(iSpecies,jSpecies)=Mass_I(iSpecies)*Mass_I(jSpecies)&
+               /(Mass_I(iSpecies)+Mass_I(jSpecies))
+       enddo
+    enddo
+
+    CoulLog=23.0&
+         -log((Mass_I(iSpeciesIon)+Mass_I(iSpeciesElec))&
+         /(Mass_I(iSpeciesIon)*TempIon0&
+         +Mass_I(iSpeciesElec)*TempElec0)&
+         *sqrt(cCm3ToM3*Density/TempIon0&
+         +cCm3ToM3*Density/TempElec))
+
+    write(*,*) CoulLog,cElectronCharge,cCm3ToM3,Density,&
+            cPi,cEps,cGtoKg,Mass_I(iSpeciesElec),TempElec0
+
+    ! adjust the particle weightings to test different weightings per 
+    !species
+    !nNumPerParticle_I(:)=1.0e6
+!    nNumPerParticle_I(1)=1.0e6
+    nNumPerParticle_I(2)=3.0*nNumPerParticle_I(1)
+
+    !set the relaxation frequencies
+    nu0= cElectronCharge**4*cCm3ToM3*Density*CoulLog&
+            /(8.*sqrt(2.0)*cPi*cEps**2*(cGtoKg*Mass_I(iSpeciesElec))**0.5&
+            *(cBoltzmann*TempElec0)**1.5)
+
+    nueq=(8.0/(3.0*sqrt(cPi)))*(Mass_I(iSpeciesElec)/Mass_I(iSpeciesIon))&
+         *(1.0+(Mass_I(iSpeciesElec)/Mass_I(iSpeciesIon))&
+         *(TempIon0/TempElec0))**(-1.5)*nu0
+
+    DtMove=.001/nu0
+!    DtMove=.01
+
+    write(*,*) 'nu0,nueq,DtMove',nu0,nueq,DtMove
+    
     write(*,*) 'initialize the ghost cell'
     call timing_start('sample_maxwellian_cell_boxmuller')
-    call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temperature)
+    call sample_maxwellian_cell_boxmuller(iAltBC,iSpeciesIon,Density,uBulk,TempIon0)
+    call sample_maxwellian_cell_boxmuller(iAltBC,iSpeciesElec,Density,uBulk,TempElec0)
     call timing_stop('sample_maxwellian_cell_boxmuller')
     
-    Particles_I%vperp=Particles_I%vperp*2.0
-
+    write(*,*)'nParticle=',nParticle
+    !Particles_I%vperp=Particles_I%vperp*2.0
+    
     !Sort the particles
     call timing_start('sort_particles')
     call sort_particles
     call timing_stop('sort_particles')
 
     !plot initial distirbution before collisions
-    call plot_distribution_cell(iSpecies,iAltBC)
+    !call plot_distribution_cell(iSpeciesIon,iAltBC)
 
-    call calc_moments_cell(iSpecies,iAltBC,&
-         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp)
-    write(*,*) 'at start',densityTmp,uBulkParTmp,TempTmp
+    call calc_moments_cell(iSpeciesIon,iAltBC,&
+         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon)
+    call calc_moments_cell(iSpeciesElec,iAltBC,&
+         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec)
+    
+    write(*,*) 'start: nu0*Time, (TIon-Te)/(TIon0-Te0), theory'
+    write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
+
     !push the guiding center 100 times and reinitialize ghost cell each time
     do iTime=1,nTime
-       call timing_start('push_guiding_center')
+       call timing_start('apply_coulomb_collision')
        call apply_coulomb_collision(iAltBC)
-       call timing_stop('push_guiding_center')
+       call timing_stop('apply_coulomb_collision')
        
        !advance the time
        Time=Time+DtMove
@@ -1389,15 +1631,22 @@ contains
        call sort_particles
        call timing_stop('sort_particles')
 
+       call calc_moments_cell(iSpeciesIon,iAltBC,&
+            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon)
+       call calc_moments_cell(iSpeciesElec,iAltBC,&
+            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec)
+
+    write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
+       
        !plot profile of moments
-       if (floor((Time+1.0e-5)/DtSavePlot) &
-            /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
-          call plot_distribution_cell(iSpecies,iAltBC)
-          
-          call calc_moments_cell(iSpecies,iAltBC,&
-               densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp)
-          write(*,*) densityTmp,uBulkParTmp,TempTmp
-       endif
+!       if (floor((Time+1.0e-5)/DtSavePlot) &
+!            /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
+!          !call plot_distribution_cell(iSpeciesIon,iAltBC)
+!          
+!          call calc_moments_cell(iSpeciesIon,iAltBC,&
+!               densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp)
+!          write(*,*) densityTmp,uBulkParTmp,TempTmp
+!       endif
 
     enddo
 !    do iCell=1,nAlt
@@ -1405,12 +1654,6 @@ contains
 !    enddo
     
 
-
-    !now plot distribution function at each alt
-    do iCell=0,nAlt
-       write(*,*)nSortedParticle_II(iSpecies,iCell)
-       
-    enddo
 
   end subroutine test_coulomb_collision
 
