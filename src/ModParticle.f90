@@ -42,6 +42,14 @@ Module ModParticle
   !how many lines do we have
   integer :: nLine=1
   
+  !Frequency of outputs
+  real :: DtSaveProfile=300
+  real :: DtSaveDF=300
+  
+  !How many and which altitudes should the DF be saved
+  integer :: nSaveDfAlts=3
+  real,allocatable :: SaveDfAlts_I(:)
+
   !hold the buried lines
   type(particleHolder),allocatable :: BuriedParticles_I(:) 
   
@@ -53,6 +61,9 @@ Module ModParticle
   real,allocatable  :: AltBot_F(:)  ! position of cell face [cm]
   real,allocatable  :: AltTop_F(:)  ! position of cell face [cm]
   real,allocatable  :: Volume_G(:)  ! Cell volume
+  
+  !array to hold lower ghostcell
+  real,allocatable :: DensityBC_I(:),VelocityBC_I(:),TemperatureBC_I(:)
 
   ! array relating cell index to particle index
   !integer :: iCell_II(:,:)
@@ -61,7 +72,7 @@ Module ModParticle
   real,allocatable  :: Efield_G(:) 
   
   ! Time step for moving particles [s]
-  real :: DtMove=1.0
+  real :: DtMove=1.0,DtMoveMax=1.0
 
   !particle variables
   real,allocatable :: Mass_I(:)
@@ -86,6 +97,11 @@ Module ModParticle
 
   real :: Time=0.0
 
+  ! public routines
+  public :: init_particle
+  public :: put_to_particles
+  
+  ! public unit tests
   public :: test_sample
   public :: test_pusher
   public :: test_coulomb_collision
@@ -136,7 +152,10 @@ contains
     case DEFAULT
        call con_stop('particles not for planet')
     end select
-       
+    !allocate arrays to hold ghost cell moments
+    allocate(DensityBC_I(nSpecies),VelocityBC_I(nSpecies),&
+         TemperatureBC_I(nSpecies))
+ 
     !save the reduced mass which is useful for collisions
     allocate(ReducedMass_II(nSpecies,nSpecies))
     do iSpecies=1,nSpecies
@@ -1403,6 +1422,125 @@ contains
     Particles_I=BuriedParticles_I(iLine)%SavedParticles_I
     
   end subroutine disinter_line
+
+  !============================================================================
+  ! 
+  subroutine put_to_particles(nAltIn,nSpeciesIn,AltIn_C,EfieldIn_C,&
+       DoInitAlt,DensityIn_IC,VelocityIn_IC,TemperatureIn_IC)
+    use ModInterpolate, only: linear
+    integer, intent(in) :: nAltIn,nSpeciesIn
+    real,    intent(in) :: EfieldIn_C(nAltIn),AltIn_C(nAltIn)
+    logical, intent(in) :: DoInitAlt
+    !for each species, the state variables as a function of alt
+    real,    intent(in) :: DensityIn_IC(nSpeciesIn,nAltIn)
+    real,    intent(in) :: VelocityIn_IC(nSpeciesIn,nAltIn)
+    real,    intent(in) :: TemperatureIn_IC(nSpeciesIn,nAltIn)
+
+    !local variables
+    real :: Density,Velocity,Temperature
+    integer :: iAlt, iSpecies
+    !--------------------------------------------------------------------------
+    
+    !interpolate the incomming efield 
+    do iAlt=-1,nAlt+1
+       Efield_G(iAlt)= linear(EfieldIn_C(:),1,nAltIn,Alt_G(iAlt),AltIn_C)
+    enddo
+
+    !when DoInitAlt then sample particles at each altitude according to 
+    !the initial PWOM condition
+    if (DoInitAlt) then
+       do iSpecies=1,nSpecies
+          do iAlt=1,nAlt
+             !interpolate statevariables to alt position and sample
+             Density  = linear(DensityIn_IC(iSpecies,:),1,     &
+                  nAltIn,Alt_G(iAlt),AltIn_C)
+             Velocity = linear(VelocityIn_IC(iSpecies,:),1,    &
+                  nAltIn,Alt_G(iAlt),AltIn_C)
+             Temperature = linear(TemperatureIn_IC(iSpecies,:),1, &
+                  nAltIn,Alt_G(iAlt),AltIn_C)
+             
+             !now Sample
+             call sample_maxwellian_cell_boxmuller(iAlt,iSpecies,&
+                  Density,Velocity,Temperature)
+          enddo
+       enddo
+    endif
+
+    ! Get the density, velocity, and Temperature
+    do iSpecies=1,nSpecies
+       DensityBC_I(iSpecies)     = linear(DensityIn_IC(iSpecies,:),1,     &
+            nAltIn,Alt_G(0),AltIn_C)
+       VelocityBC_I(iSpecies)    = linear(VelocityIn_IC(iSpecies,:),1,    &
+            nAltIn,Alt_G(0),AltIn_C)
+       TemperatureBC_I(iSpecies) = linear(TemperatureIn_IC(iSpecies,:),1, &
+            nAltIn,Alt_G(0),AltIn_C)
+    enddo
+
+  end subroutine put_to_particles
+  !============================================================================
+  ! advance the particle solution for some DtAdvance
+  subroutine run_particles(DtAdvance)
+    real, intent(in) :: DtAdvance
+
+    integer :: iAlt, iSpecies,nTime,iTime
+    integer, parameter :: iAltBC=0
+    real :: DtSavePlot, TimeAdvance
+    character(len=100):: TypeGrid
+    !---------------------------------------------------------------------------
+    
+    TimeAdvance=0.0
+    
+    
+    TIMELOOP:do 
+       !check stopping condition
+       if (TimeAdvance >=DtAdvance) exit TIMELOOP
+       
+       !set timestep
+       DtMove=min(DtAdvance-TimeAdvance,DtMoveMax)
+
+       ! stop if within tolerance of stopping time
+       if(DtMove <1.0e-6) exit TIMELOOP
+
+       !resample ghost cell
+       do iSpecies=1,nSpecies
+          call timing_start('sample_maxwellian_cell_boxmuller')
+          call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,&
+               DensityBC_I(iSpecies),VelocityBC_I(iSpecies),&
+               TemperatureBC_I(iSpecies))    
+          call timing_stop('sample_maxwellian_cell_boxmuller')
+       end do
+
+
+       !push the particles
+       call timing_start('push_guiding_center')
+       call push_guiding_center
+       call timing_stop('push_guiding_center')
+
+       !Sort the particles
+       call timing_start('sort_particles')
+       call sort_particles
+       call timing_stop('sort_particles')
+       
+       !apply the collisions
+       do iAlt=1,nAlt
+          call timing_start('apply_coulomb_collision')
+          call apply_coulomb_collision(iAlt)
+          call timing_stop('apply_coulomb_collision')
+       enddo
+       !advance the time
+       Time=Time+DtMove
+       TimeAdvance=TimeAdvance+DtMove
+       
+       !plot profile of moments
+       if (floor((Time+1.0e-5)/DtSaveProfile) &
+            /=floor((Time+1.0e-5-DtMove)/DtSaveProfile) )then 
+          call plot_profile
+       endif
+       
+    enddo TIMELOOP
+    
+    
+  end subroutine run_particles
   !============================================================================
   ! unit test subroutine for sampling
   subroutine test_sample
