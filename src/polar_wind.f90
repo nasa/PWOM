@@ -17,14 +17,14 @@ subroutine polar_wind
   
   use ModPWOM, only: DtVertical,nLine,IsStandAlone,DoSavePlot,iLine,&
        IsFullyImplicit,UseExplicitHeat,DoTimeAccurate,MaxStep,DnOutput,&
-       nAlt, IsVariableDt
+       nAlt, IsVariableDt, UseParticles,DtCoupleParticles
   use ModIoUnit, ONLY: UnitTmp_
   use ModCommonVariables
   use ModFieldLine
   use ModPwImplicit, only: PW_implicit_update
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
   use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
-
+  use ModParticle, ONLY: put_to_particles, run_particles
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -32,6 +32,9 @@ subroutine polar_wind
   logical,save  :: IsFirstCall=.true.
   real    :: Jr, DtVariable
   real    :: NewState_GV(-1:maxGrid,nVar)
+  
+  !for particle coupling
+  real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
   
   !-----------------------------------------------------------------------
   nDim = nAlt
@@ -97,6 +100,28 @@ subroutine polar_wind
         CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
         CALL PW_calc_efield(nDim,State_GV(-1:nDim+2,:))         
 
+     endif
+
+     if (UseParticles .and. (floor((Time+1.0e-5)/DtCoupleParticles) &
+          /=floor((Time+1.0e-5-DtCoupleParticles)/DtCoupleParticles)) )then 
+        allocate(Density_IC(2,nDim),Velocity_IC(2,nDim),Temperature_IC(2,nDim))
+        Density_IC(1,:)=State_GV(1:nDim,iRho_I(1))/Mass_I(1)
+        Density_IC(2,:)=State_GV(1:nDim,iRho_I(2))/Mass_I(2)
+        Velocity_IC(1,:)=State_GV(1:nDim,iU_I(1))
+        Velocity_IC(2,:)=State_GV(1:nDim,iU_I(2))
+        Temperature_IC(1,:)=State_GV(1:nDim,iT_I(1))
+        Temperature_IC(2,:)=State_GV(1:nDim,iT_I(2))        
+
+        write(*,*) 'calling put_to_particles'
+        call put_to_particles(nDim,2,1.0e5*ALTD(1:nDim),&
+             .false.,Density_IC,Velocity_IC,Temperature_IC,EfieldIn_C=EFIELD(1:nDim))
+        write(*,*) 'done put_to_particles'
+        deallocate(Density_IC,Velocity_IC,Temperature_IC)
+        
+        !advance the particle solution to the next coupling time
+        write(*,*) 'calling run_particles'
+        call run_particles(DtCoupleParticles)
+        write(*,*) 'done run_particles'
      endif
 
      NSTEP=NSTEP+1

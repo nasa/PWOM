@@ -40,15 +40,18 @@ Module ModParticle
   integer :: MaxParticles
   
   !how many lines do we have
-  integer :: nLine=1
+  integer,public :: nLine=1
   
   !Frequency of outputs
-  real :: DtSaveProfile=300
-  real :: DtSaveDF=300
+  real :: DtSaveProfile=10.0 !300
+  real :: DtSaveDF=10.0!300.0
+
+  
   
   !How many and which altitudes should the DF be saved
-  integer :: nSaveDfAlts=3
-  real,allocatable :: SaveDfAlts_I(:)
+  integer,parameter :: nSaveDfAlts=3
+  integer::iAltsDF_I(nSaveDfAlts)=(/26,76,151/)
+  !real,allocatable :: SaveDfAlts_I(:)
 
   !hold the buried lines
   type(particleHolder),allocatable :: BuriedParticles_I(:) 
@@ -100,7 +103,9 @@ Module ModParticle
   ! public routines
   public :: init_particle
   public :: put_to_particles
-  
+  public :: bury_line
+  public :: disinter_line
+  public :: run_particles
   ! public unit tests
   public :: test_sample
   public :: test_pusher
@@ -133,10 +138,10 @@ contains
        
        !set the relative weights of particles
        allocate(nNumPerParticle_I(nSpecies))
-       nNumPerParticle_I(:)=1.0e6
+       nNumPerParticle_I(:)=1.0e5
        
        !set plotting variables
-       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] nH[cm-3] uH[km/2] pH TH[k] g r'
+       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] nH[cm-3] uH[km/s] pH TH[k] g r'
        !index arrays for location in plotting routine
        allocate(iDen_I(nSpecies),iVel_I(nSpecies),&
             iPres_I(nSpecies), iTemp_I(nSpecies))
@@ -1083,7 +1088,7 @@ contains
     ! a permuted index array, These define the collision pairs.
     allocate(Index_I(nParticleInCell))
     allocate(IndexPermuted_I(nParticleInCell))
-    do iParticle=1,nParticle
+    do iParticle=1,nParticleInCell
        Index_I(iParticle)=iParticle
     enddo
     
@@ -1341,7 +1346,7 @@ contains
             *P1*DeltaRelVelx
        Vely1=Vely1&
             +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)&
-            *P1**DeltaRelVely
+            *P1*DeltaRelVely
        Velz1=Velz1&
             +ReducedMass_II(iSpecies1,iSpecies2)/Mass_I(iSpecies1)&
             *P1*DeltaRelVelz
@@ -1400,6 +1405,8 @@ contains
     BuriedParticles_I(iLine)%SavedParticles_I=Particles_I
     BuriedParticles_I(iLine)%nParticleOnLine=nParticle
     
+    !deallocate the Particles_I array now that those particles are buried 
+    deallocate(Particles_I)
   end subroutine bury_line
 
   !============================================================================
@@ -1425,16 +1432,17 @@ contains
 
   !============================================================================
   ! 
-  subroutine put_to_particles(nAltIn,nSpeciesIn,AltIn_C,EfieldIn_C,&
-       DoInitAlt,DensityIn_IC,VelocityIn_IC,TemperatureIn_IC)
+  subroutine put_to_particles(nAltIn,nSpeciesIn,AltIn_C,&
+       DoInitAlt,DensityIn_IC,VelocityIn_IC,TemperatureIn_IC,EfieldIn_C)
     use ModInterpolate, only: linear
     integer, intent(in) :: nAltIn,nSpeciesIn
-    real,    intent(in) :: EfieldIn_C(nAltIn),AltIn_C(nAltIn)
+    real,    intent(in) :: AltIn_C(nAltIn)
     logical, intent(in) :: DoInitAlt
     !for each species, the state variables as a function of alt
     real,    intent(in) :: DensityIn_IC(nSpeciesIn,nAltIn)
     real,    intent(in) :: VelocityIn_IC(nSpeciesIn,nAltIn)
     real,    intent(in) :: TemperatureIn_IC(nSpeciesIn,nAltIn)
+    real, optional,   intent(in) :: EfieldIn_C(nAltIn)
 
     !local variables
     real :: Density,Velocity,Temperature
@@ -1442,9 +1450,11 @@ contains
     !--------------------------------------------------------------------------
     
     !interpolate the incomming efield 
-    do iAlt=-1,nAlt+1
-       Efield_G(iAlt)= linear(EfieldIn_C(:),1,nAltIn,Alt_G(iAlt),AltIn_C)
-    enddo
+    If(Present(EfieldIn_C)) then
+       do iAlt=-1,nAlt+1
+          Efield_G(iAlt)= linear(EfieldIn_C(:),1,nAltIn,Alt_G(iAlt),AltIn_C)
+       enddo
+    endif
 
     !when DoInitAlt then sample particles at each altitude according to 
     !the initial PWOM condition
@@ -1460,6 +1470,7 @@ contains
                   nAltIn,Alt_G(iAlt),AltIn_C)
              
              !now Sample
+             write(*,*) 'sample iSpecies,Alt', iSpecies,Alt_G(iAlt),Density,Velocity,Temperature
              call sample_maxwellian_cell_boxmuller(iAlt,iSpecies,&
                   Density,Velocity,Temperature)
           enddo
@@ -1467,6 +1478,7 @@ contains
     endif
 
     ! Get the density, velocity, and Temperature
+    !write(*,*) 'TEST',Alt_G(0)
     do iSpecies=1,nSpecies
        DensityBC_I(iSpecies)     = linear(DensityIn_IC(iSpecies,:),1,     &
             nAltIn,Alt_G(0),AltIn_C)
@@ -1475,7 +1487,9 @@ contains
        TemperatureBC_I(iSpecies) = linear(TemperatureIn_IC(iSpecies,:),1, &
             nAltIn,Alt_G(0),AltIn_C)
     enddo
-
+!    call sort_particles
+!    call plot_profile
+!    write(*,*) 'TEST STOP'
   end subroutine put_to_particles
   !============================================================================
   ! advance the particle solution for some DtAdvance
@@ -1484,7 +1498,7 @@ contains
 
     integer :: iAlt, iSpecies,nTime,iTime
     integer, parameter :: iAltBC=0
-    real :: DtSavePlot, TimeAdvance
+    real :: TimeAdvance
     character(len=100):: TypeGrid
     !---------------------------------------------------------------------------
     
@@ -1523,6 +1537,8 @@ contains
        
        !apply the collisions
        do iAlt=1,nAlt
+          !check if we are above altitude where collisions can be neglected
+          if (Alt_G(iAlt)>4000.0e5) exit
           call timing_start('apply_coulomb_collision')
           call apply_coulomb_collision(iAlt)
           call timing_stop('apply_coulomb_collision')
@@ -1535,6 +1551,16 @@ contains
        if (floor((Time+1.0e-5)/DtSaveProfile) &
             /=floor((Time+1.0e-5-DtMove)/DtSaveProfile) )then 
           call plot_profile
+       endif
+
+       !plot DF
+       if (floor((Time+1.0e-5)/DtSaveDF) &
+            /=floor((Time+1.0e-5-DtMove)/DtSaveDF) )then
+          do iSpecies=1,nSpecies
+             call plot_distribution_cell(iSpecies,iAltsDF_I(1))
+             call plot_distribution_cell(iSpecies,iAltsDF_I(2))
+             call plot_distribution_cell(iSpecies,iAltsDF_I(3))
+          enddo
        endif
        
     enddo TIMELOOP

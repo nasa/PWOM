@@ -240,7 +240,15 @@ subroutine PW_set_parameters(NameAction)
         call read_var('PolarRainEMax', PolarRainEMax)        
         call read_var('PolarRainEMean',PolarRainEMean)        
         call read_var('PolarRainEFlux',PolarRainEFlux)        
-        
+
+
+     case('#PARTICLES')
+        call read_var('UseParticles',  UseParticles)
+        call read_var('DtCoupleParticles',  DtCoupleParticles)
+        call read_var('DoInitAltParticles', DoInitAltParticles)
+        call read_var('nAltParticles', nAltParticles)
+        call read_var('AltMinParticles', AltMinParticles)
+        call read_var('AltMaxParticles', AltMaxParticles)
         
      endselect
   enddo

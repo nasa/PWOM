@@ -7,7 +7,7 @@ subroutine PW_initialize
   use ModIoUnit, ONLY: io_unit_new,UnitTmp_
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
-  use ModCommonVariables, ONLY:IYD,ALTD
+  use ModCommonVariables, ONLY:IYD,ALTD,Mass_I
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora
@@ -19,6 +19,7 @@ subroutine PW_initialize
        PolarRainEMean, PolarRainEFlux, UsePolarRain, IsVerboseSE
   use ModOvation, ONLY: UseOvation, StartTimeOvation=>StartTime, &
        OvationEmin,OvationEmax
+  use ModParticle, ONLY: init_particle, put_to_particles, bury_line,nLineParticle=>nLine
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -28,6 +29,9 @@ subroutine PW_initialize
   integer:: iYear, iDOY
 
   integer, external :: julianday
+  
+  !for particles
+  real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
   
   !---------------------------------------------------------------------------
   !***************************************************************************
@@ -226,6 +230,30 @@ subroutine PW_initialize
         call init_pwom_se_coupling(IsVerboseSE,nAlt,nLine,iLineGlobal,ALTD)
      end if
   end if
+
+  if (UseParticles) then
+     
+     call init_particle(nAltParticles,AltMinParticles,AltMaxParticles,TypeParticleGrid)
+     nLineParticle=nLine
+     
+     !for each line fill the state variables, intially sample the particles 
+     !and then bury the line. Each lines particles will be disintered before 
+     !advancing the calculation
+     allocate(Density_IC(2,nAlt),Velocity_IC(2,nAlt),Temperature_IC(2,nAlt))
+     do iLine=1,nLine
+        Density_IC(1,:)=State_CVI(1:nAlt,iRho_I(1),iLine)/(16.*1.66e-24)!Mass_I(1)
+        Density_IC(2,:)=State_CVI(1:nAlt,iRho_I(2),iLine)/(1.66e-24)!Mass_I(2)
+        Velocity_IC(1,:)=State_CVI(1:nAlt,iU_I(1),iLine)
+        Velocity_IC(2,:)=State_CVI(1:nAlt,iU_I(2),iLine)
+        Temperature_IC(1,:)=State_CVI(1:nAlt,iT_I(1),iLine)
+        Temperature_IC(2,:)=State_CVI(1:nAlt,iT_I(2),iLine)        
+        call put_to_particles(nAlt,2,ALTD(1:nAlt), &
+             DoInitAltParticles,Density_IC,Velocity_IC,Temperature_IC)
+        !stop
+        call bury_line(iLine)
+     enddo
+     deallocate(Density_IC,Velocity_IC,Temperature_IC)
+  endif
 end subroutine PW_initialize
 
 !=============================================================================

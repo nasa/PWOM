@@ -22,6 +22,11 @@ program pw
   call MPI_COMM_RANK(iComm,iProc,errcode)
   call MPI_COMM_SIZE(iComm,nProc,errcode)
 
+
+  call timing_active(.true.)
+  call timing_step(0)
+  call timing_start('PWOM')
+
   !****************************************************************************
   ! Read the input file
   !****************************************************************************
@@ -138,6 +143,8 @@ program pw
 
   call MPI_FINALIZE(errcode)
 
+
+  call timing_stop('PWOM')
 end program pw
 
 !============================================================================
