@@ -137,7 +137,8 @@ contains
     real :: OvationDiffPhi_I(NBINS),OvationWavePhi_I(NBINS),&
          OvationMonoPhi_I(NBINS)
 
-    real    PROD(JMAX), EPROD(JMAX), T1(JMAX), T2(JMAX), TSA(NMAJ), &
+
+    real    PROD(JMAX), EPROD(JMAX), T1(JMAX), T2(JMAX), TSA(NMAJ),&
          PRODUP(JMAX,NBINS), PRODWN(JMAX,NBINS), &
          PHIUP(JMAX), PHIDWN(JMAX), TSIGNE(JMAX), TAUE(JMAX), &
          SECION(JMAX), SECP(NMAJ,JMAX), R1(JMAX), EXPT2(JMAX), &
@@ -169,6 +170,7 @@ contains
 
     LastPhiUp = 0.0
     LastPhiDwn = 0.0
+
 
     !kludge
 !    UsePrecipitation=.true.
@@ -382,16 +384,21 @@ contains
              EPROD(I) = EPROD(I) + PROD(I) * ENER(J) * DEL(J) / RMUSIN
 !             write(*,*) J,I,PESPEC(J,I),RMUSIN,DEL(J)
           End Do
-
           !
           ! Total energy loss cross section for each species:
           !
           do I = 1, NMAJ
              TSA(I) = 0.0
           enddo
+
           IF (J .GT. 1) THEN
              DO K = 1, J-1
                 DO I = 1, NMAJ
+                   !the following line is never true but NAG fails with 
+                   !optimization unless it is present. Repeated testing fails 
+                   !to show why arithmatic exception occurs, probably compiler 
+                   !bug.
+                   if(NMAJ<-11)write(*,*) 'NAG COMPILER FAIL'
                    TSA(I) = TSA(I) + SIGA(I,K,J) * (DEL(J-K)/DEL(J))
                 enddo
              enddo
@@ -400,7 +407,7 @@ contains
                 TSA(I) = TSA(I) + SIGA(I,1,J) + 1.E-18
              End Do
           ENDIF
-          
+
           !
           ! Thermal electron energy loss:
           !
@@ -409,6 +416,7 @@ contains
           DAG = ENER(J) - ENER(JJJ4)
           IF (DAG .LE. 0.0) DAG = DEL(1)
           !
+
           LOOP: DO I = 1, JMAX
              ET = 8.618E-5 * ZTE(I)
              EET = ENER(J) - ET
@@ -437,6 +445,7 @@ contains
           !
           ! Bypass next section if local calculation was specified:
           !
+
           IF (.not.IsLocal) then
              !
              !
@@ -600,9 +609,9 @@ contains
                    SECP(N,I) = SEC(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !SECP(N,I) = SIGIX(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !call get_secprod(J,N,ZMAJ(N,I),PHIUP(I) + PHIDWN(I),SECP(N,I)
-                   if (isnan(sec(n,k,j))) stop 'etrans: NaN in SEC'
-                   if (isnan(zmaj(n,i))) stop 'etrans: NaN in ZMAJ'
-                   if (isnan(phiup(i))) stop 'etrans: NaN in PHIUP'
+                   !if (isnan(sec(n,k,j))) stop 'etrans: NaN in SEC'
+                   !if (isnan(zmaj(n,i))) stop 'etrans: NaN in ZMAJ'
+                   !if (isnan(phiup(i))) stop 'etrans: NaN in PHIUP'
                    if (IsDebug .and. phidwn(i).gt.1e30) &
                         call con_stop('etrans.f: very large PHIDWN')
                    !                if (IsDebug .and. .not.isfinite(secp(n,i))) &
@@ -696,6 +705,7 @@ contains
        if (IsVerbose)write(*,*) 'DiffMax',DiffMax
        
     end do !end while
+
     !call plot_omni_iono(time,uFlux_IC,dFlux_IC)
     call plot_omni_iono(time,uFlx,dFlx)
     
@@ -750,7 +760,7 @@ contains
 !            DEN(1),B(2)
 !       error stop 'etrans:impit non-finite K(2)'
 !    end if
-    if (isnan(k(2))) stop 'etrans:impit NaN in K(2)'
+    !if (isnan(k(2))) stop 'etrans:impit NaN in K(2)'
     
     DO I = 3, I1
        DEM = B(I) - C(I) * L(I-1)
@@ -761,14 +771,14 @@ contains
        
 !       if (IsDebug .and. .not. isfinite(K(i))) then
 !          write(*,*) k
-       if (isnan(K(I))) stop 'etrans:impit NaN in K(i)'
+       !if (isnan(K(I))) stop 'etrans:impit NaN in K(i)'
 !       end if
-       if (isnan(L(i))) stop'etrans:impit NaN in L(i)'
+       !if (isnan(L(i))) stop'etrans:impit NaN in L(i)'
     End DO
     
     DEN(I1) = (K(I1) - L(I1)*FLUXJ) / (1. + L(I1)*FAC)
-    if (isnan(K(i1))) stop'etrans:impit NaN in K(i1)'
-    if (isnan(L(i1))) stop'etrans:impit NaN in L(i1)'
+    !if (isnan(K(i1))) stop'etrans:impit NaN in K(i1)'
+    !if (isnan(L(i1))) stop'etrans:impit NaN in L(i1)'
 !    if(IsDebug .and. .not.isfinite(den(i1))) &
 !         error stop 'impit nonfinite DEN(I1)'
     DEN(JMAX) = DEN(I1)
@@ -1234,6 +1244,10 @@ contains
 
     if (.not.allocated(NumDensIntegrand_I))allocate(NumDensIntegrand_I(nEnergy))
     if (.not.allocated(NumFluxIntegrand_I))allocate(NumFluxIntegrand_I(nEnergy))
+    NumDensIntegrand_I=0.0
+    NumFluxIntegrand_I=0.0
+    dKE_I=0.0
+
     ! fill PA_I
     dPA = 0.5*cPi/real(nPA)
     PA_I(1) = 0.0
