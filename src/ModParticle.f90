@@ -83,9 +83,9 @@ Module ModParticle
   real,allocatable::ReducedMass_II(:,:)
   
   !plot variables for profile (depends on planet)
-  character(len=100):: NameProfilePlotVar
+  character(len=150):: NameProfilePlotVar
   integer, allocatable :: iDen_I(:),iVel_I(:),&
-            iPres_I(:), iTemp_I(:)
+            iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:)
   integer :: nVarProfile
 
   integer :: nSpecies
@@ -141,19 +141,26 @@ contains
        nNumPerParticle_I(:)=1.0e5
        
        !set plotting variables
-       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] nH[cm-3] uH[km/s] pH TH[k] g r'
+       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
+            //'TOperp[k] nH[cm-3] uH[km/s] pH TH[k] THpar[k] THperp[k] g r'
        !index arrays for location in plotting routine
        allocate(iDen_I(nSpecies),iVel_I(nSpecies),&
-            iPres_I(nSpecies), iTemp_I(nSpecies))
+            iPres_I(nSpecies), iTemp_I(nSpecies),iTpar_I(nSpecies),&
+            iTperp_I(nSpecies))
        iDen_I(O_) =1
        iVel_I(O_) =2
        iPres_I(O_)=3
        iTemp_I(O_)=4
-       iDen_I(H_) =5
-       iVel_I(H_) =6
-       iPres_I(H_)=7
-       iTemp_I(H_)=8
-       nVarProfile=8
+       iTpar_I(O_)=5
+       iTperp_I(O_)=6
+       
+       iDen_I(H_) =7
+       iVel_I(H_) =8
+       iPres_I(H_)=9
+       iTemp_I(H_)=10
+       iTpar_I(H_)=11
+       iTperp_I(H_)=12
+       nVarProfile=12
     case DEFAULT
        call con_stop('particles not for planet')
     end select
@@ -536,6 +543,7 @@ contains
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
     real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
+    real :: Tpar,Tperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
@@ -562,16 +570,20 @@ contains
              PlotState_IV(iCell,iVel_I(iSpecies)) = 0.0
              PlotState_IV(iCell,iPres_I(iSpecies)) = 0.0
              PlotState_IV(iCell,iTemp_I(iSpecies)) = 0.0
+             PlotState_IV(iCell,iTpar_I(iSpecies)) = 0.0
+             PlotState_IV(iCell,iTperp_I(iSpecies)) = 0.0
           else
              ! get moments in cell so we can calculate thermal velocity
              call calc_moments_cell(iSpecies,iCell,&
-                  density,uBulkPar,uBulkPerp,Pressure,Temp)
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
 !             call calc_moments_cell_weighted(iSpecies,iCell,&
-!                  density,uBulkPar,uBulkPerp,Pressure,Temp)
+!                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
              PlotState_IV(iCell,iDen_I(iSpecies))  = density
              PlotState_IV(iCell,iVel_I(iSpecies)) = uBulkPar*cCmToKm
              PlotState_IV(iCell,iPres_I(iSpecies)) = Pressure
              PlotState_IV(iCell,iTemp_I(iSpecies)) = Temp
+             PlotState_IV(iCell,iTpar_I(iSpecies)) = Tpar
+             PlotState_IV(iCell,iTperp_I(iSpecies)) = Tperp
           end if
        enddo
     end do
@@ -605,6 +617,7 @@ contains
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
     real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
+    real :: Tpar,Tperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
     integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
@@ -626,7 +639,7 @@ contains
     
     ! get moments in cell so we can calculate thermal velocity
     call calc_moments_cell(iSpecies,iCell,&
-         density,uBulkPar,uBulkPerp,Pressure,Temp)
+         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
     
     write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
          ,density,uBulkPar,uBulkPerp,Pressure,Temp
@@ -794,11 +807,12 @@ contains
 
   !=============================================================================
   subroutine calc_moments_cell(iSpecies,iCell,&
-       density,uBulkPar,uBulkPerp,Pressure,Temp)
+       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
     integer,intent(in) :: iSpecies,iCell
     integer :: nParticleInCell,iParticle,nNumPerParticle
     real :: uParTmp,uPerpTmp
-    real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp
+    real :: Ppar,Pperp
+    real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp
     !--------------------------------------------------------------------------
     nNumPerParticle=nNumPerParticle_I(iSpecies)    
 
@@ -810,6 +824,8 @@ contains
        uBulkPar=0.0
        uBulkPerp=0.0
        Temp=0.0
+       Tpar=0.0
+       Tperp=0.0
        return
     endif
 
@@ -828,17 +844,28 @@ contains
     
     !from eq6.12 Gombosi Gas Kinetic Theory book
     Pressure=0.0
+    Ppar=0.0
+    Pperp=0.0
     do iParticle=1,nParticleInCell
        uParTmp =SortParticles_III(iSpecies,iCell,iParticle)%Particle%vpar
        uPerpTmp=SortParticles_III(iSpecies,iCell,iParticle)%Particle%vperp
        Pressure = Pressure+&
             (uParTmp-uBulkPar)**2&
             +2.0*(uPerpTmp-uBulkPerp)**2
+       Ppar = Ppar&
+            +(uParTmp-uBulkPar)**2
+       
+       Pperp = Pperp&
+            +(uPerpTmp-uBulkPerp)**2
     enddo
     Pressure=Pressure*Mass_I(iSpecies)*density/(3.0*nParticleInCell)
+    Ppar=Ppar*Mass_I(iSpecies)*density/(nParticleInCell)
+    Pperp=Pperp*Mass_I(iSpecies)*density/(nParticleInCell)
 
     !get temperature from ideal gas law P=nkT
     Temp = Pressure/(density*cBoltzmannCGS)
+    Tpar = Ppar/(density*cBoltzmannCGS)
+    Tperp = Pperp/(density*cBoltzmannCGS)
 
   end subroutine calc_moments_cell
   !============================================================================
@@ -868,19 +895,24 @@ contains
 
   !=============================================================================
   subroutine calc_moments_cell_weighted(iSpecies,iCell,&
-       density,uBulkPar,uBulkPerp,Pressure,Temp)
+       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
     integer,intent(in) :: iSpecies,iCell
     integer :: nParticleInCell,iParticle,iAlt,nNumPerParticle
     real :: uParTmp,uPerpTmp,weight,TotalWeight,Alt
-    real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp
+    real :: Ppar,Pperp
+    real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp
     !--------------------------------------------------------------------------
     nNumPerParticle=nNumPerParticle_I(iSpecies)
     TotalWeight=0.0
     density=0.0
     Pressure=0.0
+    Ppar=0.0
+    Pperp=0.0
     uBulkPar=0.0
     uBulkPerp=0.0
     Temp=0.0
+    Tpar=0.0
+    Tperp=0.0
     ALT_LOOP:do iAlt=iCell-1,iCell+1
        if (iAlt<0 .or. iAlt>nAlt+1) cycle ALT_LOOP
        nParticleInCell=nSortedParticle_II(iSpecies,iAlt)
@@ -927,13 +959,20 @@ contains
           Pressure = Pressure+&
                ((uParTmp-uBulkPar)**2&
                +2.0*(uPerpTmp-uBulkPerp)**2)*weight
+          Ppar = Ppar&
+               +(uParTmp-uBulkPar)**2
+          Pperp = Pperp&
+               +(uPerpTmp-uBulkPerp)**2
        end do PARTICLE_LOOP2
     end do ALT_LOOP2
 
     Pressure=Pressure*Mass_I(iSpecies)*density/(3.0*TotalWeight)
-
+    Ppar=Ppar*Mass_I(iSpecies)*density/(TotalWeight)
+    Pperp=Pperp*Mass_I(iSpecies)*density/(TotalWeight)
     !get temperature from ideal gas law P=nkT
     Temp = Pressure/(density*cBoltzmannCGS)
+    Tpar = Ppar/(density*cBoltzmannCGS)
+    Tperp = Pperp/(density*cBoltzmannCGS)
 
 
 
@@ -1057,7 +1096,7 @@ contains
     real :: N11,N12,N21,N22,N11w,N12w,N21w,N22w,P1,P2
     real :: weight_II(2,2)
     real :: SimPArticleRatio, DensityRatio
-
+    real :: Tpar,Tperp
     logical :: DoTest=.false.
   
     !---------------------------------------------------------------------------
@@ -1116,7 +1155,8 @@ contains
     allocate(Density_I(nSpecies),Temp_I(nSpecies))
     do iSpecies=1,nSpecies
        call calc_moments_cell(iSpecies,iCell,&
-            Density_I(iSpecies),uBulkPar,uBulkPerp,Pressure,Temp_I(iSpecies))
+            Density_I(iSpecies),uBulkPar,uBulkPerp,Pressure,Temp_I(iSpecies),&
+            Tpar,Tperp)
        !since we are interested in minimum density only whenever density 
        ! comes back as 0 (or less than a tolerance) set to a large number
        !if (Density_I(iSpecies)<1.0e-10) Density_I(iSpecies)=1e99          
@@ -1689,6 +1729,7 @@ contains
     real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2,ckToEv=.00008617328
     real,parameter ::cElectronChargeCGS=1.602176487e-20
     real :: nu0, nueq,dt,CoulLog
+    real :: TparIon,TperpIon,TparElec,TperpElec
     !--------------------------------------------------------------------------
 !    nTime=10
 !    nTime=1000
@@ -1774,9 +1815,11 @@ contains
     !call plot_distribution_cell(iSpeciesIon,iAltBC)
 
     call calc_moments_cell(iSpeciesIon,iAltBC,&
-         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon)
+         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon,&
+         TparIon,TperpIon)
     call calc_moments_cell(iSpeciesElec,iAltBC,&
-         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec)
+         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec,&
+         TparElec,TperpElec)
     
     write(*,*) 'start: nu0*Time, (TIon-Te)/(TIon0-Te0), theory'
     write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
@@ -1796,9 +1839,11 @@ contains
        call timing_stop('sort_particles')
 
        call calc_moments_cell(iSpeciesIon,iAltBC,&
-            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon)
+            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon,&
+            TparIon,TperpIon)
        call calc_moments_cell(iSpeciesElec,iAltBC,&
-            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec)
+            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec,&
+            TparElec,TperpElec)
 
     write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
        
