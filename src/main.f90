@@ -141,10 +141,18 @@ program pw
        iUnitGraphics,iUnitOutput, iLineGlobal,IsNorth_I)
   
 
+  call timing_stop('PWOM')
+    if (iProc == 0) then
+     write(*,'(a)') 'Finished PWOM run, (reporting timings)'
+     write(*,'(a)') '--------------------------------------'
+     call timing_report
+  endif
+
+
   call MPI_FINALIZE(errcode)
 
 
-  call timing_stop('PWOM')
+
 end program pw
 
 !============================================================================

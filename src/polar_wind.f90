@@ -103,7 +103,7 @@ subroutine polar_wind
      endif
 
      if (UseParticles .and. (floor((Time+1.0e-5)/DtCoupleParticles) &
-          /=floor((Time+1.0e-5-DtCoupleParticles)/DtCoupleParticles)) )then 
+          /=floor((Time+1.0e-5-DT)/DtCoupleParticles)) )then 
         allocate(Density_IC(2,nDim),Velocity_IC(2,nDim),Temperature_IC(2,nDim))
         Density_IC(1,:)=State_GV(1:nDim,iRho_I(1))/Mass_I(1)
         Density_IC(2,:)=State_GV(1:nDim,iRho_I(2))/Mass_I(2)
@@ -115,7 +115,7 @@ subroutine polar_wind
         write(*,*) 'calling put_to_particles'
         call put_to_particles(nDim,2,1.0e5*ALTD(1:nDim),&
              .false.,Density_IC,Velocity_IC,Temperature_IC,EfieldIn_C=EFIELD(1:nDim))
-        write(*,*) 'done put_to_particles'
+        write(*,*) 'done put_to_particles at time',Time,DtCoupleParticles
         deallocate(Density_IC,Velocity_IC,Temperature_IC)
         
         !advance the particle solution to the next coupling time
