@@ -8,18 +8,22 @@ Module ModSeGrid
   real,public :: Time
  
   !E Grid
-  integer,parameter,public :: nEnergy=190
+  integer,parameter,public :: nEnergy=190 ! Earth
+!  integer,parameter,public :: nEnergy=990 ! Jupiter
+
   real, public :: DeltaE_I(nEnergy),EnergyGrid_I(nEnergy)
   real,   public :: EnergyMin, EnergyMax, DeltaE
 !  real, allocatable,public  :: KineticEnergy_IIC(:,:,:)
 
   !Alt Grid
-  integer,parameter,public :: nAlt=120
+  integer,parameter,public :: nAlt=120 ! Earth
+  !integer,parameter,public :: nAlt=385 ! Jupiter
   real,public :: Alt_C(nAlt) !altitude grid in cm
 
   !Alt Grid Extended above two stream calculation by mapping.
   ! should be nAlt+some points
-  integer,parameter,public :: nAltExtended=220
+  integer,parameter,public :: nAltExtended=220 ! Earth
+  !integer,parameter,public :: nAltExtended=480 ! Jupiter
   real,public :: AltExtended_C(nAltExtended) !altitude grid in cm
   real,public :: AltPwUpper=8000.0e5 !alt of PW upper boundary in CM
 
@@ -52,17 +56,31 @@ contains
     implicit none
 
     ! Local:
-    Integer iEnergy
-    
+    Integer iEnergy, i2
+    real C
+
+    i2 = 33  ! 21 for 0.005; 33 for 0.001
+
+    i2 = 740
     DO iEnergy=1,nEnergy
        IF (iEnergy .LE. 21) THEN
           EnergyGrid_I(iEnergy) = 0.5 * REAL(iEnergy)
        ELSE
           EnergyGrid_I(iEnergy) = EXP (0.05 * REAL(iEnergy+26))
        ENDIF
+! *** Jupiter Test Grid ***
+!!$       IF (iEnergy .LE. i2) THEN
+!!$          EnergyGrid_I(iEnergy) = 60./real(i2) * REAL(iEnergy)
+!!$       ELSE
+!!$          EnergyGrid_I(iEnergy) = EXP(0.05*81.887)*EXP(0.01*REAL(iEnergy-i2))
+!!$          write(*,*) iEnergy,EnergyGrid_I(iEnergy)
+!!$       ENDIF
+!!$       ! nEnergy = i2 + 0.05/C*50
+
+! *** Done w/ Test Grid
     end do
     
-    DeltaE_I(1) = 0.5
+    DeltaE_I(1) = EnergyGrid_I(1)
     DO iEnergy=2,nEnergy
        DeltaE_I(iEnergy) = EnergyGrid_I(iEnergy)-EnergyGrid_I(iEnergy-1)
     End Do
@@ -74,6 +92,8 @@ contains
     EnergyMin=EnergyGrid_I(1)
     EnergyMax=EnergyGrid_I(nEnergy)
     
+    if (IsVerbose) write (*,*) sum(DeltaE_I(:)),&
+         EnergyGrid_I(nEnergy)+DeltaE_I(nEnergy)/2.0,'energies!'
     
   End Subroutine set_egrid
 
@@ -81,14 +101,14 @@ contains
   ! Set Altitude Grid
 
   SUBROUTINE set_altgrid
-    use ModPlanetConst, ONLY: Planet_, rPlanet_I
+    use ModPlanetConst, ONLY: Planet_, rPlanet_I, NamePlanet_I
     implicit none
 
     ! Local:
     real,parameter :: cKmToCm=1.0e5, cMtoCM = 1.0e2
     Integer ::iAlt
-    real :: dAltExtended
-    real :: AltKM_C(nAlt)
+    real :: dAltExtended,dr
+    real :: AltKM_C(120)
     DATA AltKM_C/     80., 81., 82., 83., 84., 85., 86., 87., 88., 89., &
          90., 91., 92., 93., 94., 95., 96., 97., 98., 99., &
          100.,101.,102.,103.,104.,105.,106.,107.,108.,109., &
@@ -102,8 +122,20 @@ contains
          570.,590.,610.,630.,650.,670.,690.,710.,730.,750., &
          770.,790.,810.,830.,850.,870.,890.,910.,930.,950./
     
-    Alt_C(:) = AltKM_C * cKmToCm
-    
+    if (NamePlanet_I(Planet_).EQ.'JUPITER') then
+
+       Alt_C(1:120) = (AltKM_C/4.0+230.) * cKmToCm
+       dr = 5.0
+
+       do iAlt = 1,nAlt-120
+          Alt_C(120+iAlt) = Alt_C(119+iAlt) + dr*cKmToCm
+          dr = dr + iAlt/1280.0
+!          write(*,*) iAlt, Alt_C(120+iAlt), dr
+       end do
+    else
+       Alt_C(1:120) = AltKM_C * cKmToCm
+    endif
+
     rPlanetCM=rPlanet_I(Planet_)*cMtoCM
 
     !add in points in extended grid above 2 stream calc. Fill in equally spaced 

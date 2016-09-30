@@ -89,7 +89,7 @@ contains
   ! AVMU   cosine of the average pitch angle
   !
   ! Array dimensions:
-  ! JMAX    number of altitude levels
+  ! AltMax    number of altitude levels
   ! NBINS   number of energetic electron energy bins
   ! LMAX    number of wavelength intervals for solar flux
   ! NMAJ    number of major species
@@ -103,7 +103,7 @@ contains
   !
   SUBROUTINE ETRANS
     use ModPlanetConst, only: Planet_, NamePlanet_I
-    use ModSeGrid, only: NBINS=>nEnergy, JMAX=>nAlt,Alt_C,&
+    use ModSeGrid, only: NBINS=>nEnergy, AltMax=>nAlt,Alt_C,&
          ENER=>EnergyGrid_I, DEL=>DeltaE_I,nAltExtended,DeltaPot_C,IsVerbose
     use ModSeCross,only: IIMAXX,SIGIX,SIGA,SIGS,SIGEX,SEC,NEI,WW,PE,PIN
 !    use ModSeCross,only: IIMAXX,SIGIX=>SIGI,SIGA,SIGS,SIGEX,NEI,WW,PE,PIN
@@ -130,19 +130,18 @@ contains
     integer  IERR
     
     !phitop should be set
-    real:: PHITOP(NBINS),EFRAC, SION(NMAJ,JMAX), &
-         UFLX(NBINS,JMAX), DFLX(NBINS,JMAX), AGLW(NEI,NMAJ,JMAX), &
-         EHEAT(JMAX), TEZ(JMAX)
+    real:: PHITOP(NBINS),EFRAC, SION(NMAJ,AltMax), &
+         UFLX(NBINS,AltMax), DFLX(NBINS,AltMax), AGLW(NEI,NMAJ,AltMax), &
+         EHEAT(AltMax), TEZ(AltMax)
     real :: PolarRainPhi_I(NBINS),PrecipPhi_I(NBINS)
     real :: OvationDiffPhi_I(NBINS),OvationWavePhi_I(NBINS),&
          OvationMonoPhi_I(NBINS)
 
-
-    real    PROD(JMAX), EPROD(JMAX), T1(JMAX), T2(JMAX), TSA(NMAJ),&
-         PRODUP(JMAX,NBINS), PRODWN(JMAX,NBINS), &
-         PHIUP(JMAX), PHIDWN(JMAX), TSIGNE(JMAX), TAUE(JMAX), &
-         SECION(JMAX), SECP(NMAJ,JMAX), R1(JMAX), EXPT2(JMAX), &
-         PRODUA(JMAX), PRODDA(JMAX), PHIINF(NBINS)
+    real    PROD(AltMax), EPROD(AltMax), T1(AltMax), T2(AltMax), TSA(NMAJ), &
+         PRODUP(AltMax,NBINS), PRODWN(AltMax,NBINS), &
+         PHIUP(AltMax), PHIDWN(AltMax), TSIGNE(AltMax), TAUE(AltMax), &
+         SECION(AltMax), SECP(NMAJ,AltMax), R1(AltMax), EXPT2(AltMax), &
+         PRODUA(AltMax), PRODDA(AltMax), PHIINF(NBINS)
     
     real  APROD,DAG,EDEP,EET,ein,eout,epe,ephi,et,fluxj,phiout, &
          rmusin, sindip
@@ -154,14 +153,14 @@ contains
     ! For convergence: 
     ! DiffMax is the maximum difference between successive solutions
     ! needed for convergence.
-    real :: DiffMax, LastPHIUP(NBINS,JMAX), LastPHIDWN(NBINS,JMAX),DiffMax_I(NBINS)
+    real :: DiffMax, LastPHIUP(NBINS,AltMax), LastPHIDWN(NBINS,AltMax),DiffMax_I(NBINS)
     integer :: iEnergy
     
     !logical to define if we should iterate flux calculation to reflect portion 
     ! of flux below high altitude potential drop
     logical :: DoIterateFlux=.true.
     ! this should be adjusted...planet specific
-    real,allocatable:: potion(:)
+    real,allocatable:: potion(:),SecRate_IC(:,:)
     real :: PrecipCoef
     !  DATA potion/16.,16.,18./
     !------------------------------------------------------------------------
@@ -255,7 +254,7 @@ contains
        !reflect solution below max potential drop
        do iEnergy=1,nBINS
           if (ENER(iEnergy)<DeltaPot_C(nAltExtended)) then 
-             PHITOP(iEnergy)=LastPhiUp(iEnergy,JMAX)
+             PHITOP(iEnergy)=LastPhiUp(iEnergy,AltMax)
              !write(*,*) 'E,Phi',ENER(iEnergy),PhiUp(iEnergy)
           else
              if (UseOvation .or. UsePrecipitation .or. UsePolarRain) then
@@ -270,11 +269,14 @@ contains
        if (.not.allocated(HeatingRate_C))allocate(HeatingRate_C(nAltExtended))
        if (.not.allocated(SecondaryIonRate_IC))&
             allocate(SecondaryIonRate_IC(NMAJ,nAltExtended))
+       if (.not.allocated(SecRate_IC))&
+            allocate(SecRate_IC(nBINS,nAltExtended))
        if (.not.allocated(TotalIonizationRate_C))&
             allocate(TotalIonizationRate_C(nAltExtended))
 
        HeatingRate_C(:)=0.0
        SecondaryIonRate_IC(:,:)=0.0
+       SecRate_IC(:,:)=0.0
        TotalIonizationRate_C(:)=0.0
 
        if(.not.allocated(potion)) then
@@ -285,9 +287,9 @@ contains
        end if
 
        ! allocate solver arrays
-       if (.not.allocated(ALPHA)) allocate(ALPHA(JMAX), BETA(JMAX), GAMA(JMAX), &
-            PSI(JMAX), DELZ(JMAX), DEL2(JMAX), DELA(JMAX), DELP(JMAX), &
-            DELM(JMAX), DELS(JMAX), DEN(JMAX))
+       if (.not.allocated(ALPHA)) allocate(ALPHA(AltMax), BETA(AltMax), GAMA(AltMax), &
+            PSI(AltMax), DELZ(AltMax), DEL2(AltMax), DELA(AltMax), DELP(AltMax), &
+            DELM(AltMax), DELS(AltMax), DEN(AltMax))
        
 
        IERR = 0
@@ -308,7 +310,7 @@ contains
        !
        ! Zero variables:
        !
-       !      DO 100 II=1,JMAX
+       !      DO 100 II=1,AltMax
        !        DO 100 IB=1,NMAJ
        !          DO 100 IBB=1,NEI
        !            AGLW(IBB,IB,II) = 0.0
@@ -320,7 +322,7 @@ contains
        GAMA(1) = 0.
        PHIOUT = 0.0
        !
-       DO I = 1, JMAX
+       DO I = 1, AltMax
           EHEAT(I) = 0.0
           EPROD(I) = 0.0
           SECION(I) = 0.0
@@ -330,7 +332,7 @@ contains
        End Do
        !
        DO JJ = 1, NBINS
-          DO I = 1, JMAX
+          DO I = 1, AltMax
              PRODUP(I,JJ) = 1.0E-20
              PRODWN(I,JJ) = 1.0E-20
           enddo
@@ -349,11 +351,11 @@ contains
        ! Calcualte delta z's:
        !
        DELZ(1) = Alt_C(2)-Alt_C(1)
-       DO I=2,JMAX
+       DO I=2,AltMax
           DELZ(I) = Alt_C(I)-Alt_C(I-1)
        End Do
 
-       DO I=1,JMAX-1
+       DO I=1,AltMax-1
           DEL2(I) = DELZ(I)+DELZ(I+1)
           DELA(I) = DEL2(I)/2.
           DELP(I) = DELA(I)*DELZ(I+1)
@@ -361,11 +363,11 @@ contains
           DELS(I) = DELZ(I)*DELZ(I+1)
        End Do
 
-       DEL2(JMAX) = DEL2(JMAX-1)
-       DELA(JMAX) = DELA(JMAX-1)
-       DELP(JMAX) = DELP(JMAX-1)
-       DELM(JMAX) = DELP(JMAX-1)
-       DELS(JMAX) = DELS(JMAX-1)
+       DEL2(AltMax) = DEL2(AltMax-1)
+       DELA(AltMax) = DELA(AltMax-1)
+       DELP(AltMax) = DELP(AltMax-1)
+       DELM(AltMax) = DELP(AltMax-1)
+       DELS(AltMax) = DELS(AltMax-1)
        !
        !
        !
@@ -377,7 +379,7 @@ contains
           !
           ! Calculate production:
           !
-          DO I = 1, JMAX
+          DO I = 1, AltMax
              !SESPEC is obsolete
              ! PROD(I) = (PESPEC(J,I)+SESPEC(J,I)) * RMUSIN / DEL(J)
              PROD(I) = (PESPEC(J,I)) * RMUSIN / DEL(J)
@@ -416,8 +418,7 @@ contains
           DAG = ENER(J) - ENER(JJJ4)
           IF (DAG .LE. 0.0) DAG = DEL(1)
           !
-
-          LOOP: DO I = 1, JMAX
+          LOOP: DO I = 1, AltMax
              ET = 8.618E-5 * ZTE(I)
              EET = ENER(J) - ET
              IF (EET .LE. 0.0) then
@@ -432,7 +433,7 @@ contains
           !
           ! Collision terms:
           !
-          DO I = 1, JMAX
+          DO I = 1, AltMax
              T1(I) = 0.0
              T2(I) = 0.0
              DO IV = 1, NMAJ
@@ -451,7 +452,7 @@ contains
              !
              ! Solve parabolic d.e. by Crank-Nicholson method to find downward flux:
              !
-             DO I = 2, JMAX-1
+             DO I = 2, AltMax-1
                 PSI(I) = 1.
                 ALPHA(I) = (T1(I-1) - T1(I+1)) / (DEL2(I) * T1(I))
                 BETA(I) = T2(I) * (T1(I+1) - T1(I-1)) / (T1(I) * DEL2(I)) &
@@ -486,7 +487,7 @@ contains
              DEN(1) = PHIDWN(2)
              FLUXJ = PHIINF(J)
              CALL IMPIT(FLUXJ) !computes DEN via module
-             DO I = 1, JMAX
+             DO I = 1, AltMax
                 PHIDWN(I) = DEN(I)
                 if(IsDebug .and. phidwn(i).gt.1e30) then
                    write(*,*) 'GAMA(i), beta(i)',gama(i),beta(i)
@@ -500,13 +501,13 @@ contains
              ! Then integrate back upward to calculate upward flux:
              !
              PHIUP(1) = PHIDWN(1)
-             DO I = 2, JMAX
+             DO I = 2, AltMax
                 R1(I) = (T1(I)*PHIDWN(I) + (PROD(I)+2.*PRODUP(I,J))/2.) / T2(I)
                 TAUE(I) = T2(I)*DELZ(I)
                 IF (TAUE(I) .GT. 60.) TAUE(I)=60.
                 EXPT2(I) = EXP(-TAUE(I))
              enddo
-             DO I=2,JMAX
+             DO I=2,AltMax
                 PHIUP(I) = R1(I) + (PHIUP(I-1)-R1(I)) * EXPT2(I)
                 !             if (IsDebug .and. .not.isfinite(phiup(i))) &
                 !      call con_stop('etrans: nonfinite PHIUP  (.not.IsLocal)')
@@ -515,7 +516,7 @@ contains
              
           else
              !local calculation
-             DO I = 1, JMAX
+             DO I = 1, AltMax
                 IF (T2(I) .LE. T1(I)) THEN
                    IERR = 1
                    T2(I) = T1(I) * 1.0001
@@ -535,24 +536,24 @@ contains
           ! Multiply fluxes by average pitch angle cosine and put in arrays,
           ! and calculate outgoing electron energy flux for conservation check:
           !
-          DO I=1,JMAX
+          DO I=1,AltMax
              UFLX(J,I) = PHIUP(I) * AVMU
              DFLX(J,I) = PHIDWN(I) * AVMU
           End do
           !
-          PHIOUT = PHIOUT + PHIUP(JMAX) * DEL(J) * ENER(J)
+          PHIOUT = PHIOUT + PHIUP(AltMax) * DEL(J) * ENER(J)
           !
           !
           ! Cascade production:
           !
           do K = 1, J-1
              LL = J - K
-             DO I=1,JMAX
+             DO I=1,AltMax
                 PRODUA(I) = 0.0
                 PRODDA(I) = 0.0
              enddo
              do N = 1, NMAJ
-                do I=1,JMAX
+                do I=1,AltMax
                    PRODUA(I) = PRODUA(I) &
                         + ZMAJ(N,I) * (SIGA(N,K,J)*PIN(N,J)*PHIDWN(I) &
                         + (1. - PIN(N,J))*SIGA(N,K,J)*PHIUP(I))
@@ -561,7 +562,7 @@ contains
                         + (1. - PIN(N,J))*SIGA(N,K,J)*PHIDWN(I))
                 enddo
              enddo
-             do I=1,JMAX
+             do I=1,AltMax
                 PRODUP(I,LL) = PRODUP(I,LL) + PRODUA(I) * RMUSIN
                 PRODWN(I,LL) = PRODWN(I,LL) + PRODDA(I) * RMUSIN
              enddo
@@ -569,7 +570,7 @@ contains
           !
           KK = J - 1
           IF (KK>0) then
-             do I = 1, JMAX
+             do I = 1, AltMax
                 PRODUP(I,KK) = PRODUP(I,KK) + TSIGNE(I) * PHIUP(I) * (DEL(J) &
                      / DEL(KK))
                 PRODWN(I,KK) = PRODWN(I,KK) + TSIGNE(I) * PHIDWN(I) * (DEL(J) &
@@ -581,15 +582,15 @@ contains
           ! Electron heating rate:
           !
           DAG = DEL(J)
-          DO I = 1, JMAX
+          DO I = 1, AltMax
              EHEAT(I) = EHEAT(I) + TSIGNE(I) * (PHIUP(I)+PHIDWN(I)) * DAG**2
           End Do
 
           !
           ! Electron impact excitation rates:
           !
-          AGLW(1:NEI,1:NMAJ,1:JMAX) = 0.0
-          DO II = 1, JMAX
+          AGLW(1:NEI,1:NMAJ,1:AltMax) = 0.0
+          DO II = 1, AltMax
              DO I = 1, NMAJ
                 DO IBB = 1, NEI
                    AGLW(IBB,I,II) = AGLW(IBB,I,II) + (PHIUP(II) + PHIDWN(II)) &
@@ -605,7 +606,7 @@ contains
           !
           DO  K = 1, IIMAXX(J) ! iimaxx set near exsect.f:424
              DO  N = 1, NMAJ
-                DO  I = 1, JMAX ! altitude step - JMAX has nothing to do with J!
+                DO  I = 1, AltMax ! altitude step - AltMax has nothing to do with J!
                    SECP(N,I) = SEC(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !SECP(N,I) = SIGIX(N,K,J) * ZMAJ(N,I) * (PHIUP(I) + PHIDWN(I))
                    !call get_secprod(J,N,ZMAJ(N,I),PHIUP(I) + PHIDWN(I),SECP(N,I)
@@ -632,6 +633,7 @@ contains
                         +SECP(N,I) * DEL(K)
                    PRODUP(I,K) = PRODUP(I,K) + (SECP(N,I)*.5*RMUSIN)
                    PRODWN(I,K) = PRODWN(I,K) + (SECP(N,I)*.5*RMUSIN)
+                   SecRate_IC(K,I) = SecRate_IC(K,I) + SECP(N,I)
                 enddo
              enddo
           enddo
@@ -646,14 +648,14 @@ contains
        
        !add secondary production to totalionization rate
        !add photoproduction to total ionization rate
-       do I=1,JMAX
-          TotalIonizationRate_C(I)=sum(PESPEC(:,I)*DEL(:))+SECION(I)
+       do I=1,AltMax
+          TotalIonizationRate_C(I)=sum(PESPEC(:,I))+SECION(I)
           !       write(*,*) 'Alt_C(I)*1e-5,ionrate',&
           !            Alt_C(I)*1e-5,TotalIonizationRate_C(I)
           
        enddo
        
-       DO I = 1, JMAX
+       DO I = 1, AltMax
           EHEAT(I) = EHEAT(I) / RMUSIN
           !       write(*,*) 'Alt_C(I)*1e-5,EHEAT(I)',Alt_C(I)*1e-5,EHEAT(I)
           HeatingRate_C(I)=EHEAT(I)
@@ -667,7 +669,7 @@ contains
        EDEP = 0.
        !Calculate energy deposition for Earth
        if(NamePlanet_I(Planet_).EQ.'EARTH') then
-          DO IM=1,JMAX
+          DO IM=1,AltMax
              TEZ(IM) = EHEAT(IM)
              DO II=1,NMAJ
                 TEZ(IM) = TEZ(IM) + SION(II,IM)*POTION(II)
@@ -687,7 +689,7 @@ contains
        
        EPE = 0.0
        EPHI = 0.0
-       DO I = 2, JMAX
+       DO I = 2, AltMax
           APROD = SQRT(EPROD(I)*EPROD(I - 1))
           EPE = EPE + APROD * DELZ(I)
        enddo
@@ -708,6 +710,7 @@ contains
 
     !call plot_omni_iono(time,uFlux_IC,dFlux_IC)
     call plot_omni_iono(time,uFlx,dFlx)
+    call plot_ionization(time,PESPEC,SecRate_IC)
     
     call calc_integrated_values(AVMU,uFlx,dFlx)
     !call map_flux(AVMU,uFlx)
@@ -721,7 +724,7 @@ contains
   ! Crank-Nicholson method
   !
   SUBROUTINE IMPIT(FLUXJ)
-    use ModSeGrid, only: NBINS=>nEnergy, JMAX=>nAlt,Alt_C,&
+    use ModSeGrid, only: NBINS=>nEnergy, AltMax=>nAlt,Alt_C,&
          ENER=>EnergyGrid_I, DEL=>DeltaE_I
     !      use, intrinsic :: iso_fortran_env, only : stdout=>output_unit, &
     !                                                stderr=>error_unit
@@ -733,13 +736,13 @@ contains
     !Local:
 !    logical,external:: isfinite
     Real dem
-    real,dimension(jmax) ::K, L, A, B, C, D
+    real,dimension(AltMax) ::K, L, A, B, C, D
     Integer i,i1,jk,kk
     
     !      COMMON /CIMPIT/ ALPHA, BETA, GAMA, PSI, DELZ, DEL2, DELA, DELP, &
     !                      DELM, DELS, DEN, FAC
     !
-    I1 = JMAX - 1
+    I1 = AltMax - 1
     
     DO I = 1, I1
        A(I) = PSI(I) / DELP(I) + ALPHA(I) / DEL2(I)
@@ -781,9 +784,9 @@ contains
     !if (isnan(L(i1))) stop'etrans:impit NaN in L(i1)'
 !    if(IsDebug .and. .not.isfinite(den(i1))) &
 !         error stop 'impit nonfinite DEN(I1)'
-    DEN(JMAX) = DEN(I1)
+    DEN(AltMax) = DEN(I1)
     
-    Do KK = 1, JMAX-3
+    Do KK = 1, AltMax-3
        JK = I1 - KK
        DEN(JK) = K(JK) - L(JK) * DEN(JK + 1)
 !       if (IsDebug .and. .not.isfinite(den(jk))) &
@@ -940,6 +943,77 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_omni_iono
+
+  !============================================================================
+  subroutine plot_ionization(time,pe,sec)
+    use ModSeGrid,     ONLY: Alt_C, nAlt, nEnergy,&
+         EnergyGrid_I,iLineGlobal
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    
+    real,    intent(in) :: time
+    real,    intent(in) :: pe(nEnergy,nAlt),sec(nEnergy,nAlt)
+    
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+
+    !grid parameters
+    integer, parameter :: nDim =2, nVar=3, S_=2, E_=1
+    !variable parameters
+    integer, parameter :: Pe_=1, Sec_=2, Total_=3
+    
+    character(len=100),parameter :: NamePlotVar='E[eV] Alt[km] Pe[] Sec[] Total[] g r'
+    character(len=100) :: NamePlot='IonRate.out'
+    
+    character(len=*),parameter :: NameHeader='Ionization Rates'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iAlt,iEnergy
+
+    logical :: IsFirstCall1=.true.,IsFirstCall2=.true.
+    !--------------------------------------------------------------------------
+    
+    allocate(Coord_DII(nDim,nEnergy,nAlt),PlotState_IIV(nEnergy,nAlt,nVar))
+    
+    !    do iLine=1,nLine
+    PlotState_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    !Set values
+    do iEnergy=1,nEnergy
+       do iAlt=1,nAlt
+             Coord_DII(E_,iEnergy,iAlt) = EnergyGrid_I(iEnergy)             
+             Coord_DII(S_,iEnergy,iAlt) = Alt_C(iAlt)/1e5
+             ! set plot state
+             PlotState_IIV(iEnergy,iAlt,Pe_)  = &
+                  pe(iEnergy,iAlt)
+             PlotState_IIV(iEnergy,iAlt,Sec_)  = &
+                  sec(iEnergy,iAlt)
+             PlotState_IIV(iEnergy,iAlt,Total_)  = &
+                  sec(iEnergy,iAlt)+pe(iEnergy,iAlt)
+          enddo
+       enddo
+       
+       ! set name for plotfile
+       write(NamePlot,"(a,i4.4,a)") 'IonRate_',iLineGlobal,'.out'
+  
+       !Plot grid for given line
+       if(IsFirstCall1) then
+          call save_plot_file(NamePlot, TypePositionIn='rewind', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+          IsFirstCall1 = .false.
+       else
+          call save_plot_file(NamePlot, TypePositionIn='append', &
+               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_ionization
 
     ! plot omnidirectional flux in the ionosphere
   !============================================================================

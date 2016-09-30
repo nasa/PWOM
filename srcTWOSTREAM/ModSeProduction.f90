@@ -403,7 +403,6 @@ contains
 
     !
     !
-    
     use ModSeGrid,   only:nEnergy,del=>DeltaE_I,ener=>EnergyGrid_I,Emin=>EnergyMin
 !    use ModMath,     only:midpnt_int
     use ModPlanetConst, ONLY: Planet_, NamePlanet_I
@@ -658,7 +657,8 @@ contains
                 ENDIF
                 DO  J=1,nAlt
                    PESPEC(N,J) = PESPEC(N,J) + DSPECT(J) * FAC
-                   PeSpectrumSpecies_IIIC(K,I,N,J)=DSPECT(J) * FAC
+                   PeSpectrumSpecies_IIIC(K,I,N,J)=PeSpectrumSpecies_IIIC(K,I,N,J) + &
+                        DSPECT(J) * FAC
                 enddo
              enddo
 
@@ -667,6 +667,7 @@ contains
              ! Generate Auger electrons if energy is sufficient:
              !
              IF (WAVE1(L) .LE. AugWave_I(I)) THEN
+                write (*,*) '*************** auger'
                 E1 = AugEnergy_I(I)
                 E2 = AugEnergy_I(I)
                 CALL BOXNUM (E1, E2, M1, M2, R1, R2, DEL, ENER)
@@ -687,43 +688,43 @@ contains
        PhotoIonRate_IC(1,:) = 0.0
     case('JUPITER')
        !uncomment for debugging
-       !CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)
-       !CALL plot_flux(FLUX)
-       !CALL plot_crossec(SIGION,PROB)
+!       CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)
+       CALL plot_flux(FLUX)
+       CALL plot_crossec(SIGION,PROB)
        
        do iAlt=1,nAlt
           !
           !integrate to get production rate for each species as a function of 
           ! altitude
           !H2+
-          PhotoIonRate_IC(H2plus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(1,H2_,:,iAlt)*del(:))
+          PhotoIonRate_IC(H2plus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(1,H2_,:,iAlt))!*del(:))
           
           !He+
-          PhotoIonRate_IC(Heplus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(1,He_,:,iAlt)*del(:))
+          PhotoIonRate_IC(Heplus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(1,He_,:,iAlt))!*del(:))
 
           !H+
-          PhotoIonRate_IC(Hplus_,iAlt) = 4.0*cPi*&
-               (sum(PeSpectrumSpecies_IIIC(2,H2_,:,iAlt)*del(:)) &
-               + sum(PeSpectrumSpecies_IIIC(1,H_,:,iAlt)*del(:)) &
-               + sum(PeSpectrumSpecies_IIIC(5,CH4_,:,iAlt)*del(:)))
+          PhotoIonRate_IC(Hplus_,iAlt) = & !4.0*cPi*&
+               (sum(PeSpectrumSpecies_IIIC(2,H2_,:,iAlt)) &!*del(:)) &
+               + sum(PeSpectrumSpecies_IIIC(1,H_,:,iAlt)) &!*del(:)) &
+               + sum(PeSpectrumSpecies_IIIC(5,CH4_,:,iAlt))) !*del(:)))
 
           !CH4+
-          PhotoIonRate_IC(CH4plus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(1,CH4_,:,iAlt)*del(:))
+          PhotoIonRate_IC(CH4plus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(1,CH4_,:,iAlt)) !*del(:))
           
           !CH3+
-          PhotoIonRate_IC(CH3plus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(2,CH4_,:,iAlt)*del(:))
+          PhotoIonRate_IC(CH3plus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(2,CH4_,:,iAlt)) !*del(:))
           
           !CH2+
-          PhotoIonRate_IC(CH2plus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(3,CH4_,:,iAlt)*del(:))
+          PhotoIonRate_IC(CH2plus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(3,CH4_,:,iAlt)) !*del(:))
           
           !CH+
-          PhotoIonRate_IC(CHplus_,iAlt) = 4.0*cPi*&
-               sum(PeSpectrumSpecies_IIIC(4,CH4_,:,iAlt)*del(:))
+          PhotoIonRate_IC(CHplus_,iAlt) = & !4.0*cPi*&
+               sum(PeSpectrumSpecies_IIIC(4,CH4_,:,iAlt)) !*del(:))
 
        enddo
     end select
@@ -878,7 +879,8 @@ contains
        !Set Flux Coordinates along field line and wavelength converted to eV
        do iLambda=1,LMAX
           do iAlt=1,nAlt
-             Coord_DII(E_,iLambda,iAlt) = C1/Wave1(iLambda)
+             !Coord_DII(E_,iLambda,iAlt) = C1/Wave1(iLambda)
+             Coord_DII(E_,iLambda,iAlt) = Wave1(iLambda)
              Coord_DII(S_,iLambda,iAlt) = Alt_C(iAlt)/1e5
              PlotFlux_IIV(iLambda,iAlt,1)  = FLUX(iLambda,iAlt)
           enddo
@@ -943,7 +945,7 @@ contains
          'E[eV] SigmaIon Prob g r'
 
     character(len=100) :: NamePlotVar
-    character(len=*),parameter :: NameHeader='He+ Cross Section'
+    character(len=*),parameter :: NameHeader='H2+ Cross Section'
     character(len=5) :: TypePlot='ascii'
     integer :: iIon,iAlt
     character(len=100) :: NamePlot
@@ -966,9 +968,10 @@ contains
        
        !Set Flux Coordinates along field line and wavelength converted to eV
        do iLambda=1,LMAX
-             Coord_I(iLambda) = C1/Wave1(iLambda)
-             PlotState_IV(iLambda,1) = SIGION(He_,iLambda)
-             PlotState_IV(iLambda,2) = PROB(1,He_,iLambda)
+          !             Coord_I(iLambda) = C1/Wave1(iLambda)
+          Coord_I(iLambda) = Wave1(iLambda)
+          PlotState_IV(iLambda,1) = SIGION(H2_,iLambda)
+          PlotState_IV(iLambda,2) = PROB(1,H2_,iLambda)
        enddo       
        
     ! set name for plotfile
@@ -1535,6 +1538,7 @@ contains
        PROB(:,2,:) = ProbSpecies(:,:)
        SIGABS(2,:) = SigAbsSpecies(:) * 1.e-18
        SIGION(2,:) = SigIonSpecies(:) * 1.e-18
+!       call CON_STOP('He done')
        call read_data_array('PW/PhotoH.dat',nStatesPerSpecies_I(3),1, &
             ProbSpecies,SigAbsSpecies,SigIonSpecies)
        PROB(:,3,:) = ProbSpecies(:,:)
@@ -1684,6 +1688,7 @@ contains
              ProbSpecies(l,i) = linear(ProbIn(l,:),1,nLines, &
                   StandardWaveGrid(i),WaveGridCenters)/100.0
           end do
+!          write(*,*) StandardWaveGrid(i),SigIonSpecies(i)
        endif
     enddo
 
