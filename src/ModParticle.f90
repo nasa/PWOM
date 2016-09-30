@@ -138,7 +138,8 @@ contains
        
        !set the relative weights of particles
        allocate(nNumPerParticle_I(nSpecies))
-       nNumPerParticle_I(:)=1.0e5
+       nNumPerParticle_I(O_)=1.0e5
+       nNumPerParticle_I(H_)=5.0e5
        
        !set plotting variables
        NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
@@ -990,12 +991,22 @@ contains
     
     integer,allocatable :: Index_I(:),iParticleCell_II(:,:)
     integer :: iParticle,MaxSortedParticle
+    integer :: nThreads,iThread
+    
+    !comment next lines when not using openmp
+    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
+         OMP_get_num_threads
+    type(particleCellSpecies), allocatable:: SortParticles_TIII(:,:,:,:)
+    integer,allocatable :: iParticleCell_TII(:,:,:)
+    integer :: iUpper, iLower
     !--------------------------------------------------------------------------
     
     ! Find the number of particles of a given species in a cell and build 
     ! an array of indicies connecting the local index and the particle index
     allocate(Index_I(nParticle))
+    
     do iSpecies=1,nSpecies
+       !$OMP PARALLEL DO  PRIVATE(Index_I)
        do iCell=0,nAlt+1
           where(Particles_I%iCell==iCell .and. Particles_I%iSpecies==iSpecies)
              Index_I=1
@@ -1004,7 +1015,9 @@ contains
           end where
           nSortedParticle_II(iSpecies,iCell)=sum(Index_I)
        enddo
+       !$OMP END PARALLEL DO
     enddo
+    
     deallocate(Index_I)
     
     !find maximum number of particles in a given cell
@@ -1016,24 +1029,79 @@ contains
     endif
     allocate(SortParticles_III(nSpecies,0:nAlt+1,maxval(nSortedParticle_II)))
 
+
+    !the no openmp version
+!!!    allocate(iParticleCell_II(nSpecies,0:nAlt+1))
+!!!    iParticleCell_II=1
+!!!    PARTICLE_LOOP: do iParticle=1,nParticle
+!!!       iCell=Particles_I(iParticle)%iCell
+!!!       if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
+!!!       iSpecies=Particles_I(iParticle)%iSpecies
+!!!       if(iSpecies==0)write(*,*)iParticle,nParticle
+!!!       
+!!!       SortParticles_III(iSpecies,iCell,&
+!!!            iParticleCell_II(iSpecies,iCell))%Particle& 
+!!!            =>Particles_I(iParticle)
+!!!       iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
+!!!       
+!!!    enddo PARTICLE_LOOP
+!!!    deallocate(iParticleCell_II)
+    
+    !\
+    ! the openmp version
+    !/
+    !allocate a sortparticle array specific to each thread, after soring 
+    !
+    nThreads = OMP_get_max_threads()
+    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
+    allocate(SortParticles_TIII(0:nThreads-1,nSpecies,0:nAlt+1,&
+         maxval(nSortedParticle_II)))
+!    write(*,*) nThreads
+!    stop
     ! loop through particles and assign pointer index to target particle from 
     !global list
-    allocate(iParticleCell_II(nSpecies,0:nAlt+1))
-    iParticleCell_II=1
+    allocate(iParticleCell_TII(0:nThreads-1,nSpecies,0:nAlt+1))
+    iParticleCell_TII=1
+    !$OMP PARALLEL DO  PRIVATE(iCell,iSpecies,iThread)
     PARTICLE_LOOP: do iParticle=1,nParticle
+       !write(*,*) 'number of threads=',OMP_get_num_threads()
+       iThread=OMP_get_thread_num()
+       !write(*,*) 'iThread=',iThread
        iCell=Particles_I(iParticle)%iCell
        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
        iSpecies=Particles_I(iParticle)%iSpecies
        if(iSpecies==0)write(*,*)iParticle,nParticle
-       SortParticles_III(iSpecies,iCell,&
-            iParticleCell_II(iSpecies,iCell))%Particle& 
+       
+       SortParticles_TIII(iThread,iSpecies,iCell,&
+            iParticleCell_TII(iThread,iSpecies,iCell))%Particle& 
             =>Particles_I(iParticle)
-       !          write(*,*)'test'
-       !          write(*,*) SortParticles_III(iParticleCell)%Particle%vpar,Particles_I(iParticle)%vpar
-       iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
+       iParticleCell_TII(iThread,iSpecies,iCell)=&
+            iParticleCell_TII(iThread,iSpecies,iCell)+1
        
     enddo PARTICLE_LOOP
-    deallocate(iParticleCell_II)
+    !$OMP END PARALLEL DO
+    !Now combine the results from each thread
+
+    !$OMP PARALLEL DO  PRIVATE(iCell,iSpecies,iThread,iUpper,iLower)
+    do iCell=0,nAlt+1
+       do iSpecies=1,nSpecies
+          iUpper=0
+          THREADS:do iThread=0,nThreads-1
+             if(iParticleCell_TII(iThread,iSpecies,iCell)==1) cycle THREADS
+             iLower=iUpper+1
+             iUpper=sum(iParticleCell_TII(0:iThread,iSpecies,iCell))-iThread-1
+             !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
+             
+             SortParticles_III(iSpecies,iCell,iLower:iUpper) = &
+                  SortParticles_TIII(iThread,iSpecies,iCell,&
+                  1:iParticleCell_TII(iThread,iSpecies,iCell)-1)
+             
+          enddo THREADS
+       enddo
+    enddo
+    !$OMP END PARALLEL DO
+    
+    deallocate(iParticleCell_TII)
   end subroutine sort_particles
 
   !=============================================================================
@@ -1544,7 +1612,7 @@ contains
     
     TimeAdvance=0.0
     
-    
+    write(*,*) 'nParticle=',nParticle
     TIMELOOP:do 
        !check stopping condition
        if (TimeAdvance >=DtAdvance) exit TIMELOOP
@@ -1627,10 +1695,14 @@ contains
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
 
     write(*,*) 'sample_maxwellian_cell'
-    !call sample_maxwellian_cell(iCell,iSpecies,Density,uBulk,Temperature)
+    
     call sample_maxwellian_cell_boxmuller(iCell,iSpecies,Density,uBulk,Temperature)
-!    call plot_distribution_cell_orig(iSpecies,iCell,nParticle,Particles_I)
+
     call sample_maxwellian_cell_boxmuller(iCell+1,iSpecies,Density,uBulk,Temperature)
+
+    call sample_maxwellian_cell_boxmuller(iCell,iSpecies+1,Density,uBulk,Temperature)
+
+    call sample_maxwellian_cell_boxmuller(iCell+1,iSpecies+1,Density,uBulk,Temperature)
     write(*,*) 'test pointer extraction'
 !    Particles_I%vperp=Particles_I%vperp*2.0
     call sort_particles
@@ -1639,6 +1711,8 @@ contains
     call plot_distribution_cell(iSpecies,iCell+1)
 !    call plot_distribution_cell(iSpecies,iCell,nSortedParticle_II,&
 !         SortParticles_III(iSpecies)%CellParticle)
+
+    call plot_profile
   end subroutine test_sample
 
   !============================================================================
@@ -1865,7 +1939,6 @@ contains
 
 
   end subroutine test_coulomb_collision
-
 
 
 end Module ModParticle
