@@ -670,9 +670,9 @@ contains
     PlotState_IIV=0.0
     !Sort particles into bins
     do iParticle=1,nParticleInCell
-       iVpar =floor((SortParticles_III(iSpecies,iCell,iParticle)%Particle%vpar &
+       iVpar =floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar &
             -vParMin )/dVel)
-       iVperp=floor((SortParticles_III(iSpecies,iCell,iParticle)%Particle%vperp&
+       iVperp=floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp&
             -vPerpMin)/dVel)
        
        if (iVpar>0 .and.iVpar<=nVel .and.iVperp>0 .and.iVperp<=nVel) then
@@ -837,7 +837,7 @@ contains
     uBulkPar=0.0
     do iParticle=1,nParticleInCell
        !write(*,*) iParticle,nParticleInCell
-       uParTmp =SortParticles_III(iSpecies,iCell,iParticle)%Particle%vpar
+       uParTmp =SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar
        uBulkPar  = uBulkPar + uParTmp        
     end do
     uBulkPar=uBulkPar/nParticleInCell
@@ -849,8 +849,8 @@ contains
     Ppar=0.0
     Pperp=0.0
     do iParticle=1,nParticleInCell
-       uParTmp =SortParticles_III(iSpecies,iCell,iParticle)%Particle%vpar
-       uPerpTmp=SortParticles_III(iSpecies,iCell,iParticle)%Particle%vperp
+       uParTmp =SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar
+       uPerpTmp=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp
        Pressure = Pressure+&
             (uParTmp-uBulkPar)**2&
             +2.0*(uPerpTmp-uBulkPerp)**2
@@ -921,7 +921,7 @@ contains
        if (nParticleInCell==0) cycle ALT_LOOP
        PARTICLE_LOOP:do iParticle=1,nParticleInCell
           !get weight
-          Alt=SortParticles_III(iSpecies,iAlt,iParticle)%Particle%Alt
+          Alt=SortParticles_III(iParticle,iSpecies,iAlt)%Particle%Alt
           !check if no weight contributes
           if(Alt<Alt_G(iCell-1) .or. Alt>Alt_G(iCell+1)) cycle PARTICLE_LOOP
           weight=1.0-abs(Alt_G(iCell)-Alt)/dAlt_G(iCell) !assumes uniform grid!
@@ -930,7 +930,7 @@ contains
           density=density+weight*nNumPerParticle/Volume_G(iCell)
           
           !bulk velocity is average of velocity
-          uParTmp =SortParticles_III(iSpecies,iAlt,iParticle)%Particle%vpar
+          uParTmp =SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vpar
           uBulkPar  = uBulkPar + weight*uParTmp        
           
           TotalWeight=TotalWeight+weight
@@ -950,14 +950,14 @@ contains
        if (nParticleInCell==0) cycle ALT_LOOP2
        PARTICLE_LOOP2:do iParticle=1,nParticleInCell
           !get weight
-          Alt=SortParticles_III(iSpecies,iAlt,iParticle)%Particle%Alt
+          Alt=SortParticles_III(iParticle,iSpecies,iAlt)%Particle%Alt
           !check if no weight contributes
           if(Alt<Alt_G(iCell-1) .or. Alt>Alt_G(iCell+1)) cycle PARTICLE_LOOP2
           weight=1.0-abs(Alt_G(iCell)-Alt)/dAlt_G(iCell) !assumes uniform grid!
 
           !from eq6.12 Gombosi Gas Kinetic Theory book
-          uParTmp =SortParticles_III(iSpecies,iAlt,iParticle)%Particle%vpar
-          uPerpTmp=SortParticles_III(iSpecies,iAlt,iParticle)%Particle%vperp
+          uParTmp =SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vpar
+          uPerpTmp=SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vperp
           Pressure = Pressure+&
                ((uParTmp-uBulkPar)**2&
                +2.0*(uPerpTmp-uBulkPerp)**2)*weight
@@ -995,12 +995,11 @@ contains
     integer :: nThreads,iThread,nThreadsOrig
     integer,parameter :: nThreadsReduced=8
     !comment next lines when not using openmp
-    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
-         OMP_get_num_threads
-!    type(particleCellSpecies), allocatable:: SortParticles_TIII(:,:,:,:)
-    type(particleCellSpecies), allocatable:: SortParticlesT_III(:,:,:)
-    integer,allocatable :: iParticleCell_TII(:,:,:)
-    integer :: iUpper, iLower
+!    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
+!         OMP_get_num_threads
+!    type(particleCellSpecies), allocatable:: SortParticlesT_III(:,:,:)
+!    integer,allocatable :: iParticleCell_IIT(:,:,:)
+!    integer :: iUpper, iLower
     !--------------------------------------------------------------------------
     
     ! Find the number of particles of a given species in a cell and build 
@@ -1029,104 +1028,97 @@ contains
     if (allocated(SortParticles_III)) then
        deallocate(SortParticles_III)
     endif
-    allocate(SortParticles_III(nSpecies,0:nAlt+1,maxval(nSortedParticle_II)))
+    allocate(SortParticles_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
 
 
     !the no openmp version
-!!!    allocate(iParticleCell_II(nSpecies,0:nAlt+1))
-!!!    iParticleCell_II=1
-!!!    PARTICLE_LOOP: do iParticle=1,nParticle
-!!!       iCell=Particles_I(iParticle)%iCell
-!!!       if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
-!!!       iSpecies=Particles_I(iParticle)%iSpecies
-!!!       if(iSpecies==0)write(*,*)iParticle,nParticle
-!!!       
-!!!       SortParticles_III(iSpecies,iCell,&
-!!!            iParticleCell_II(iSpecies,iCell))%Particle& 
-!!!            =>Particles_I(iParticle)
-!!!       iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
-!!!       
-!!!    enddo PARTICLE_LOOP
-!!!    deallocate(iParticleCell_II)
-    
-    !\
-    ! the openmp version
-    !/
-    !allocate a sortparticle array specific to each thread, after soring 
-    !
-    !reduce the number of threads and save the origional amount
-    nThreadsOrig = OMP_get_max_threads()
-    call OMP_set_num_threads(nThreadsReduced)
-    nThreads=nThreadsReduced
-!    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
-!    allocate(SortParticlesT_III(0:nThreads-1,nSpecies,0:nAlt+1,&
-!         maxval(nSortedParticle_II)))
-
-    if(allocated(SortParticlesT_III))deallocate(SortParticlesT_III)
-    allocate(SortParticlesT_III(nSpecies,0:nAlt+1,&
-         maxval(nSortedParticle_II)))
-!    write(*,*) nThreads
-!    stop
-    ! loop through particles and assign pointer index to target particle from 
-    !global list
-    allocate(iParticleCell_TII(0:nThreads-1,nSpecies,0:nAlt+1))
-!    allocate(iParticleCellT_II(nSpecies,0:nAlt+1))
-    iParticleCell_TII=1
-    
-    !$OMP PARALLEL PRIVATE(iCell,iSpecies,iThread, &
-    !$OMP iParticle, SortParticlesT_III, &
-    !$OMP iUpper,iLower)
-    !$OMP DO  
+    allocate(iParticleCell_II(nSpecies,0:nAlt+1))
+    iParticleCell_II=1
     PARTICLE_LOOP: do iParticle=1,nParticle
-       !write(*,*) 'number of threads=',OMP_get_num_threads()
-       iThread=OMP_get_thread_num()
-       !write(*,*) 'iThread=',iThread
        iCell=Particles_I(iParticle)%iCell
        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
        iSpecies=Particles_I(iParticle)%iSpecies
        if(iSpecies==0)write(*,*)iParticle,nParticle
        
-       SortParticlesT_III(iSpecies,iCell,&
-            iParticleCell_TII(iThread,iSpecies,iCell))%Particle& 
+       SortParticles_III(iParticleCell_II(iSpecies,iCell),&
+            iSpecies,iCell)%Particle& 
             =>Particles_I(iParticle)
-       iParticleCell_TII(iThread,iSpecies,iCell)=&
-            iParticleCell_TII(iThread,iSpecies,iCell)+1
+       iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
        
     enddo PARTICLE_LOOP
-    !$OMP END DO
-
-    !Now combine the results from each thread
-
-    !!! $OMP DO 
-    do iCell=0,nAlt+1
-       do iSpecies=1,nSpecies
-          !iUpper=0
-          !THREADS:do iThread=0,nThreads-1
-          !   if(iParticleCell_TII(iThread,iSpecies,iCell)==1) cycle THREADS
-          
-          if(iParticleCell_TII(iThread,iSpecies,iCell)>1) then
-             !iLower=iUpper+1
-             !write(*,*) 'iThread,par1,par2',iThread,&
-             !     iParticleCell_TII(:,iSpecies,iCell),iSpecies,iCell
-
-             iLower=sum(iParticleCell_TII(0:iThread-1,iSpecies,iCell))-iThread+1
-             iUpper=sum(iParticleCell_TII(0:iThread,iSpecies,iCell))-iThread-1
-             !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
-             !write(*,*) 'iThread,iParticleCell_TII(iThread,iSpecies,iCell)',&
-             !     iThread,iParticleCell_TII(iThread,iSpecies,iCell)
-             SortParticles_III(iSpecies,iCell,iLower:iUpper) = &
-                  SortParticlesT_III(iSpecies,iCell,&
-                  1:iParticleCell_TII(iThread,iSpecies,iCell)-1)
-          endif
-!          enddo THREADS
-       enddo
-    enddo
-    !!! $OMP END DO
-    !$OMP END PARALLEL
-
-    !set number of threads back to origional value
-    call OMP_set_num_threads(nThreadsOrig)
-    deallocate(iParticleCell_TII,SortParticlesT_III)
+    deallocate(iParticleCell_II)
+    
+!!!     !\
+!!!     ! the openmp version
+!!!     !/
+!!!     !allocate a sortparticle array specific to each thread, after soring 
+!!!     !
+!!!     !reduce the number of threads and save the origional amount
+!!!     nThreadsOrig = OMP_get_max_threads()
+!!!     call OMP_set_num_threads(nThreadsReduced)
+!!!     nThreads=nThreadsReduced
+!!! !    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
+!!! !    allocate(SortParticlesT_III(0:nThreads-1,nSpecies,0:nAlt+1,&
+!!! !         maxval(nSortedParticle_II)))
+!!! 
+!!!     if(allocated(SortParticlesT_III))deallocate(SortParticlesT_III)
+!!!     allocate(SortParticlesT_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
+!!! !    write(*,*) nThreads
+!!! !    stop
+!!!     ! loop through particles and assign pointer index to target particle from 
+!!!     !global list
+!!!     allocate(iParticleCell_IIT(nSpecies,0:nAlt+1,0:nThreads-1))
+!!! !    allocate(iParticleCellT_II(nSpecies,0:nAlt+1))
+!!!     iParticleCell_IIT=1
+!!!     
+!!!     !$OMP PARALLEL PRIVATE(iCell,iSpecies,iThread, &
+!!!     !$OMP iParticle, SortParticlesT_III, &
+!!!     !$OMP iUpper,iLower) 
+!!!     !$OMP DO  
+!!!     PARTICLE_LOOP: do iParticle=1,nParticle
+!!!        !write(*,*) 'number of threads=',OMP_get_num_threads()
+!!!        iThread=OMP_get_thread_num()
+!!!        !write(*,*) 'iThread=',iThread
+!!!        iCell=Particles_I(iParticle)%iCell
+!!!        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
+!!!        iSpecies=Particles_I(iParticle)%iSpecies
+!!!        if(iSpecies==0)write(*,*)iParticle,nParticle
+!!!        
+!!!        SortParticlesT_III(iParticleCell_IIT(iSpecies,iCell,iThread),&
+!!!             iSpecies,iCell)%Particle& 
+!!!             =>Particles_I(iParticle)
+!!!        iParticleCell_IIT(iSpecies,iCell,iThread)=&
+!!!             iParticleCell_IIT(iSpecies,iCell,iThread)+1
+!!!        
+!!!     enddo PARTICLE_LOOP
+!!!     !$OMP END DO 
+!!! 
+!!!     !Now combine the results from each thread
+!!! 
+!!!     do iCell=0,nAlt+1
+!!!        do iSpecies=1,nSpecies
+!!!           if(iParticleCell_IIT(iSpecies,iCell,iThread)>1) then
+!!!              !write(*,*) 'iThread,par1,par2',iThread,&
+!!!              !     iParticleCell_TII(:,iSpecies,iCell),iSpecies,iCell
+!!! 
+!!!              iLower=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread-1))-iThread+1
+!!!              iUpper=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread))-iThread-1
+!!!              !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
+!!!              !write(*,*) 'iThread,iParticleCell_TII(iThread,iSpecies,iCell)',&
+!!!              !     iThread,iParticleCell_TII(iThread,iSpecies,iCell)
+!!!              SortParticles_III(iLower:iUpper,iSpecies,iCell) = &
+!!!                   SortParticlesT_III(&
+!!!                   1:iParticleCell_IIT(iSpecies,iCell,iThread)-1,&
+!!!                   iSpecies,iCell)
+!!!           endif
+!!!        enddo
+!!!     enddo
+!!! 
+!!!     !$OMP END PARALLEL
+!!! 
+!!!     !set number of threads back to origional value
+!!!     call OMP_set_num_threads(nThreadsOrig)
+!!!     deallocate(iParticleCell_IIT,SortParticlesT_III)
   end subroutine sort_particles
 
   !=============================================================================
@@ -1211,7 +1203,7 @@ contains
           !so we end up with a pointer to all the particles in the cell 
           !regardless of species
           CellParticles_I(iParticle)%Particle=>&
-               SortParticles_III(iSpecies,iCell,iParticleSpec)%Particle
+               SortParticles_III(iParticleSpec,iSpecies,iCell)%Particle
           iParticle=iParticle+1
        enddo
     enddo
@@ -1562,6 +1554,74 @@ contains
     Particles_I=BuriedParticles_I(iLine)%SavedParticles_I
     
   end subroutine disinter_line
+
+  !============================================================================
+  ! 
+  subroutine get_from_particles(nAltIn,nSpeciesIn,AltIn_C,&
+       DensityOut_IC,VelocityOut_IC,TemperatureOut_IC)
+    use ModInterpolate, only: linear
+    integer, intent(in) :: nAltIn,nSpeciesIn
+    real,    intent(in) :: AltIn_C(nAltIn)
+    
+    !for each species, the state variables as a function of alt
+    real,    intent(in) :: DensityOut_IC(nSpeciesIn,nAltIn)
+    real,    intent(in) :: VelocityOut_IC(nSpeciesIn,nAltIn)
+    real,    intent(in) :: TemperatureOut_IC(nSpeciesIn,nAltIn)
+    
+    integer :: iSpecies, iCell,nParticleInCell, iAlt
+    real :: density, Velocity,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,&
+         Tperp,Temperature
+    real, allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
+    
+    !min values for density and temperature
+    real, parameter :: DensityMin=1e-4 !cm-3
+    real, parameter :: TemperatureMin=100.0 !k
+    !---------------------------------------------------------------------------
+    
+    allocate(Density_IC(nSpecies,nAlt),Velocity_IC(nSpecies,nAlt),&
+         Temperature_IC(nSpecies,nAlt))    
+    
+    do iCell=0,nAlt
+       do iSpecies=1,nSpecies
+          nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+          if(nParticleInCell==0) then
+             Density_IC(iSpecies,iCell)    =0.0
+             Velocity_IC(iSpecies,iCell)   =0.0
+             Temperature_IC(iSpecies,iCell)=0.0
+          else
+             ! get moments in each cell so we can later interpolate to fluid 
+!             call calc_moments_cell(iSpecies,iCell,&
+!                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+             call calc_moments_cell_weighted(iSpecies,iCell,&
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+             Density_IC(iSpecies,iCell)    =density
+             Velocity_IC(iSpecies,iCell)   =uBulkPar
+             Temperature_IC(iSpecies,iCell)=Temp
+          end if
+       enddo
+    end do
+
+    !Now interpolate results from particle grid onto fluid grid
+    do iAlt=1,nAltIn
+       do iSpecies=1,nSpecies
+          !check bounds 
+          if(AltIn_C(iAlt)<Alt_G(1) .or. AltIn_C(iAlt)>Alt_G(nAlt)) then
+             Density     = DensityMin
+             Velocity    = 0.0
+             Temperature = TemperatureMin
+          else
+             !interpolate
+             Density  = max(linear(Density_IC(iSpecies,:),1,     &
+                  nAlt,AltIn_C(iAlt),Alt_G),DensityMin)
+             Velocity = linear(Velocity_IC(iSpecies,:),1,     &
+                  nAlt,AltIn_C(iAlt),Alt_G)
+             Temperature = max(linear(Temperature_IC(iSpecies,:),1,     &
+                  nAlt,AltIn_C(iAlt),Alt_G),TemperatureMin)
+          endif
+       enddo
+    enddo
+    
+  end subroutine get_from_particles
 
   !============================================================================
   ! 
