@@ -7,7 +7,7 @@ subroutine PW_initialize
   use ModIoUnit, ONLY: io_unit_new,UnitTmp_
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
-  use ModCommonVariables, ONLY:IYD,ALTD,Mass_I
+  use ModCommonVariables, ONLY:IYD,ALTD,Mass_I,DRBND
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora
@@ -230,11 +230,17 @@ subroutine PW_initialize
         call init_pwom_se_coupling(IsVerboseSE,nAlt,nLine,iLineGlobal,ALTD)
      end if
   end if
+  
 
+  
   if (UseParticles) then
      
-     call init_particle(nAltParticles,AltMinParticles,AltMaxParticles,TypeParticleGrid)
+     call init_particle(nAltParticles,AltMinParticles,AltMaxParticles,&
+          TypeParticleGrid)
      nLineParticle=nLine
+     
+     !set altitude index for fluid to particle transition
+     iAltParticle=ceiling(AltMinParticles/DRBND)+1
      
      !for each line fill the state variables, intially sample the particles 
      !and then bury the line. Each lines particles will be disintered before 

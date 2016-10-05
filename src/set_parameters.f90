@@ -244,6 +244,7 @@ subroutine PW_set_parameters(NameAction)
 
      case('#PARTICLES')
         call read_var('UseParticles',  UseParticles)
+        call read_var('UseParticleFeedback', UseParticleFeedback)
         call read_var('DtCoupleParticles',  DtCoupleParticles)
         call read_var('DoInitAltParticles', DoInitAltParticles)
         call read_var('nAltParticles', nAltParticles)

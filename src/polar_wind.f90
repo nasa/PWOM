@@ -17,14 +17,15 @@ subroutine polar_wind
   
   use ModPWOM, only: DtVertical,nLine,IsStandAlone,DoSavePlot,iLine,&
        IsFullyImplicit,UseExplicitHeat,DoTimeAccurate,MaxStep,DnOutput,&
-       nAlt, IsVariableDt, UseParticles,DtCoupleParticles
+       nAlt, IsVariableDt, UseParticles,DtCoupleParticles,UseParticleFeedback,&
+       iAltParticle
   use ModIoUnit, ONLY: UnitTmp_
   use ModCommonVariables
   use ModFieldLine
   use ModPwImplicit, only: PW_implicit_update
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
   use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
-  use ModParticle, ONLY: put_to_particles, run_particles
+  use ModParticle, ONLY: put_to_particles, run_particles,get_from_particles
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -38,6 +39,12 @@ subroutine polar_wind
   
   !-----------------------------------------------------------------------
   nDim = nAlt
+  !set species dependent upper boundary to nAlt when not using particles
+  nAltTop_I(:)=nAlt
+  if (UseParticles) then
+     !nAltTop_I(1:2)=iAltParticle
+     nAltTop_I(:)=iAltParticle
+  endif
   call get_field_line(nDim,State_GV(1:nDim,:),                       &
        SmLat,SmLon,Jr,wHorizontal,uJoule2=uJoule2,                &
        iUnitOutput=iUnitOutput,       &
@@ -114,14 +121,45 @@ subroutine polar_wind
 
         write(*,*) 'calling put_to_particles'
         call put_to_particles(nDim,2,1.0e5*ALTD(1:nDim),&
-             .false.,Density_IC,Velocity_IC,Temperature_IC,EfieldIn_C=EFIELD(1:nDim))
+             .false.,Density_IC,Velocity_IC,Temperature_IC,&
+             EfieldIn_C=EFIELD(1:nDim))
         write(*,*) 'done put_to_particles at time',Time,DtCoupleParticles
-        deallocate(Density_IC,Velocity_IC,Temperature_IC)
         
         !advance the particle solution to the next coupling time
         write(*,*) 'calling run_particles'
         call run_particles(DtCoupleParticles)
         write(*,*) 'done run_particles'
+        
+        if (UseParticleFeedback) then
+           !get the particle solution back
+           call get_from_particles(nDim,2,1.0e5*ALTD(1:nDim),&
+                Density_IC,Velocity_IC,Temperature_IC)
+           
+           !overwrite portion of state array with particle solution
+           State_GV(iAltParticle:nDim,iRho_I(1))=&
+                Density_IC(1,iAltParticle:nDim)*Mass_I(1)
+           State_GV(iAltParticle:nDim,iRho_I(2))=&
+                Density_IC(2,iAltParticle:nDim)*Mass_I(2)
+           State_GV(iAltParticle:nDim,iU_I(1))=&
+                Velocity_IC(1,iAltParticle:nDim)
+           State_GV(iAltParticle:nDim,iU_I(2))=&
+                Velocity_IC(2,iAltParticle:nDim)
+           State_GV(iAltParticle:nDim,iT_I(1))=&
+                Temperature_IC(1,iAltParticle:nDim)
+           State_GV(iAltParticle:nDim,iT_I(2))=&
+                Temperature_IC(2,iAltParticle:nDim)
+
+           State_GV(iAltParticle:nDim,iP_I(1))=&
+                Temperature_IC(1,iAltParticle:nDim)*Rgas_I(1)&
+                *State_GV(iAltParticle:nDim,iRho_I(1))
+
+           State_GV(iAltParticle:nDim,iP_I(2))=&
+                Temperature_IC(2,iAltParticle:nDim)*Rgas_I(2)&
+                *State_GV(iAltParticle:nDim,iRho_I(2))
+        endif
+        
+        deallocate(Density_IC,Velocity_IC,Temperature_IC)
+
      endif
 
      NSTEP=NSTEP+1
@@ -254,28 +292,30 @@ contains
     NewState_GV = State_GV
     if (TypeSolver == 'Godunov') then
        Do iIon=1,nIon-1
-          CALL Solver(iIon,nDim,Dt,&
-               State_GV(-1:nDim+2,iRho_I(iIon):iT_I(iIon)),&
-               Source_CV(1:nDim,iRho_I(iIon)),Source_CV(1:nDim,iP_I(iIon)),&
-               Source_CV(1:nDim,iU_I(iIon)),&
-               RGAS_I(iIon),HeatCon_GI(0:nDim+1,iIon),&
-               NewState_GV(-1:nDim+2,iRho_I(iIon):iT_I(iIon)))
+          CALL Solver(iIon,nAltTop_I(iIon),Dt,&
+               State_GV(-1:nAltTop_I(iIon)+2,iRho_I(iIon):iT_I(iIon)),&
+               Source_CV(1:nAltTop_I(iIon),iRho_I(iIon)),&
+               Source_CV(1:nAltTop_I(iIon),iP_I(iIon)),&
+               Source_CV(1:nAltTop_I(iIon),iU_I(iIon)),&
+               RGAS_I(iIon),HeatCon_GI(0:nAltTop_I(iIon)+1,iIon),&
+               NewState_GV(-1:nAltTop_I(iIon)+2,iRho_I(iIon):iT_I(iIon)))
        enddo
 
       else if (TypeSolver == 'Rusanov') then
          do iIon=1,nIon-1
-            call rusanov_solver(iIon,nDim,RGAS_I(iIon),dt,   &
-                 State_GV(-1:nDim+2,iRho_I(iIon):iP_I(iIon)),&
-                 State_GV(-1:nDim+2,iRho_I(nIon):iP_I(nIon)),&
-                 Source_CV(1:nDim,iRho_I(iIon)), Source_CV(1:nDim,iU_I(iIon)),&
-                 Source_CV(1:nDim,iP_I(iIon)),  &
-                 HeatCon_GI(0:nDim+1,iIon), &
-                 NewState_GV(-1:nDim+2,iRho_I(iIon):iP_I(iIon)))
+            call rusanov_solver(iIon,nAltTop_I(iIon),RGAS_I(iIon),dt,   &
+                 State_GV(-1:nAltTop_I(iIon)+2,iRho_I(iIon):iP_I(iIon)),&
+                 State_GV(-1:nAltTop_I(iIon)+2,iRho_I(nIon):iP_I(nIon)),&
+                 Source_CV(1:nAltTop_I(iIon),iRho_I(iIon)), &
+                 Source_CV(1:nAltTop_I(iIon),iU_I(iIon)),&
+                 Source_CV(1:nAltTop_I(iIon),iP_I(iIon)),  &
+                 HeatCon_GI(0:nAltTop_I(iIon)+1,iIon), &
+                 NewState_GV(-1:nAltTop_I(iIon)+2,iRho_I(iIon):iP_I(iIon)))
             !get T from p and rho
-            NewState_GV(1:nDim,iT_I(iIon))=&
-                 NewState_GV(1:nDim,iP_I(iIon))&
+            NewState_GV(1:nAltTop_I(iIon),iT_I(iIon))=&
+                 NewState_GV(1:nAltTop_I(iIon),iP_I(iIon))&
                  /Rgas_I(iIon)&
-                 /NewState_GV(1:nDim,iRho_I(iIon))
+                 /NewState_GV(1:nAltTop_I(iIon),iRho_I(iIon))
          enddo
       endif
       

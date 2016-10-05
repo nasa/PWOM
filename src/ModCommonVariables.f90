@@ -11,7 +11,8 @@ module ModCommonVariables
        iUnitCollision, iUnitSourceGraphics
   
   
-
+  !species dependent upper boundary
+  integer :: nAltTop_I(nIon)
   
   real :: wHorizontal
   character(len=7) :: TypeSolver
