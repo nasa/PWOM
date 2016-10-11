@@ -81,7 +81,11 @@ Module ModParticle
   real,allocatable :: Mass_I(:)
   integer, parameter :: O_=1, H_=2, He_=3
   real,allocatable::ReducedMass_II(:,:)
-  
+
+  !variable for WPI
+  real,allocatable :: Dperp_I(:),Dexp_I(:)
+  logical :: UseWPI=.true.
+
   !plot variables for profile (depends on planet)
   character(len=150):: NameProfilePlotVar
   integer, allocatable :: iDen_I(:),iVel_I(:),&
@@ -111,6 +115,7 @@ Module ModParticle
   public :: test_sample
   public :: test_pusher
   public :: test_coulomb_collision
+  public :: test_wpi
 contains
 
   !============================================================================
@@ -142,7 +147,20 @@ contains
        !nNumPerParticle_I(O_)=1.0e5
        !nNumPerParticle_I(H_)=5.0e5
        nNumPerParticle_I(O_)=5.0e5
-       nNumPerParticle_I(H_)=1.0e6
+       nNumPerParticle_I(H_)=5.0e5
+       
+       !set WPI variables
+       allocate(Dperp_I(nSpecies))
+       allocate(Dexp_I(nSpecies))
+       
+!       Dperp_I(O_)=9.55e2  !polar cap value
+       Dperp_I(O_)=6.94e5   !auroral/cusp value
+       Dexp_I(O_)=13.3
+       
+
+!       Dperp_I(H_)=5.77e3  !polar cap value
+       Dperp_I(H_)=4.45e7   !auroral/cusp value
+       Dexp_I(H_)=7.95
        
        !set plotting variables
        NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
@@ -306,6 +324,199 @@ contains
     !$OMP END PARALLEL DO
     
   end subroutine push_guiding_center
+
+  !============================================================================
+  ! push guiding center of particles using rk4 method
+  subroutine push_guiding_center_rk4
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I,mPlanet_I,rPlanet_I    
+    use ModConst,ONLY:cGravitation
+    use ModInterpolate, only: linear
+    integer :: iParticle,iAlt
+    real :: rCoord, Efield,acceleration,gravity,AltStart
+    
+    !interpolation variables
+    real :: xAlt, Dx1, Dx2
+    integer :: iMin,iMax
+
+    !variables for the rk4 method
+    real :: dAlt1,dAlt2,dAlt3,dAlt4,dVpar1,dVpar2,dVpar3,dVpar4,Vperp,VperpStart
+    real :: VparStart, Mass
+    real, parameter ::OneOverSix=0.166666666666666666666666666666666666
+    
+    !conversion variables
+    real, parameter :: cMtoCm=1e2
+    real, parameter :: cElecChargeCGS= 4.80320425e-10 !statcoulombs
+    
+    !coef for calculation of gravity (to reduce repeated multiplies)
+    real :: GravCoef
+    !--------------------------------------------------------------------------
+
+    GravCoef = cMtoCm**3*cGravitation*mPlanet_I(Planet_)
+
+    !$OMP PARALLEL DO PRIVATE(AltStart,rCoord,gravity,Efield,acceleration,iAlt,&
+    !$OMP xAlt,iMin,iMax,Dx1,Dx2,&
+    !$OMP dAlt1,dAlt2,dAlt3,dAlt4,dVpar1,dVpar2,dVpar3,dVpar4,Vperp,VperpStart,&
+    !$OMP VparStart, Mass)
+    
+    do iParticle=1,nParticle
+       AltStart=Particles_I(iParticle)%Alt
+       VperpStart=Particles_I(iParticle)%vperp
+       VparStart=Particles_I(iParticle)%vpar
+       Mass = Mass_I(Particles_I(iParticle)%iSpecies)
+       
+       !set the radial distance and the gravitational acceleration 
+       ! at particle location. note need rCoord in cm but modplanetconst in SI
+       rCoord=rPlanet_I(Planet_)*cMtoCm+AltStart
+       gravity=GravCoef/rCoord**2
+       
+
+       ! interpolate electric field to particle (note ModInterpolate cannot be 
+       !used since it is not safe for multiple OpenMp threads. 
+       !note current interpolation only works for uniform grid
+       xAlt=(AltStart-Alt_G(-1))/dAlt_G(-1)-1.0
+       iMin=floor(xAlt)
+       iMax=ceiling(xAlt)
+       !set interpolation weights
+       Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+       !interpolate
+       Efield=Dx2*Efield_G(iMin)+Dx1*Efield_G(iMax)
+       
+       !Efield= linear(Efield_G(:),-1,nAlt+1,Particles_I(iParticle)%Alt,Alt_G)
+       !Efield=0.     
+       !determine acceleration (mirror force-gravity-eField)
+       acceleration=1.5*VperpStart**2/rCoord - gravity&
+            +Efield*(cElecChargeCGS/Mass)
+       
+       !save RK4 step 1
+       dVpar1 = acceleration*DtMove
+       dAlt1 = VparStart*DtMove
+
+       
+       !start to get RK4 step2
+       Vperp = VperpStart&
+            *(AltStart/(AltStart+0.5*dAlt1))**1.5
+       !set the radial distance and the gravitational acceleration 
+       ! at particle location. note need rCoord in cm but modplanetconst in SI
+       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+0.5*dAlt1)
+       gravity=GravCoef/rCoord**2
+       
+
+       ! interpolate electric field to particle (note ModInterpolate cannot be 
+       !used since it is not safe for multiple OpenMp threads. 
+       !note current interpolation only works for uniform grid
+       xAlt=((AltStart+0.5*dAlt1)-Alt_G(-1))/dAlt_G(-1)-1.0
+       iMin=floor(xAlt)
+       iMax=ceiling(xAlt)
+       !set interpolation weights
+       Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+       !interpolate
+       Efield=Dx2*Efield_G(iMin)+Dx1*Efield_G(iMax)
+       
+       !Efield= linear(Efield_G(:),-1,nAlt+1,Particles_I(iParticle)%Alt,Alt_G)
+       !Efield=0.     
+       !determine acceleration (mirror force-gravity-eField)
+       acceleration=1.5*Vperp**2/rCoord - gravity&
+            +Efield*(cElecChargeCGS/Mass)
+
+       !save RK4 step 2
+       dVpar2 = acceleration*DtMove
+       dAlt2 = (VparStart+0.5*dVpar1)*DtMove
+       
+       !get RK4 step 3
+       Vperp = VperpStart&
+            *(AltStart/(AltStart+0.5*dAlt2))**1.5
+
+       !set the radial distance and the gravitational acceleration 
+       ! at particle location. note need rCoord in cm but modplanetconst in SI
+       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+0.5*dAlt2)
+       gravity=GravCoef/rCoord**2
+       
+
+       ! interpolate electric field to particle (note ModInterpolate cannot be 
+       !used since it is not safe for multiple OpenMp threads. 
+       !note current interpolation only works for uniform grid
+       xAlt=((AltStart+0.5*dAlt2)-Alt_G(-1))/dAlt_G(-1)-1.0
+       iMin=floor(xAlt)
+       iMax=ceiling(xAlt)
+       !set interpolation weights
+       Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+       !interpolate
+       Efield=Dx2*Efield_G(iMin)+Dx1*Efield_G(iMax)
+       
+       !Efield= linear(Efield_G(:),-1,nAlt+1,Particles_I(iParticle)%Alt,Alt_G)
+       !Efield=0.     
+       !determine acceleration (mirror force-gravity-eField)
+       acceleration=1.5*Vperp**2/rCoord - gravity&
+            +Efield*(cElecChargeCGS/Mass)
+
+
+       !save RK4 step 3
+       dVpar3 = acceleration*DtMove
+       dAlt3 = (VparStart+0.5*dVpar2)*DtMove
+
+       !get RK4 step 4
+       Vperp = VperpStart&
+            *(AltStart/(AltStart+dAlt3))**1.5
+
+       !set the radial distance and the gravitational acceleration 
+       ! at particle location. note need rCoord in cm but modplanetconst in SI
+       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+dAlt3)
+       gravity=GravCoef/rCoord**2
+       
+
+       ! interpolate electric field to particle (note ModInterpolate cannot be 
+       !used since it is not safe for multiple OpenMp threads. 
+       !note current interpolation only works for uniform grid
+       xAlt=((AltStart+dAlt3)-Alt_G(-1))/dAlt_G(-1)-1.0
+       iMin=floor(xAlt)
+       iMax=ceiling(xAlt)
+       !set interpolation weights
+       Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+       !interpolate
+       Efield=Dx2*Efield_G(iMin)+Dx1*Efield_G(iMax)
+       
+       !Efield= linear(Efield_G(:),-1,nAlt+1,Particles_I(iParticle)%Alt,Alt_G)
+       !Efield=0.     
+       !determine acceleration (mirror force-gravity-eField)
+       acceleration=1.5*Vperp**2/rCoord - gravity&
+            +Efield*(cElecChargeCGS/Mass)
+
+
+       !save RK4 step 4
+       dVpar4 = acceleration*DtMove
+       dAlt4 = (VparStart+dVpar3)*DtMove
+
+
+       ! from initial velocity and acceleration update state using 
+       !rk4 method
+       Particles_I(iParticle)%vpar=VparStart&
+            +(dVpar1+2.0*dVpar2+2.0*dVpar3+dVpar4)*OneOverSix
+       Particles_I(iParticle)%Alt=AltStart&
+            +(dAlt1+2.0*dAlt2+2.0*dAlt3+dAlt4)*OneOverSix
+       Particles_I(iParticle)%vperp=&
+            VperpStart&
+            *(AltStart/Particles_I(iParticle)%Alt)**1.5
+
+
+       !check is particle leaves computational domain
+       if (Particles_I(iParticle)%Alt<AltBot_F(1) .or. &
+            Particles_I(iParticle)%Alt>AltTop_F(nAlt)) then
+          Particles_I(iParticle)%IsOpen = .true.
+       endif
+       
+       !Assign cell index to particle
+       CELL_ASSIGN: do iAlt=0,nAlt+1
+          if(Particles_I(iParticle)%Alt>AltBot_F(iAlt) &
+               .and. Particles_I(iParticle)%Alt<AltTop_F(iAlt)) then
+             Particles_I(iParticle)%iCell=iAlt
+             exit CELL_ASSIGN
+          endif
+       end do CELL_ASSIGN
+    end do
+    !$OMP END PARALLEL DO
+    
+  end subroutine push_guiding_center_rk4
+
 
 !  !=============================================================================
 !  ! sample maxwellian in cell
@@ -1508,7 +1719,66 @@ contains
          RandNum5_I,RandNum6_I)
 
   end subroutine apply_coulomb_collision
+  
+  !=============================================================================
+  ! 
+  subroutine apply_wave_particle_interaction
+    use ModPlanetConst, ONLY: Planet_,rPlanet_I
+    use ModNumConst, ONLY: cTwoPi
+    real :: rPlanetCM, rCoord, Dperp,variance
+    integer :: iSpecies, iParticle
+    real :: vpar, vperp,vmag,dVx,dVy,theta,phi,Velx,Vely
+    !random numbers for sampling
+    real,allocatable :: RandNum1_I(:),RandNum2_I(:),RandNum3_I(:),&
+         RandNum4_I(:),RandNum5_I(:)
+    real, parameter :: cMtoCm=1e2
+    !--------------------------------------------------------------------------
 
+    !precompute random numbers for collisions (for optimizing openmp loop)
+    allocate(RandNum1_I(nParticle), RandNum2_I(nParticle), &
+         RandNum3_I(nParticle),RandNum4_I(nParticle),RandNum5_I(nParticle))
+
+    do iParticle=1,nParticle
+       RandNum1_I(iParticle)=random_real(iSeed)
+       RandNum2_I(iParticle)=random_real(iSeed)
+       RandNum3_I(iParticle)=random_real(iSeed)
+       RandNum4_I(iParticle)=random_real(iSeed)
+       RandNum5_I(iParticle)=random_real(iSeed)
+    enddo    
+
+    rPlanetCM=rPlanet_I(Planet_)*cMtoCm
+    !$OMP PARALLEL PRIVATE(iParticle, iSpecies,vpar,vperp,vmag,rCoord,Dperp,&
+    !$OMP variance,dVx,dVy,Velx,Vely,theta,phi)
+    
+    !$OMP DO  
+    do iParticle=1,nParticle
+       iSpecies=Particles_I(iParticle)%iSpecies
+       vpar =Particles_I(iParticle)%vpar
+       vperp=Particles_I(iParticle)%vperp
+       vmag =sqrt(vpar**2+vperp**2)
+
+       rCoord=rPlanetCM+Particles_I(iParticle)%Alt
+       Dperp=Dperp_I(iSpecies)*(rCoord/rPlanetCM)**Dexp_I(iSpecies)
+       variance=2*Dperp*DtMove
+       dVx=sqrt(-2.0*variance*log(RandNum1_I(iParticle)))&
+            *cos(cTwoPi*RandNum2_I(iParticle))
+       dVy=sqrt(-2.0*variance*log(RandNum3_I(iParticle)))&
+            *cos(cTwoPi*RandNum4_I(iParticle))
+
+       !calculate the pitchange (theta) for each particle
+       theta=acos(vpar/vmag)
+       !randomly choose phase (azimuthal angle) for particle
+       phi=RandNum5_I(iParticle)*cTwoPi
+       
+       Velx=vmag*sin(theta)*cos(phi)
+       Vely=vmag*sin(theta)*sin(phi)
+
+       Particles_I(iParticle)%vperp=sqrt((Velx+dVx)**2+(Vely+dVy)**2)
+    end do
+    !$OMP END DO 
+    
+    !$OMP END PARALLEL
+  end subroutine apply_wave_particle_interaction
   !============================================================================
   ! Bury particles on a line. Useful when considering multiple lines on a proc
   subroutine bury_line(iLine)
@@ -1753,6 +2023,14 @@ contains
           call apply_coulomb_collision(iAlt)
           call timing_stop('apply_coulomb_collision')
        enddo
+
+       !apply the WPI
+       if (UseWPI) then
+          call timing_start('apply_wave_particle_interaction')
+          call apply_wave_particle_interaction
+          call timing_stop('apply_wave_particle_interaction')
+       endif
+       
        !advance the time
        Time=Time+DtMove
        TimeAdvance=TimeAdvance+DtMove
@@ -1825,8 +2103,8 @@ contains
     character(len=100):: TypeGrid
     !--------------------------------------------------------------------------
     
-!    nTime=1000
-    nTime=10000
+    nTime=1000
+!    nTime=10000
     DtSavePlot=10
     nAltIn=10
     AltMin=1000.0e5
@@ -1850,7 +2128,8 @@ contains
     !push the guiding center 100 times and reinitialize ghost cell each time
     do iTime=1,nTime
        call timing_start('push_guiding_center')
-       call push_guiding_center
+       !call push_guiding_center
+       call push_guiding_center_rk4
        call timing_stop('push_guiding_center')
        
        !advance the time
@@ -2041,6 +2320,95 @@ contains
 
 
   end subroutine test_coulomb_collision
+
+  !============================================================================
+  ! unit test for the wpi. Basically apply the wpi repeatedly for a stationary 
+  ! distribution and see perpendicular heating rate
+  subroutine test_wpi
+    use ModNumConst, ONLY: cPi,cTwoPi
+    use ModConst, ONLY: cEps,cElectronCharge,cBoltzmann
+    integer :: nAltIn, iCell,nTime,iTime,iAltBC
+    integer :: iSpecies
+    real :: AltMin, AltMax, Density, uBulk, DtSavePlot
+    character(len=100):: TypeGrid
+    real :: densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp
+    real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2,ckToEv=.00008617328
+    real,parameter ::cElectronChargeCGS=1.602176487e-20
+    real :: dt,uTherm
+    real :: Temp,Tpar,Tperp
+    !--------------------------------------------------------------------------
+!    nTime=10
+!    nTime=1000
+    nTime=100
+    DtSavePlot=10
+    nAltIn=10
+    AltMin=8000.0e5
+    AltMax=8200.0e5
+    TypeGrid='Uniform'
+    iAltBC = 0
+    iSpecies=1
+    Density=5e5
+    uBulk=0.0
+
+    Temp =1000.0
+        
+    write(*,*) 'init_particle'
+    Time=0.0
+    
+    call timing_start('init_particle')
+    call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
+    call timing_stop('init_particle')
+
+    write(*,*) 'initialize the ghost cell'
+    call timing_start('sample_maxwellian_cell_boxmuller')
+    call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temp)
+    call timing_stop('sample_maxwellian_cell_boxmuller')
+    
+    write(*,*)'nParticle=',nParticle
+    !Particles_I%vperp=Particles_I%vperp*2.0
+    
+    !Sort the particles
+    call timing_start('sort_particles')
+    call sort_particles
+    call timing_stop('sort_particles')
+
+    !plot initial distirbution before collisions
+    call plot_distribution_cell(iSpecies,iAltBC)
+
+    call calc_moments_cell(iSpecies,iAltBC,&
+         densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
+         Tpar,Tperp)
+
+    uTherm=sqrt(8.0*cBoltzmannCGS*TempTmp/Mass_I(iSpecies)/cPi)
+    write(*,*) 0.01*uTherm**2/(9.55e2*((6375e5+AltMin)/6375.0e5)**13.3)
+
+    !push the guiding center 100 times and reinitialize ghost cell each time
+    do iTime=1,nTime
+       call timing_start('apply_wpi')
+       call apply_wave_particle_interaction
+       call timing_stop('apply_wpi')
+       
+       !advance the time
+       Time=Time+DtMove
+       
+       !Sort the particles
+       call timing_start('sort_particles')
+       call sort_particles
+       call timing_stop('sort_particles')
+
+       call calc_moments_cell(iSpecies,iAltBC,&
+            densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
+            Tpar,Tperp)
+       write(*,*) densityTmp,uBulkParTmp,TempTmp,Tpar,Tperp
+
+       if (floor((Time+1.0e-5)/DtSavePlot) &
+            /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
+          call plot_distribution_cell(iSpecies,iAltBC)
+       endif
+    enddo
+
+  end subroutine test_wpi
+
 
 
 end Module ModParticle

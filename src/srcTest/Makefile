@@ -92,3 +92,24 @@ unit_test_coulomb_collision:
 
 #######################################################################
 
+#######################################################################
+
+OBJ_WPI = \
+	../ModParticle.o 
+
+
+unit_test_wpi_exe:
+	@(cd .. ;make ModParticle.o)
+	@make unit_test_wpi.o 
+	${LINK.f90} -o unit_test_wpi.exe ${OBJ_WPI} \
+		unit_test_wpi.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_wpi: 
+	@echo unit_test_wpi starting
+	@make unit_test_wpi_exe 
+	@echo ./unit_test_wpi_exe
+	-@(./unit_test_wpi_exe )
+
+#######################################################################
+
