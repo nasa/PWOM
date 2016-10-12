@@ -43,15 +43,18 @@ Module ModParticle
   integer,public :: nLine=1
   
   !Frequency of outputs
-  real :: DtSaveProfile=10.0 !300
-  real :: DtSaveDF=10.0!300.0
+  real :: DtSaveProfile=60.0 !300
+  real :: DtSaveDF=60.0!300.0
 
   
   
   !How many and which altitudes should the DF be saved
-  integer,parameter :: nSaveDfAlts=3
-  integer::iAltsDF_I(nSaveDfAlts)=(/26,76,151/)
+  !integer,parameter :: nSaveDfAlts=3
+  !integer::iAltsDF_I(nSaveDfAlts)=(/26,76,151/)
   !real,allocatable :: SaveDfAlts_I(:)
+
+  integer,parameter :: nSaveDfAlts=14
+  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,133,145,157/)
 
   !hold the buried lines
   type(particleHolder),allocatable :: BuriedParticles_I(:) 
@@ -84,7 +87,7 @@ Module ModParticle
 
   !variable for WPI
   real,allocatable :: Dperp_I(:),Dexp_I(:)
-  logical :: UseWPI=.true.
+  logical :: UseWPI=.false.
 
   !plot variables for profile (depends on planet)
   character(len=150):: NameProfilePlotVar
@@ -147,7 +150,7 @@ contains
        !nNumPerParticle_I(O_)=1.0e5
        !nNumPerParticle_I(H_)=5.0e5
        nNumPerParticle_I(O_)=5.0e5
-       nNumPerParticle_I(H_)=5.0e5
+       nNumPerParticle_I(H_)=1.0e5
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
@@ -1467,7 +1470,8 @@ contains
     do iSpecies=1,nSpecies
        do jSpecies=1,nSpecies
           if(Temp_I(iSpecies)<1e-10.or.Temp_I(jSpecies)<1e-10 &
-               .or. Density_I(iSpecies)<1e-10) then
+               .or. Density_I(iSpecies)<1e-10 &
+               .or. Density_I(jSpecies)<1e-10) then
              !In case of zero temperature or density 
              CoulLog_II(iSpecies,jSpecies)=0.0
           else
@@ -1487,29 +1491,46 @@ contains
     !code would need to be generalized from what is presented in MC94. 
     !the simplest would be to have two species with the same weights and 
     !one with different, but for now we assume only two species.
-    DensityRatio=Density_I(1)/Density_I(2)
-    SimParticleRatio=nSortedParticle_II(1,iCell)&
-         /nSortedParticle_II(2,iCell)
-    !calculate the weighted and unweighted collision pairs
-    N11=(0.5*nParticleInCell)*(DensityRatio**2/(1.0+DensityRatio)**2)
-    N12=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
-    N21=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
-    N22=(0.5*nParticleInCell)*(1.0/(1.0+DensityRatio)**2)
+    if (Density_I(1)<1e-10) then
+       weight_II(1,1)=1e-10
+       weight_II(1,2)=1e-10
+       weight_II(2,1)=1e-10
+       weight_II(2,2)=1.0
+    elseif(Density_I(2)<1e-10)then
+       weight_II(1,1)=1.0
+       weight_II(1,2)=1e-10
+       weight_II(2,1)=1e-10
+       weight_II(2,2)=1e-10
+    elseif(Density_I(1)<1e-10 .and. Density_I(2)<1e-10)then
+       !no particles so return
+       return
+    else
+       DensityRatio=Density_I(1)/Density_I(2)
+       SimParticleRatio=real(nSortedParticle_II(1,iCell))&
+            /real(nSortedParticle_II(2,iCell))
+       !calculate the weighted and unweighted collision pairs
+       N11=(0.5*nParticleInCell)*(DensityRatio**2/(1.0+DensityRatio)**2)
+       N12=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
+       N21=(0.5*nParticleInCell)*(DensityRatio/(1.0+DensityRatio)**2)
+       N22=(0.5*nParticleInCell)*(1.0/(1.0+DensityRatio)**2)
+       
+       N11w=(0.5*nParticleInCell)*SimParticleRatio*DensityRatio&
+            /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+       N12w=(0.5*nParticleInCell)*DensityRatio&
+            /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+       N21w=(0.5*nParticleInCell)*SimParticleRatio&
+            /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+       N22w=(0.5*nParticleInCell)&
+            /((1.0+SimParticleRatio)*(1.0+DensityRatio))
+       
+       weight_II(1,1)=N11w/N11
+       weight_II(1,2)=N12w/N12
+       weight_II(2,1)=N21w/N21
+       weight_II(2,2)=N22w/N22
+    endif
+
     
-    N11w=(0.5*nParticleInCell)*SimParticleRatio*DensityRatio&
-         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
-    N12w=(0.5*nParticleInCell)*DensityRatio&
-         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
-    N21w=(0.5*nParticleInCell)*SimParticleRatio&
-         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
-    N22w=(0.5*nParticleInCell)&
-         /((1.0+SimParticleRatio)*(1.0+DensityRatio))
-    
-    weight_II(1,1)=N11w/N11
-    weight_II(1,2)=N12w/N12
-    weight_II(2,1)=N21w/N21
-    weight_II(2,2)=N22w/N22
-    
+
     !write(*,*) weight_II(1,1),weight_II(1,2),weight_II(2,1),weight_II(2,2)
     !stop
     
@@ -1545,7 +1566,7 @@ contains
        
        !get index of colliding particle
        iCollider=IndexPermuted_I(iParticle)
-       
+
        !save species type for each particle
        iSpecies1=CellParticles_I(iParticle)%Particle%iSpecies
        iSpecies2=CellParticles_I(iCollider)%Particle%iSpecies
@@ -1583,8 +1604,8 @@ contains
        vmag2=sqrt(vpar2**2+vperp2**2)
        
        !calculate the pitchange (theta) for each particle
-       theta1=acos(vpar1/vmag1)
-       theta2=acos(vpar2/vmag2)
+       theta1=acos(max(min(vpar1/vmag1,0.999999999999999),-0.999999999999999))
+       theta2=acos(max(min(vpar2/vmag2,0.999999999999999),-0.999999999999999))
 
        !randomly choose phase (azimuthal angle) for each particle
        phi1=RandNum_I(iParticle)*cTwoPi
@@ -1650,17 +1671,17 @@ contains
        Theta=2.0*atan(sqrt(-2.0*variance*log(RandNum4_I(iParticle)))&
             *cos(cTwoPi*RandNum5_I(iParticle)))
        
-       if(DoTest) then
-          write(*,*) 'CoulLog_II(iSpecies1,iSpecies2)',CoulLog_II(iSpecies1,iSpecies2)
-          write(*,*) 'cElectronCharge',cElectronCharge
-          write(*,*) 'cCm3ToM3*DensityTotal',cCm3ToM3*DensityTotal
-          write(*,*) 'cEps',cEps
-          write(*,*) 'cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)',cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)
-          write(*,*) 'DtMove',DtMove
-          write(*,*) 'RelVelMag*cCmToM',RelVelMag*cCmToM
-          write(*,*)'theta,variance',theta*180./3.14,variance
-          stop
-       endif
+!       if(DoTest) then
+!          write(*,*) 'CoulLog_II(iSpecies1,iSpecies2)',CoulLog_II(iSpecies1,iSpecies2)
+!          write(*,*) 'cElectronCharge',cElectronCharge
+!          write(*,*) 'cCm3ToM3*DensityTotal',cCm3ToM3*DensityTotal
+!          write(*,*) 'cEps',cEps
+!          write(*,*) 'cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)',cGtoKg*ReducedMass_II(iSpecies1,iSpecies2)
+!          write(*,*) 'DtMove',DtMove
+!          write(*,*) 'RelVelMag*cCmToM',RelVelMag*cCmToM
+!          write(*,*)'theta,variance',theta*180./3.14,variance
+!          stop
+!       endif
        
        !now that we know the post collision scatter and phase angle compute 
        !the velocity change for each component (eq. 4a-4d' of Takizuka and Abe)
@@ -1976,7 +1997,7 @@ contains
   subroutine run_particles(DtAdvance)
     real, intent(in) :: DtAdvance
 
-    integer :: iAlt, iSpecies,nTime,iTime
+    integer :: iAlt, iSpecies,nTime,iTime,iAltPlot
     integer, parameter :: iAltBC=0
     real :: TimeAdvance
     character(len=100):: TypeGrid
@@ -2018,7 +2039,9 @@ contains
        !apply the collisions
        do iAlt=1,nAlt
           !check if we are above altitude where collisions can be neglected
-          if (Alt_G(iAlt)>4000.0e5) exit
+          !if (Alt_G(iAlt)>7500.0e5) exit
+          if (iAlt==nAlt-1) exit
+          !write(*,*) 'iAlt',iAlt
           call timing_start('apply_coulomb_collision')
           call apply_coulomb_collision(iAlt)
           call timing_stop('apply_coulomb_collision')
@@ -2041,13 +2064,14 @@ contains
           call plot_profile
        endif
 
-       !plot DF
+
+       !plot DF                                                                 
        if (floor((Time+1.0e-5)/DtSaveDF) &
             /=floor((Time+1.0e-5-DtMove)/DtSaveDF) )then
           do iSpecies=1,nSpecies
-             call plot_distribution_cell(iSpecies,iAltsDF_I(1))
-             call plot_distribution_cell(iSpecies,iAltsDF_I(2))
-             call plot_distribution_cell(iSpecies,iAltsDF_I(3))
+             do iAltPlot=1,nSaveDfAlts
+                call plot_distribution_cell(iSpecies,iAltsDF_I(iAltPlot))
+             enddo
           enddo
        endif
        
