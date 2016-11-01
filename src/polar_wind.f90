@@ -25,7 +25,8 @@ subroutine polar_wind
   use ModPwImplicit, only: PW_implicit_update
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
   use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
-  use ModParticle, ONLY: put_to_particles, run_particles,get_from_particles
+  use ModParticle, ONLY: put_to_particles, run_particles,get_from_particles,&
+       IsVerboseParticle
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -118,17 +119,18 @@ subroutine polar_wind
         Velocity_IC(2,:)=State_GV(1:nDim,iU_I(2))
         Temperature_IC(1,:)=State_GV(1:nDim,iT_I(1))
         Temperature_IC(2,:)=State_GV(1:nDim,iT_I(2))        
-
-        write(*,*) 'calling put_to_particles'
+        
+        if(IsVerboseParticle) write(*,*) 'calling put_to_particles'
         call put_to_particles(nDim,2,1.0e5*ALTD(1:nDim),&
              .false.,Density_IC,Velocity_IC,Temperature_IC,&
              EfieldIn_C=EFIELD(1:nDim))
-        write(*,*) 'done put_to_particles at time',Time,DtCoupleParticles
+        if(IsVerboseParticle) &
+             write(*,*) 'done put_to_particles at time',Time,DtCoupleParticles
         
         !advance the particle solution to the next coupling time
-        write(*,*) 'calling run_particles'
+        if(IsVerboseParticle) write(*,*) 'calling run_particles'
         call run_particles(DtCoupleParticles)
-        write(*,*) 'done run_particles'
+        if(IsVerboseParticle) write(*,*) 'done run_particles'
         
         if (UseParticleFeedback) then
            !get the particle solution back

@@ -41,6 +41,8 @@ Module ModParticle
   
   !how many lines do we have
   integer,public :: nLine=1
+  integer, public, allocatable :: iLineGlobal_I(:)
+  integer :: iLineCurrent
   
   !Frequency of outputs
   real :: DtSaveProfile=60.0 !300
@@ -87,13 +89,16 @@ Module ModParticle
 
   !variable for WPI
   real,allocatable :: Dperp_I(:),Dexp_I(:)
-  logical :: UseWPI=.false.
+  logical,public :: UseWPI=.false.
 
   !plot variables for profile (depends on planet)
   character(len=150):: NameProfilePlotVar
   integer, allocatable :: iDen_I(:),iVel_I(:),&
             iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:)
   integer :: nVarProfile
+
+  !should the output associated with particles be verbose
+  logical,public :: IsVerboseParticle = .false.
 
   integer :: nSpecies
 
@@ -151,6 +156,8 @@ contains
        !nNumPerParticle_I(H_)=5.0e5
        nNumPerParticle_I(O_)=5.0e5
        nNumPerParticle_I(H_)=1.0e5
+       !nNumPerParticle_I(O_)=5.0e7
+       !nNumPerParticle_I(H_)=1.0e7
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
@@ -160,7 +167,6 @@ contains
        Dperp_I(O_)=6.94e5   !auroral/cusp value
        Dexp_I(O_)=13.3
        
-
 !       Dperp_I(H_)=5.77e3  !polar cap value
        Dperp_I(H_)=4.45e7   !auroral/cusp value
        Dexp_I(H_)=7.95
@@ -775,7 +781,14 @@ contains
     character(len=*),parameter :: NameHeader='moments'
     character(len=5) :: TypePlot='ascii'
     logical, save :: IsFirstCall=.true.
+    logical,allocatable,save :: IsFirstCall_I(:)
     !---------------------------------------------------------------------------
+    if (IsFirstCall) then
+       allocate(IsFirstCall_I(nLine))
+       IsFirstCall_I(:)=.true.
+       IsFirstCall = .false.
+    endif
+    
     nVar=nVarProfile
     
     allocate(Coord_I(0:nAlt),PlotState_IV(0:nAlt,nVar))    
@@ -805,16 +818,18 @@ contains
           end if
        enddo
     end do
-
     !Plot 
-    write(NamePlot,"(a)") 'Profile.out'
-    if(IsFirstCall) then
+    !write(NamePlot,"(a)") 'Profile.out'
+    write(NamePlot,"(a,i5.5,a)") &
+         'PW/plots/Profile_',iLineGlobal_I(iLineCurrent),'.out'
+
+    if(IsFirstCall_I(iLineCurrent)) then
        call save_plot_file(NamePlot, TypePositionIn='rewind', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
             NameVarIn = NameProfilePlotVar, nStepIn=0,TimeIn=time,     &
             nDimIn=nDim,CoordIn_I=Coord_I,                &
             VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
-       IsFirstCall = .false.
+       IsFirstCall_I(iLineCurrent) = .false.
     else
        call save_plot_file(NamePlot, TypePositionIn='append', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
@@ -822,7 +837,6 @@ contains
             nDimIn=nDim,CoordIn_I=Coord_I,                &
             VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
     endif
-    
     deallocate(Coord_I, PlotState_IV)
   end subroutine plot_profile
   
@@ -847,7 +861,8 @@ contains
     character(len=100),parameter :: NamePlotVar='Vperp[cm/s] Vpar[cm/s] Particles g r'
     character(len=*),parameter :: NameHeader='distribution function'
     character(len=5) :: TypePlot='ascii'
-    logical, save :: IsFirstCall=.true.
+
+    integer,save :: iCounter=0
     !---------------------------------------------------------------------------
     nNumPerParticle=nNumPerParticle_I(iSpecies)
     
@@ -911,14 +926,17 @@ contains
     endif
 
     !Plot 
-    write(NamePlot,"(a,a,a,i5.5,a)") 'DistFunc_',NameSpecies_I(iSpecies),'Alt',floor(Alt_G(iCell)*1e-5),'km.out'
-    if(IsFirstCall) then
+    write(NamePlot,"(a,a,a,i5.5,a,i5.5,a)") &
+         'PW/plots/DistFunc_',NameSpecies_I(iSpecies),'Alt',&
+         floor(Alt_G(iCell)*1e-5),'km_iLine',iLineGlobal_I(iLineCurrent),'.out'
+
+    if(iCounter<(nSaveDfAlts*nLine)) then
        call save_plot_file(NamePlot, TypePositionIn='rewind', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
             NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
             nDimIn=nDim,CoordIn_DII=Coord_DII,                &
             VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-       IsFirstCall = .false.
+       iCounter=iCounter+1
     else
        call save_plot_file(NamePlot, TypePositionIn='append', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
@@ -1087,6 +1105,88 @@ contains
     Tperp = Pperp/(density*cBoltzmannCGS)
 
   end subroutine calc_moments_cell
+  !============================================================================
+
+  !=============================================================================
+  ! same as calc_moments_cell, but if statistics are poor combine with 
+  ! neighbor cells until reasonable statistics are reached
+  subroutine calc_moments_cell_smooth(iSpecies,iCell,&
+       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+    integer,intent(in) :: iSpecies,iCell
+    integer :: nParticleInCell,iParticle,nNumPerParticle,iAlt
+    integer :: MinCell, MaxCell
+    real :: uParTmp,uPerpTmp
+    real :: Ppar,Pperp,Volume
+    real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp
+    integer, parameter :: MinNumParticle=50.0
+    !--------------------------------------------------------------------------
+    nNumPerParticle=nNumPerParticle_I(iSpecies)    
+
+    nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+    Volume=Volume_G(iCell)
+    ! if not enough particles in cell, then add in cells around iCell until 
+    !statistics are good.
+    MinCell=iCell
+    MaxCell=iCell
+    if(nParticleInCell<MinNumParticle)then
+       do while (nParticleInCell<MinNumParticle)
+          !set min and max cell
+          MinCell=max(MinCell-1,1)
+          MaxCell=min(MaxCell+1,nAlt)
+          !find numer of particles in combined cell
+          nParticleInCell=0
+          Volume=0.0
+          do iAlt=MinCell,MaxCell
+             nParticleInCell=nParticleInCell+nSortedParticle_II(iSpecies,iAlt)
+             Volume=Volume+Volume_G(iAlt)
+          end do
+       end do
+    endif
+
+    !density is particles in cell over volume
+    density=nNumPerParticle/Volume*nParticleInCell
+
+    !bulk velocity is average of velocity
+    uBulkPar=0.0
+    do iAlt=MinCell,MaxCell
+       do iParticle=1,nSortedParticle_II(iSpecies,iAlt)
+          !write(*,*) iParticle,nParticleInCell
+          uParTmp =SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vpar
+          uBulkPar  = uBulkPar + uParTmp        
+       end do
+    enddo
+    uBulkPar=uBulkPar/nParticleInCell
+    !    uBulkPerp = sum(CellParticle_I(:)%vperp)/nParticleInCell
+    uBulkPerp = 0.0
+    
+    !from eq6.12 Gombosi Gas Kinetic Theory book
+    Pressure=0.0
+    Ppar=0.0
+    Pperp=0.0
+    do iAlt=MinCell,MaxCell
+       do iParticle=1,nSortedParticle_II(iSpecies,iAlt)
+          uParTmp =SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vpar
+          uPerpTmp=SortParticles_III(iParticle,iSpecies,iAlt)%Particle%vperp
+          Pressure = Pressure+&
+               (uParTmp-uBulkPar)**2&
+               +2.0*(uPerpTmp-uBulkPerp)**2
+          Ppar = Ppar&
+               +(uParTmp-uBulkPar)**2
+          
+          Pperp = Pperp&
+               +(uPerpTmp-uBulkPerp)**2
+       enddo
+    enddo
+    Pressure=Pressure*Mass_I(iSpecies)*density/(3.0*nParticleInCell)
+    Ppar=Ppar*Mass_I(iSpecies)*density/(nParticleInCell)
+    Pperp=Pperp*Mass_I(iSpecies)*density/(nParticleInCell)
+    
+    !get temperature from ideal gas law P=nkT
+    Temp = Pressure/(density*cBoltzmannCGS)
+    Tpar = Ppar/(density*cBoltzmannCGS)
+    Tperp = Pperp/(density*cBoltzmannCGS)
+    
+  end subroutine calc_moments_cell_smooth
   !============================================================================
   subroutine calc_moments_cell_orig(iSpecies,iCell,nParticleInCell,CellParticle_I,&
        density,uBulkPar,uBulkPerp,Pressure,Temp)
@@ -1407,7 +1507,7 @@ contains
     do iSpecies = 1, nSpecies
        nParticleInCell=nParticleInCell+nSortedParticle_II(iSpecies,iCell)
     enddo
-    
+
     ! allocate pointer array to hold all the particles in cell 
     !regardless of species
     allocate(CellParticles_I(nParticleInCell))
@@ -1424,7 +1524,7 @@ contains
           iParticle=iParticle+1
        enddo
     enddo
-    
+
     ! Now we need to pair particles randomly. First create index array and 
     ! a permuted index array, These define the collision pairs.
     allocate(Index_I(nParticleInCell))
@@ -1463,7 +1563,7 @@ contains
        ! comes back as 0 (or less than a tolerance) set to a large number
        !if (Density_I(iSpecies)<1.0e-10) Density_I(iSpecies)=1e99          
     enddo
-    
+
     !save the total density
     DensityTotal = sum(Density_I(:))
        
@@ -1530,7 +1630,6 @@ contains
     endif
 
     
-
     !write(*,*) weight_II(1,1),weight_II(1,2),weight_II(2,1),weight_II(2,2)
     !stop
     
@@ -1847,6 +1946,8 @@ contains
     !now load particles and number on line for later use
     Particles_I=BuriedParticles_I(iLine)%SavedParticles_I
     
+    ! save the current index for the line we are working on
+    iLineCurrent = iLine
   end subroutine disinter_line
 
   !============================================================================
@@ -1870,6 +1971,7 @@ contains
     !min values for density and temperature
     real, parameter :: DensityMin=1e-4 !cm-3
     real, parameter :: TemperatureMin=100.0 !k
+    logical,parameter :: UseSmooth=.true.
     !---------------------------------------------------------------------------
     
     allocate(Density_IC(nSpeciesIn,nAlt),Velocity_IC(nSpeciesIn,nAlt),&
@@ -1877,24 +1979,29 @@ contains
     
     do iAlt=1,nAlt
        do iSpecies=1,nSpeciesIn
-          nParticleInCell=nSortedParticle_II(iSpecies,iAlt)
-          if(nParticleInCell==0) then
-             Density_IC(iSpecies,iAlt)    =0.0
-             Velocity_IC(iSpecies,iAlt)   =0.0
-             Temperature_IC(iSpecies,iAlt)=0.0
-          else
-             ! get moments in each cell so we can later interpolate to fluid 
-!             call calc_moments_cell(iSpecies,iAlt,&
-!                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
-             call calc_moments_cell_weighted(iSpecies,iAlt,&
+          if (UseSmooth) then
+             call calc_moments_cell_smooth(iSpecies,iAlt,&
                   density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
              Density_IC(iSpecies,iAlt)    =density
              Velocity_IC(iSpecies,iAlt)   =uBulkPar
              Temperature_IC(iSpecies,iAlt)=Temp
+          else
+             nParticleInCell=nSortedParticle_II(iSpecies,iAlt)
+             if(nParticleInCell==0) then
+                Density_IC(iSpecies,iAlt)    =0.0
+                Velocity_IC(iSpecies,iAlt)   =0.0
+                Temperature_IC(iSpecies,iAlt)=0.0
+             else
+                ! get moments in each cell so we can later interpolate to fluid 
+                !             call calc_moments_cell(iSpecies,iAlt,&
+                !                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                call calc_moments_cell_weighted(iSpecies,iAlt,&
+                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                Density_IC(iSpecies,iAlt)    =density
+                Velocity_IC(iSpecies,iAlt)   =uBulkPar
+                Temperature_IC(iSpecies,iAlt)=Temp
+             endif
           end if
-          !if(iSpecies==1) write(*,*) iSpecies,Alt_G(iAlt),&
-          !     Density_IC(iSpecies,iAlt),Velocity_IC(iSpecies,iAlt),&
-          !     Temperature_IC(iSpecies,iAlt)
        enddo
     end do
    
@@ -1971,7 +2078,9 @@ contains
                   nAltIn,Alt_G(iAlt),AltIn_C)
              
              !now Sample
-             write(*,*) 'sample iSpecies,Alt', iSpecies,Alt_G(iAlt),Density,Velocity,Temperature
+             if (IsVerboseParticle) &
+                  write(*,*) 'sample iSpecies,Alt', &
+                  iSpecies,Alt_G(iAlt),Density,Velocity,Temperature
              call sample_maxwellian_cell_boxmuller(iAlt,iSpecies,&
                   Density,Velocity,Temperature)
           enddo
@@ -2005,7 +2114,7 @@ contains
     
     TimeAdvance=0.0
     
-    write(*,*) 'nParticle=',nParticle
+    if(IsVerboseParticle) write(*,*) 'nParticle=',nParticle
     TIMELOOP:do 
        !check stopping condition
        if (TimeAdvance >=DtAdvance) exit TIMELOOP
@@ -2015,7 +2124,7 @@ contains
 
        ! stop if within tolerance of stopping time
        if(DtMove <1.0e-6) exit TIMELOOP
-
+       
        !resample ghost cell
        do iSpecies=1,nSpecies
           call timing_start('sample_maxwellian_cell_boxmuller')
@@ -2024,7 +2133,6 @@ contains
                TemperatureBC_I(iSpecies))    
           call timing_stop('sample_maxwellian_cell_boxmuller')
        end do
-
 
        !push the particles
        call timing_start('push_guiding_center')
@@ -2053,7 +2161,7 @@ contains
           call apply_wave_particle_interaction
           call timing_stop('apply_wave_particle_interaction')
        endif
-       
+
        !advance the time
        Time=Time+DtMove
        TimeAdvance=TimeAdvance+DtMove
@@ -2064,7 +2172,6 @@ contains
           call plot_profile
        endif
 
-
        !plot DF                                                                 
        if (floor((Time+1.0e-5)/DtSaveDF) &
             /=floor((Time+1.0e-5-DtMove)/DtSaveDF) )then
@@ -2074,7 +2181,7 @@ contains
              enddo
           enddo
        endif
-       
+
     enddo TIMELOOP
     
     
@@ -2097,6 +2204,10 @@ contains
     Temperature=1000.0
     write(*,*) 'init_particle'
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
+    
+    !set global line info
+    allocate(iLineGlobal_I(nLine))
+    iLineGlobal_I(1)=1
 
     write(*,*) 'sample_maxwellian_cell'
     
@@ -2144,6 +2255,10 @@ contains
     call timing_start('init_particle')
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     call timing_stop('init_particle')
+
+    !set global line info
+    allocate(iLineGlobal_I(nLine))
+    iLineGlobal_I(1)=1
 
     write(*,*) 'initialize the ghost cell'
     call timing_start('sample_maxwellian_cell_boxmuller')
@@ -2234,6 +2349,10 @@ contains
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     call timing_stop('init_particle')
 
+    !set global line info
+    allocate(iLineGlobal_I(nLine))
+    iLineGlobal_I(1)=1
+    
     !overwrite masses from init since we are using H+ and e- 
     Mass_I(iSpeciesIon)=1.66054e-24
     Mass_I(iSpeciesElec)=0.25*Mass_I(iSpeciesIon)
@@ -2291,7 +2410,8 @@ contains
     call timing_stop('sort_particles')
 
     !plot initial distirbution before collisions
-    !call plot_distribution_cell(iSpeciesIon,iAltBC)
+    call plot_distribution_cell(iSpeciesIon,iAltBC)
+    call plot_distribution_cell(iSpeciesElec,iAltBC)
 
     call calc_moments_cell(iSpeciesIon,iAltBC,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon,&
@@ -2325,7 +2445,13 @@ contains
             TparElec,TperpElec)
 
     write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
-       
+
+    if (floor((Time+1.0e-5)/(10.*DtMove)) &
+         /=floor((Time+1.0e-5-DtMove)/(10.*DtMove)) )then 
+       call plot_distribution_cell(iSpeciesIon,iAltBC)
+       call plot_distribution_cell(iSpeciesElec,iAltBC)
+    endif
+
        !plot profile of moments
 !       if (floor((Time+1.0e-5)/DtSavePlot) &
 !            /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
@@ -2382,6 +2508,10 @@ contains
     call timing_start('init_particle')
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     call timing_stop('init_particle')
+
+    !set global line info
+    allocate(iLineGlobal_I(nLine))
+    iLineGlobal_I(1)=1
 
     write(*,*) 'initialize the ghost cell'
     call timing_start('sample_maxwellian_cell_boxmuller')

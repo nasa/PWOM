@@ -18,6 +18,7 @@ subroutine PW_set_parameters(NameAction)
        DoCoupleSE, UseFeedbackFromSE,IsVerboseSE,DtGetSe
   use ModOvation, ONLY: UseOvation,DoPlotOvation,OvationEmin,OvationEmax,&
        DoPlotOvation
+  use ModParticle,ONLY: UseWPI,IsVerboseParticle
 
   implicit none
   
@@ -250,6 +251,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('nAltParticles', nAltParticles)
         call read_var('AltMinParticles', AltMinParticles)
         call read_var('AltMaxParticles', AltMaxParticles)
+        call read_var('UseWPI', UseWPI)
+        call read_var('IsVerboseParticle', IsVerboseParticle)
         
      endselect
   enddo

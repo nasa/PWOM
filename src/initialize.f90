@@ -19,7 +19,8 @@ subroutine PW_initialize
        PolarRainEMean, PolarRainEFlux, UsePolarRain, IsVerboseSE
   use ModOvation, ONLY: UseOvation, StartTimeOvation=>StartTime, &
        OvationEmin,OvationEmax
-  use ModParticle, ONLY: init_particle, put_to_particles, bury_line,nLineParticle=>nLine
+  use ModParticle, ONLY: init_particle, put_to_particles, bury_line,&
+       nLineParticle=>nLine,iLineGlobalParticle_I=>iLineGlobal_I
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -238,7 +239,9 @@ subroutine PW_initialize
      call init_particle(nAltParticles,AltMinParticles,AltMaxParticles,&
           TypeParticleGrid)
      nLineParticle=nLine
-     
+     allocate(iLineGlobalParticle_I(nLine))
+     iLineGlobalParticle_I=iLineGlobal
+
      !set altitude index for fluid to particle transition
      iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)+1
      
