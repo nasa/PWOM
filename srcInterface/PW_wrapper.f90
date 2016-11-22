@@ -176,8 +176,8 @@ contains
     use ModPWOM, only: &
          nAlt,r_C,GeoMagLat_I,GeoMagLon_I,DtVertical,&
          nStep,NameRestart, &
-         State_CVI,nLine
-
+         State_CVI,nLine,UseParticles
+    use ModParticle, ONLY: disinter_line, bury_line,write_restart_particle
     !INPUT PARAMETERS:
     real,     intent(in) :: TimeSimulation   ! seconds from start time
 
@@ -190,6 +190,12 @@ contains
             nAlt, r_C, GeoMagLat_I(iLine), GeoMagLon_I(iLine), &
             TimeSimulation, DtVertical, nStep, NameRestart(iLine), &
             State_CVI(:,:,iLine))
+
+       if (UseParticles) then
+          call disinter_line(iLine)
+          call write_restart_particle(iLine)
+          call bury_line(iLine)
+       endif
     enddo
 
   end subroutine PW_save_restart
