@@ -20,7 +20,8 @@ subroutine PW_initialize
   use ModOvation, ONLY: UseOvation, StartTimeOvation=>StartTime, &
        OvationEmin,OvationEmax
   use ModParticle, ONLY: init_particle, put_to_particles, bury_line,&
-       nLineParticle=>nLine,iLineGlobalParticle_I=>iLineGlobal_I
+       nLineParticle=>nLine,iLineGlobalParticle_I=>iLineGlobal_I, &
+       read_restart_particle
   use CON_axes,         ONLY: init_axes
   implicit none
 
@@ -245,23 +246,32 @@ subroutine PW_initialize
      !set altitude index for fluid to particle transition
      iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)+1
      
-     !for each line fill the state variables, intially sample the particles 
+     !for each line restart or 
+     !fill the state variables, intially sample the particles 
      !and then bury the line. Each lines particles will be disintered before 
      !advancing the calculation
-     allocate(Density_IC(2,nAlt),Velocity_IC(2,nAlt),Temperature_IC(2,nAlt))
-     do iLine=1,nLine
-        Density_IC(1,:)=State_CVI(1:nAlt,iRho_I(1),iLine)/(16.*1.66e-24)!Mass_I(1)
-        Density_IC(2,:)=State_CVI(1:nAlt,iRho_I(2),iLine)/(1.66e-24)!Mass_I(2)
-        Velocity_IC(1,:)=State_CVI(1:nAlt,iU_I(1),iLine)
-        Velocity_IC(2,:)=State_CVI(1:nAlt,iU_I(2),iLine)
-        Temperature_IC(1,:)=State_CVI(1:nAlt,iT_I(1),iLine)
-        Temperature_IC(2,:)=State_CVI(1:nAlt,iT_I(2),iLine)        
-        call put_to_particles(nAlt,2,ALTD(1:nAlt), &
-             DoInitAltParticles,Density_IC,Velocity_IC,Temperature_IC)
-        !stop
-        call bury_line(iLine)
-     enddo
-     deallocate(Density_IC,Velocity_IC,Temperature_IC)
+     if(IsRestart .and. .not.DoInitAltParticles) then
+        do iLine=1,nLine
+           call read_restart_particle(iLine)
+           call bury_line(iLine)
+        enddo
+     else
+        
+        allocate(Density_IC(2,nAlt),Velocity_IC(2,nAlt),Temperature_IC(2,nAlt))
+        do iLine=1,nLine
+           Density_IC(1,:)=State_CVI(1:nAlt,iRho_I(1),iLine)/(16.*1.66e-24)!Mass_I(1)
+           Density_IC(2,:)=State_CVI(1:nAlt,iRho_I(2),iLine)/(1.66e-24)!Mass_I(2)
+           Velocity_IC(1,:)=State_CVI(1:nAlt,iU_I(1),iLine)
+           Velocity_IC(2,:)=State_CVI(1:nAlt,iU_I(2),iLine)
+           Temperature_IC(1,:)=State_CVI(1:nAlt,iT_I(1),iLine)
+           Temperature_IC(2,:)=State_CVI(1:nAlt,iT_I(2),iLine)        
+           call put_to_particles(nAlt,2,ALTD(1:nAlt), &
+                DoInitAltParticles,Density_IC,Velocity_IC,Temperature_IC)
+           !stop
+           call bury_line(iLine)
+        enddo
+        deallocate(Density_IC,Velocity_IC,Temperature_IC)
+     endif
   endif
 end subroutine PW_initialize
 

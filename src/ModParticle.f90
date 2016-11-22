@@ -119,6 +119,7 @@ Module ModParticle
   public :: bury_line
   public :: disinter_line
   public :: run_particles
+  public :: write_restart_particle,read_restart_particle
   ! public unit tests
   public :: test_sample
   public :: test_pusher
@@ -1931,7 +1932,7 @@ contains
   ! Disinter particles on a line.Useful when considering multiple lines on a proc
   subroutine disinter_line(iLine)
     integer, intent(in) :: iLine
-    !----------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
     !set total number of particles to buried value
     nParticle = BuriedParticles_I(iLine)%nParticleOnLine
@@ -1949,6 +1950,61 @@ contains
     ! save the current index for the line we are working on
     iLineCurrent = iLine
   end subroutine disinter_line
+
+  !============================================================================
+  ! routine for saving current particles for restart. note that if not in 
+  ! standalone PWOM mode particles must be disintered first
+  subroutine write_restart_particle(iLine)
+    use ModIoUnit, ONLY: UnitTmp_
+    integer, intent(in) :: iLine
+    character(len=150) :: NameRestart
+    integer :: iParticle
+    !---------------------------------------------------------------------------
+    !set restart name
+    write(NameRestart,"(a,i4.4,a)") &
+         'PW/restartOUT/restart_particles_iline',iLineGlobal_I(iLine),'.dat'
+    
+    open(UnitTmp_, FILE=NameRestart,status="replace", form="unformatted")    
+   
+    WRITE (UnitTmp_) nParticle
+    do iParticle=1,nParticle
+       WRITE (UnitTmp_) Particles_I(iParticle)%iSpecies,&
+            Particles_I(iParticle)%iCell,Particles_I(iParticle)%vpar,&
+            Particles_I(iParticle)%vperp,Particles_I(iParticle)%Alt,&
+            Particles_I(iParticle)%IsOpen
+    enddo
+    close(UnitTmp_)
+    
+  end subroutine write_restart_particle
+
+  !============================================================================
+  ! routine for reading current particles for restart. note that if not in 
+  ! standalone PWOM mode particles must be buried after
+  subroutine read_restart_particle(iLine)
+    use ModIoUnit, ONLY: UnitTmp_
+    integer, intent(in) :: iLine
+    character(len=150) :: NameRestart
+    integer :: iParticle
+    !---------------------------------------------------------------------------
+    !set restart name
+    write(NameRestart,"(a,i4.4,a)") &
+         'PW/restartIN/restart_particles_iline',iLineGlobal_I(iLine),'.dat'
+    
+    open(UnitTmp_, FILE=NameRestart,status="OLD", form="unformatted")    
+   
+    read (UnitTmp_) nParticle
+    !reallocate Particles_I array to restart size
+    if (allocated(Particles_I)) deallocate(Particles_I)
+    allocate(Particles_I(nParticle))
+    do iParticle=1,nParticle
+       read(UnitTmp_) Particles_I(iParticle)%iSpecies,&
+            Particles_I(iParticle)%iCell,Particles_I(iParticle)%vpar,&
+            Particles_I(iParticle)%vperp,Particles_I(iParticle)%Alt,&
+            Particles_I(iParticle)%IsOpen
+    enddo
+    close(UnitTmp_)
+    
+  end subroutine read_restart_particle
 
   !============================================================================
   ! 

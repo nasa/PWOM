@@ -26,7 +26,7 @@ subroutine polar_wind
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
   use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
   use ModParticle, ONLY: put_to_particles, run_particles,get_from_particles,&
-       IsVerboseParticle
+       IsVerboseParticle,write_restart_particle
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -206,10 +206,12 @@ subroutine polar_wind
            if (DoPlotOvation) call plot_ovation_polar
         endif
         IF (IsStandAlone .and. &
-             floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-2.0*DT)/DToutput) )&
-             call PW_write_restart(&
-             nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
-             State_GV(1:nDim,:))                  
+             floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-2.0*DT)/DToutput) )then
+           call PW_write_restart(&
+                nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
+                State_GV(1:nDim,:))
+           if (UseParticles) call write_restart_particle(iLine)
+        endif
         IF (TIME+1.0e-5 >= TMAX) Then 
            Call put_field_line(nDim,State_GV(1:nDim,:),    &
                 SmLat,SmLon,Jr,wHorizontal,&
@@ -221,10 +223,12 @@ subroutine polar_wind
            CALL PW_print_plot
            if (DoPlotNeutral) call plot_neutral_pw
            if (DoPlotOvation) call plot_ovation_polar
-           IF (IsStandAlone)&
+           IF (IsStandAlone) then
                 call PW_write_restart(&
                 nDim,RAD(1:nDim),SmLat,SmLon,Time,DT,nStep,NameRestart, &    
-                State_GV(1:nDim,:))             
+                State_GV(1:nDim,:))  
+                if (UseParticles) call write_restart_particle(iLine)
+             endif
         endif
         IF (nStep >= MaxStep) Then 
            Call put_field_line(nDim,State_GV(1:nDim,:),    &
