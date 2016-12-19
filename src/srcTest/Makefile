@@ -50,6 +50,25 @@ unit_test_sample:
 	@echo ./unit_test_sample_exe
 	-@(./unit_test_sample_exe )
 
+
+#######################################################################
+OBJ_SPLIT_JOIN = \
+	../ModParticle.o 
+
+
+unit_test_split_join_exe:
+	@(cd .. ;make ModParticle.o)
+	@make unit_test_split_join.o 
+	${LINK.f90} -o unit_test_split_join.exe ${OBJ_SPLIT_JOIN} \
+		unit_test_split_join.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_split_join: 
+	@echo unit_test_split_join starting
+	@make unit_test_split_join_exe 
+	@echo ./unit_test_split_join_exe
+	-@(./unit_test_split_join_exe )
+
 #######################################################################
 
 OBJ_PUSHER = \
