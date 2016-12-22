@@ -57,11 +57,11 @@ Module ModParticle
   !integer::iAltsDF_I(nSaveDfAlts)=(/26,76,151/)
   !real,allocatable :: SaveDfAlts_I(:)
 
-!  integer,parameter :: nSaveDfAlts=14
-!  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,133,145,157/)
+  integer,parameter :: nSaveDfAlts=14
+  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,133,145,157/)
 
-  integer,parameter :: nSaveDfAlts=1
-  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
+!  integer,parameter :: nSaveDfAlts=1
+!  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
   !hold the buried lines
   type(particleHolder),allocatable :: BuriedParticles_I(:) 
   
@@ -113,7 +113,7 @@ Module ModParticle
   integer, allocatable :: nNumPerParticle_I(:)
   
   ! use a fixed number of particles per cell
-  integer :: nParticlePerCell=10000
+  integer :: nParticlePerCell=5000
 
   real, parameter :: cBoltzmannCGS = 1.3807E-16
 
@@ -394,6 +394,7 @@ contains
        xAlt=(AltStart-Alt_G(-1))/dAlt_G(-1)-1.0
        iMin=floor(xAlt)
        iMax=ceiling(xAlt)
+       
        !set interpolation weights
        Dx1=xAlt-iMin ; Dx2=1.0-Dx1
        !interpolate
@@ -1294,7 +1295,15 @@ contains
           if(Alt<Alt_G(iCell-1) .or. Alt>Alt_G(iCell+1)) cycle PARTICLE_LOOP
           weight=1.0-abs(Alt_G(iCell)-Alt)/dAlt_G(iCell) !assumes uniform grid!
           
+          write(*,*) iParticle
           !density is particles in cell over volume
+          if (iParticle==1005)then
+             write(*,*) ' '
+             write(*,*) iCell,iSpecies
+             write(*,*)SortParticles_III(iParticle,iSpecies,iCell)%Particle%Alt
+             write(*,*)SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
+          endif
+             
           density=density+weight&
                *SortParticles_III(iParticle,iSpecies,iCell)%Particle&
                %NumPerParticle/Volume_G(iCell)
@@ -1419,6 +1428,7 @@ contains
        SortParticles_III(iParticleCell_II(iSpecies,iCell),&
             iSpecies,iCell)%Particle& 
             =>Particles_I(iParticle)
+
        iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
        
     enddo PARTICLE_LOOP
@@ -1966,16 +1976,151 @@ contains
   end subroutine apply_wave_particle_interaction
 
   !============================================================================
+  ! loop over all cells in the computational domain and check if number of 
+  ! particles in the cell are equal to the target number of particles per cell 
+  ! if outside the target then split or join particles as required to reach 
+  ! target number of particles in a cell. Then resort when done
+  subroutine split_join_particles(iSpecies,Tolerance)
+    integer, intent(in) :: iSpecies
+    real   , intent(in) :: Tolerance
+    integer :: iCell, nParticleInCell
+    integer,parameter :: LowerLimit=10
+    
+    !variables for splitting joining and holding new paritcles
+    integer :: nJoin, nSplit, nNew, nNewOld
+    type(particle),allocatable :: NewParticles_I(:), NewParticlesOld_I(:)
+    type(particle),allocatable :: NewParticlesTmp_I(:)
+
+
+    !variables for assignment of particles
+    type(particle),allocatable ::ParticlesOld_I(:)
+    integer :: nParticleOld,nAvail, iParticle,iParticleOld
+    integer,allocatable :: IndexAvail_I(:)
+    !--------------------------------------------------------------------------
+    
+    nNew=0
+    nNewOld=0
+
+    !loop over cells
+    cell_loop: do iCell=1,nAlt
+       ! get the number of particles in the cell of a given species
+       nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+       
+       ! if particle in cell are less than some lower limit cycle
+       if (nParticleInCell <= LowerLimit) cycle cell_loop
+       
+       !Compare to tolerance and if inside then cycle
+       if(nParticleInCell>=nParticlePerCell*(1.0-Tolerance) &
+            .and. nParticleInCell<=nParticlePerCell*(1.0+Tolerance)) then
+          cycle cell_loop
+       endif
+       
+       !Save the number of new particles
+       nNewOld=nNew
+
+       ! on first time through loop nNewOld is zero so special case
+       if (nNewOld>0) then
+          allocate(NewParticlesOld_I(nNewOld))
+          NewParticlesOld_I=NewParticles_I
+       endif
+
+       !Check if we need to split or join
+       if (nParticleInCell>nParticlePerCell) then
+          !set number of joined particles to create never letting the number 
+          !exceed 10% of the particles at a time
+          nJoin=min(abs(nParticleInCell-nParticlePercell),&
+               floor(0.1*nParticleInCell))
+          nNew=nNewOld+nJoin
+          if(.not.allocated(NewParticlesTmp_I))&
+               allocate(NewParticlesTmp_I(nJoin))
+          call join_particles_cell(iCell,iSpecies,nJoin,NewParticlesTmp_I)
+       else
+          !set number of particles to split never letting the number 
+          !exceed 10% of the particles at a time
+          nSplit=min(abs(nParticleInCell-nParticlePercell),&
+               floor(0.1*nParticleInCell))
+          nNew=nNewOld+2*nSplit
+          if(.not.allocated(NewParticlesTmp_I))&
+               allocate(NewParticlesTmp_I(2*nSplit))
+          call split_particles_cell(iCell,iSpecies,nSplit,NewParticlesTmp_I)
+       endif
+       
+       ! append new particles to new particle list
+       
+       if (nNewOld>0) then
+          deallocate(NewParticles_I)
+          allocate(NewParticles_I(nNew))
+          NewParticles_I(1:nNewOld)=NewParticlesOld_I
+          NewParticles_I(nNewOld+1:nNew)=NewParticlesTmp_I
+          deallocate(NewParticlesOld_I)
+       else
+          allocate(NewParticles_I(nNew))
+          NewParticles_I=NewParticlesTmp_I
+       endif
+       
+
+       !deallocate these arrays as they need to be allocated the next time
+       !around the loop
+       deallocate(NewParticlesTmp_I)
+       
+       ! now add new particles to the list, note that the old particles 
+       ! involved in spliting or joining are already removed from the main 
+       ! particle list
+              
+    end do cell_loop
+
+    ! rebuild master particle list including new particles
+    if (nNew >0) then
+
+       !Calculate the
+       !number of open spots (nAvail) then save Particles_I and allocate a new 
+       !Particles_I array to save the good particles and the newly created ones
+       allocate(IndexAvail_I(nParticle))
+       where(Particles_I%IsOpen)
+          IndexAvail_I=1
+       elsewhere
+          IndexAvail_I=0
+       end where
+       nAvail=sum(IndexAvail_I)
+       deallocate(IndexAvail_I)
+       
+       !save old particle array information
+       nParticleOld=nParticle
+       allocate(ParticlesOld_I(nParticleOld))
+       ParticlesOld_I=Particles_I
+       deallocate(Particles_I)
+       
+       !allocate new Particles_I array
+       nParticle=nParticleOld-nAvail+nNew
+       allocate(Particles_I(nParticle))
+       
+       !now fill new Particle_I array with old particles that are not open and 
+       !the newly created particles
+       iParticle=1
+       do iParticleOld=1,nParticleOld
+          if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
+             Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+             iParticle=iParticle+1
+          endif
+       end do
+       Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticles_I
+       
+       deallocate(ParticlesOld_I)
+       
+       !deallocate to save memory
+       deallocate(NewParticles_I)
+    end if
+  end subroutine split_join_particles
+  !============================================================================
   ! Split nSplit particles of species iSpecies in cell iCell
-  subroutine split_particles_cell(iCell,iSpecies,nSplit)
+  subroutine split_particles_cell(iCell,iSpecies,nSplit,NewParticle_I)
     use ModSort, ONLY: sort_quick
     integer,intent(in) :: iCell,iSpecies,nSplit
+    type(particle),intent(out):: NewParticle_I(2*nSplit)
     integer :: nParticleInCell,iParticle,iParticleOld
     real,allocatable :: weights_I(:)
     integer,allocatable:: IndexSort_I(:)
     integer :: iSplit1, iSplit2
-    !variable to hold new particle info before inserting it to particles array
-    type(particle),allocatable :: NewParticle_I(:)
 
     !variables for assignment of particles
     type(particle),allocatable ::ParticlesOld_I(:)
@@ -1996,9 +2141,6 @@ contains
     !get index array that sorts weights_I from lowest to biggest
     call sort_quick(nParticleInCell,weights_I,IndexSort_I)
     
-    !allocate array to hold new particles 
-    allocate(NewParticle_I(2*nSplit))
-    
     !now split the nSplit heaviest particles in the cell
     iSplit1=-1
     iSplit2=0
@@ -2008,65 +2150,89 @@ contains
 
        !copy old particle to new particle with half the weight and shift 
        !x+-deltaX/nParticleInCell in position
-       NewParticle_I(iSplit1)=&
-            SortParticles_III(iParticle,iSpecies,iCell)%Particle
-       NewParticle_I(iSplit2)=&
-            SortParticles_III(iParticle,iSpecies,iCell)%Particle
-              
+       !NewParticle_I(iSplit1)=&
+       !     SortParticles_III(iParticle,iSpecies,iCell)%Particle
+       !NewParticle_I(iSplit2)=&
+       !     SortParticles_III(iParticle,iSpecies,iCell)%Particle
+       
+       NewParticle_I(iSplit1)%iSpecies=iSpecies
+       NewParticle_I(iSplit2)%iSpecies=iSpecies
+
+       NewParticle_I(iSplit1)%iCell=iCell
+       NewParticle_I(iSplit2)%iCell=iCell            
+
        NewParticle_I(iSplit1)%NumPerParticle=&
-            0.5*NewParticle_I(iSplit1)%NumPerParticle
+            0.5*&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
        NewParticle_I(iSplit2)%NumPerParticle=&
-            0.5*NewParticle_I(iSplit2)%NumPerParticle
+            0.5*&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
+
+       NewParticle_I(iSplit1)%vpar=&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar
+       NewParticle_I(iSplit2)%vpar=&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar
+
+       NewParticle_I(iSplit1)%vperp=&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp
+       NewParticle_I(iSplit2)%vperp=&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp
 
        NewParticle_I(iSplit1)%Alt=&
-            max(NewParticle_I(iSplit1)%Alt+dAlt_G(iCell)/nParticleInCell&
+            min(SortParticles_III(iParticle,iSpecies,iCell)%Particle%Alt&
+            +dAlt_G(iCell)/real(nParticleInCell)&
             ,AltTop_F(iCell))
        NewParticle_I(iSplit2)%Alt=&
-            max(NewParticle_I(iSplit2)%Alt+dAlt_G(iCell)/nParticleInCell&
+            max(SortParticles_III(iParticle,iSpecies,iCell)%Particle%Alt&
+            -dAlt_G(iCell)/real(nParticleInCell)&
             ,AltBot_F(iCell))
+       
+       NewParticle_I(iSplit1)%IsOpen=.false.
+       NewParticle_I(iSplit2)%IsOpen=.false.
+
+
        !set particle to be split to open
        SortParticles_III(iParticle,iSpecies,iCell)%Particle%IsOpen=.true.
     enddo
 
-    !recreate particle array inserting new particles and removing open ones
-    !Calculate the
-    !number of open spots (nAvail) then save Particles_I and allocate a new 
-    !Particles_I array to save the good particles and the newly created ones
-    allocate(IndexAvail_I(nParticle))
-    where(Particles_I%IsOpen)
-       IndexAvail_I=1
-    elsewhere
-       IndexAvail_I=0
-    end where
-    nAvail=sum(IndexAvail_I)
-    deallocate(IndexAvail_I)
-    
-    !save old particle array information
-    nParticleOld=nParticle
-    allocate(ParticlesOld_I(nParticleOld))
-    ParticlesOld_I=Particles_I
-    deallocate(Particles_I)
-    
-    !allocate new Particles_I array
-    nParticle=nParticleOld-nAvail+2*nSplit
-    allocate(Particles_I(nParticle))
-    
-    !now fill new Particle_I array with old particles that are not open and 
-    !the newly created particles
-    iParticle=1
-    do iParticleOld=1,nParticleOld
-       if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
-          Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
-          iParticle=iParticle+1
-       endif
-    end do
-    Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticle_I
-    
-    deallocate(ParticlesOld_I)
-    
+!    !recreate particle array inserting new particles and removing open ones
+!    !Calculate the
+!    !number of open spots (nAvail) then save Particles_I and allocate a new 
+!    !Particles_I array to save the good particles and the newly created ones
+!    allocate(IndexAvail_I(nParticle))
+!    where(Particles_I%IsOpen)
+!       IndexAvail_I=1
+!    elsewhere
+!       IndexAvail_I=0
+!    end where
+!    nAvail=sum(IndexAvail_I)
+!    deallocate(IndexAvail_I)
+!    
+!    !save old particle array information
+!    nParticleOld=nParticle
+!    allocate(ParticlesOld_I(nParticleOld))
+!    ParticlesOld_I=Particles_I
+!    deallocate(Particles_I)
+!    
+!    !allocate new Particles_I array
+!    nParticle=nParticleOld-nAvail+2*nSplit
+!    allocate(Particles_I(nParticle))
+!    
+!    !now fill new Particle_I array with old particles that are not open and 
+!    !the newly created particles
+!    iParticle=1
+!    do iParticleOld=1,nParticleOld
+!       if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
+!          Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+!          iParticle=iParticle+1
+!       endif
+!    end do
+!    Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticle_I
+!    
+!    deallocate(ParticlesOld_I)
+!    
     
     !deallocate to save memory
-    deallocate(NewParticle_I)
     deallocate(weights_I, IndexSort_I)
   end subroutine split_particles_cell
 
@@ -2076,16 +2242,17 @@ contains
   ! particle and join it to another particle in the bin. Lapenta 2002 details the 
   ! idea behind this although the sorting into bins is not described there but 
   ! used here to ensure that all joined particles are close in phase space. 
-  subroutine join_particles_cell(iSpecies,iCell,nJoin)
+  subroutine join_particles_cell(iCell,iSpecies,nJoin,NewParticle_I)
     use ModSort, ONLY: sort_quick
     use ModNumConst, ONLY: cPi,cTwoPi
     
     integer,intent(in) :: iSpecies,iCell,nJoin
+    type(particle),intent(out):: NewParticle_I(nJoin)
     integer :: nParticleInCell,iJoin
     logical :: FoundParticle
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
-    real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
+    real :: dVel, vParMin, vPerpMin
     real :: Tpar,Tperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
@@ -2098,7 +2265,6 @@ contains
     integer, allocatable   :: jParticle_II(:,:)
     integer :: jParticle
     
-    type(particle),allocatable :: NewParticle_I(:)
     !grid parameters
     integer, parameter :: nDim =2, Vperp_=1,Vpar_=2,nVar=1, PSD_=1
     
@@ -2114,7 +2280,7 @@ contains
     type(particle),allocatable ::ParticlesOld_I(:)
     integer :: nParticleOld,nAvail,i,j,iParticleOld
     integer,allocatable :: IndexAvail_I(:)
-
+    logical :: IsEnough
     !---------------------------------------------------------------------------
     TrueParticles=0
         
@@ -2127,9 +2293,6 @@ contains
     allocate(IsAvail_I(nParticleInCell)) 
     allocate(IndexVpar_I(nParticleInCell),IndexVperp_I(nParticleInCell))
     IsAvail_I=.true.
-
-   !allocate array to hold new particles 
-    allocate(NewParticle_I(nJoin)) 
 
     ! first get index array that sorts particles by weight from lowest to highest 
     ! so we can join lowest weight particles
@@ -2150,53 +2313,78 @@ contains
     call calc_moments_cell(iSpecies,iCell,&
          density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
     
-    write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
-         ,density,uBulkPar,uBulkPerp,Pressure,Temp
-    ! calculate thermal velocity
-
-    uTherm=sqrt(8.0*cBoltzmannCGS*Temp/Mass_I(iSpecies)/cPi)
+    !write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
+    !     ,density,uBulkPar,uBulkPerp,Pressure,Temp
+    ! calculate thermal velocity based on max of tpar or tperp
+    uTherm=max(sqrt(8.0*cBoltzmannCGS*Tpar/Mass_I(iSpecies)/cPi),&
+         sqrt(8.0*cBoltzmannCGS*Tperp/Mass_I(iSpecies)/cPi))
 
     ! discretize velocity space, center around bulk velocity to 
-    !5 uTherm in every direction with grid size .1 uTherm
+    !5 uTherm in every direction with grid size .2 uTherm
     vParMin=uBulkPar-5.0*uTherm
-    vParMax=uBulkPar+5.0*uTherm
-    vPerpMin=uBulkPerp
-    vPerpMax=uBulkPerp+10.0*uTherm
+    vPerpMin=0.0
     dVel=0.1*uTherm
-    do iVel=1,nVel
-       vPar_C(iVel)=vParMin+iVel*dVel
-       vPerp_C(iVel)=vPerpMin+iVel*dVel
-    enddo
-
     
-    !Sort particles into bins
-    jParticle_II(:,:)=1
-    nParticleBin_II(:,:)=0
-    do iParticle=1,nParticleInCell
-       iVpar =floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar &
-            -vParMin )/dVel)
-       iVperp=floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp&
-            -vPerpMin)/dVel)
+    ! discretize velocity space but make sure enough particle are in enough 
+    ! bins to join particles
+    IsEnough=.false.
+    discretize: do while (.not.IsEnough)
+       do iVel=1,nVel
+          vPar_C(iVel)=vParMin+iVel*dVel
+          vPerp_C(iVel)=vPerpMin+iVel*dVel
+       enddo
        
-       !save the bin indices for each particle
-       IndexVpar_I(iParticle)=iVpar
-       IndexVperp_I(iParticle)=iVperp
        
-       !cycle if either index is outside range
-       if (iVpar<1 .or. iVpar>nVel .or.iVperp<1 .or. iVperp>nVel) then
-          cycle
+       !Sort particles into bins
+       jParticle_II(:,:)=1
+       nParticleBin_II(:,:)=0
+       do iParticle=1,nParticleInCell
+          iVpar =floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar &
+               -vParMin )/dVel)
+          iVperp=floor((SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp&
+               -vPerpMin)/dVel)
+          
+          !save the bin indices for each particle
+          IndexVpar_I(iParticle)=iVpar
+          IndexVperp_I(iParticle)=iVperp
+          
+          !cycle if either index is outside range
+          if (iVpar<1 .or. iVpar>nVel .or.iVperp<1 .or. iVperp>nVel) then
+             cycle
+          endif
+          
+          !append the particle index for the bin
+          jParticle=jParticle_II(iVpar,iVperp)
+          IndexBinParticle_III(iVpar,iVperp,jParticle)=iParticle
+          nParticleBin_II(iVpar,iVperp)=nParticleBin_II(iVpar,iVperp)+1
+          jParticle_II(iVpar,iVperp)=jParticle_II(iVpar,iVperp)+1
+          
+       enddo
+       
+       !Initially all particle are available for joining
+       nAvailBin_II = nParticleBin_II
+       
+       !check if there are enough particles in the bins for joining
+       iCounter=0
+       do iVpar=1,nVel
+          do iVperp=1,nVel
+             iCounter = iCounter+nAvailBin_II(iVpar,iVperp)/2
+          enddo
+       enddo
+       
+       !write(*,*) iCounter,nJoin,dVel/uTherm
+       if (iCounter>= nJoin)then
+          !the discretization is coarse enough! 
+          IsEnough=.true.
+       else
+          !not coarse enough so coarsen by 2
+          dVel=2.*dVel
+          !check how coarse
+          If (dVel>uTherm) then
+             call con_stop('To coarse in Join')
+          endif
        endif
-
-       !append the particle index for the bin
-       jParticle=jParticle_II(iVpar,iVperp)
-       IndexBinParticle_III(iVpar,iVperp,jParticle)=iParticle
-       nParticleBin_II(iVpar,iVperp)=nParticleBin_II(iVpar,iVperp)+1
-       jParticle_II(iVpar,iVperp)=jParticle_II(iVpar,iVperp)+1
-       
-    enddo
-    !Initially all particle are available for joining
-    nAvailBin_II = nParticleBin_II
-
+    end do discretize
     ! now start joining particle starting from lowest weight. Proceedure is 
     !to select lowest weight particle, check how many are available for joining 
     !in its velocity space bin and then join it to the first available particle 
@@ -2206,6 +2394,11 @@ contains
        FoundParticle=.false.
        select_particle: do while (.not.FoundParticle)
           iCounter=iCounter+1
+          if (iCounter>nParticleInCell) then
+             !failure case! 
+             write(*,*) 'not enough particles close enough to join'
+             write(*,*) iJoin,nJoin,maxval(nAvailBin_II)
+          endif
           iParticle=IndexSort_I(iCounter)
                     
           !check if particle is available for joining and another particle is 
@@ -2216,7 +2409,7 @@ contains
              if (iVpar<1 .or. iVpar>nVel .or.iVperp<1 .or. iVperp>nVel) then
                 cycle select_particle
              endif
-             if (nAvailBin_II(iVpar,iVperp)>2) FoundParticle=.true.
+             if (nAvailBin_II(iVpar,iVperp)>=2) FoundParticle=.true.
           endif
        end do select_particle
        !update availablility 
@@ -2270,42 +2463,42 @@ contains
     end do JOIN_LOOP
        
     
-    !recreate particle array inserting new particles and removing open ones
-    !Calculate the
-    !number of open spots (nAvail) then save Particles_I and allocate a new 
-    !Particles_I array to save the good particles and the newly created ones
-    allocate(IndexAvail_I(nParticle))
-    where(Particles_I%IsOpen)
-       IndexAvail_I=1
-    elsewhere
-       IndexAvail_I=0
-    end where
-    nAvail=sum(IndexAvail_I)
-    deallocate(IndexAvail_I)
-    
-    !save old particle array information
-    nParticleOld=nParticle
-    allocate(ParticlesOld_I(nParticleOld))
-    ParticlesOld_I=Particles_I
-    deallocate(Particles_I)
-    
-    !allocate new Particles_I array
-    nParticle=nParticleOld-nAvail+nJoin
-    allocate(Particles_I(nParticle))
-    
-    !now fill new Particle_I array with old particles that are not open and 
-    !the newly created particles
-    iParticle=1
-    do iParticleOld=1,nParticleOld
-       if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
-          Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
-          iParticle=iParticle+1
-       endif
-    end do
-    Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticle_I
-    
-    deallocate(ParticlesOld_I)
-    deallocate(NewParticle_I)
+!    !recreate particle array inserting new particles and removing open ones
+!    !Calculate the
+!    !number of open spots (nAvail) then save Particles_I and allocate a new 
+!    !Particles_I array to save the good particles and the newly created ones
+!    allocate(IndexAvail_I(nParticle))
+!    where(Particles_I%IsOpen)
+!       IndexAvail_I=1
+!    elsewhere
+!       IndexAvail_I=0
+!    end where
+!    nAvail=sum(IndexAvail_I)
+!    deallocate(IndexAvail_I)
+!    
+!    !save old particle array information
+!    nParticleOld=nParticle
+!    allocate(ParticlesOld_I(nParticleOld))
+!    ParticlesOld_I=Particles_I
+!    deallocate(Particles_I)
+!    
+!    !allocate new Particles_I array
+!    nParticle=nParticleOld-nAvail+nJoin
+!    allocate(Particles_I(nParticle))
+!    
+!    !now fill new Particle_I array with old particles that are not open and 
+!    !the newly created particles
+!    iParticle=1
+!    do iParticleOld=1,nParticleOld
+!       if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
+!          Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+!          iParticle=iParticle+1
+!       endif
+!    end do
+!    Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticle_I
+!    
+!    deallocate(ParticlesOld_I)
+!    deallocate(NewParticle_I)
 
     deallocate(IndexBinParticle_III)
     deallocate(nParticleBin_II)
@@ -2465,10 +2658,10 @@ contains
                 Temperature_IC(iSpecies,iAlt)=0.0
              else
                 ! get moments in each cell so we can later interpolate to fluid 
-                !             call calc_moments_cell(iSpecies,iAlt,&
-                !                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
-                call calc_moments_cell_weighted(iSpecies,iAlt,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                             call calc_moments_cell(iSpecies,iAlt,&
+                                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                !call calc_moments_cell_weighted(iSpecies,iAlt,&
+                !     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
                 Density_IC(iSpecies,iAlt)    =density
                 Velocity_IC(iSpecies,iAlt)   =uBulkPar
                 Temperature_IC(iSpecies,iAlt)=Temp
@@ -2616,13 +2809,6 @@ contains
        call sort_particles
        call timing_stop('sort_particles')
  
-       !apply splitting and joining to regularize numbers
-       !do iAlt=1,nAlt
-       !   call timing_start('split_join')
-       !   call split_join(iAlt)
-       !   call timing_stop('split_join')
-       !enddo
-
        
        !apply the collisions
        do iAlt=1,nAlt
@@ -2642,6 +2828,12 @@ contains
           call timing_stop('apply_wave_particle_interaction')
        endif
 
+       !split and join particles to be within 5% of the target particles/cell
+       do iSpecies=1,nSpecies
+          call split_join_particles(iSpecies,0.05)
+          call sort_particles
+       enddo
+       
        !advance the time
        Time=Time+DtMove
        TimeAdvance=TimeAdvance+DtMove
@@ -2741,6 +2933,9 @@ contains
     
     write(*,*) 'sample_maxwellian_cell'
     
+    !set target particles per cell 
+    nParticlePerCell=10000
+
     call sample_maxwellian_cell_boxmuller(iCell,iSpecies,Density,uBulk,Temperature)
     call sort_particles
     !now plot from sorted
@@ -2749,18 +2944,18 @@ contains
     write(*,*) 'nParticle at start:', nParticle
 
     ! test repeated splitting (10 times)
-    do iCount=1,10
+    do iCount=1,50
        !Split 5% of particles
        nSplit=floor(nParticle*0.05)
        
-       write(*,*) 'at iCount',iCount,'splitting nSplit',nSplit
+       !update target particles per cell 
+       nParticlePerCell=nParticlePerCell+nSplit
 
-       call split_particles_cell(iCell,iSpecies,nSplit)
-       
-       call sort_particles
        !now plot from sorted
-       call plot_distribution_cell(iSpecies,iCell)
+       call split_join_particles(iSpecies,0.03)
+       call sort_particles
        
+       call plot_distribution_cell(iSpecies,iCell)
        call calc_moments_cell(iSpecies,iCell,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
             TparTmp,TperpTmp) 
@@ -2774,16 +2969,18 @@ contains
        write(*,*) '   ','TparTmp     ', TparTmp      
        write(*,*) '   ','TperpTmp    ', TperpTmp     
     enddo
-
+    
     ! test repeated joining (10 times)
-    do iCount=1,10
+    do iCount=1,50
        !Join 5% of particles
        nJoin=floor(nParticle*0.05)
-       
-       write(*,*) 'at iCount',iCount,'joining nJoin',nJoin
 
-       call join_particles_cell(iCell,iSpecies,nJoin)
+
+       !update target particles per cell 
+       nParticlePerCell=nParticlePerCell-nJoin
        
+       call split_join_particles(iSpecies,0.03)
+
        call sort_particles
        !now plot from sorted
        call plot_distribution_cell(iSpecies,iCell)
@@ -2814,7 +3011,11 @@ contains
     real :: AltMin, AltMax, Density, uBulk, Temperature,DtSavePlot
     character(len=100):: TypeGrid
     !--------------------------------------------------------------------------
-    
+    !set global line info
+    allocate(iLineGlobal_I(nLine))
+    iLineGlobal_I(1)=1
+    iLineCurrent=1
+
     nTime=1000
 !    nTime=10000
     DtSavePlot=10
@@ -2827,16 +3028,15 @@ contains
     Density=1e5
     uBulk=100000.0
     Temperature=10000.0
+    
     write(*,*) 'init_particle'
     
     call timing_start('init_particle')
     call init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     call timing_stop('init_particle')
-
-    !set global line info
-    allocate(iLineGlobal_I(nLine))
-    iLineGlobal_I(1)=1
-
+    
+    Efield_G(:)=0.0
+    
     write(*,*) 'initialize the ghost cell'
     call timing_start('sample_maxwellian_cell_boxmuller')
     call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temperature)
@@ -2855,6 +3055,15 @@ contains
        call timing_start('sample_maxwellian_cell_boxmuller')
        call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temperature)    
        call timing_stop('sample_maxwellian_cell_boxmuller')
+
+       !Sort the particles
+       call timing_start('sort_particles')
+       call sort_particles
+       call timing_stop('sort_particles')
+       
+       call timing_start('split_join_particles')
+       call split_join_particles(iSpecies,0.05)
+       call timing_stop('split_join_particles')
        
        !Sort the particles
        call timing_start('sort_particles')
