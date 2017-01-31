@@ -79,7 +79,7 @@ contains
     !write plot
     call save_plot_file(NameGraphics(iLine), TypePositionIn='append',     &
          TypeFileIn=TypePlot,StringHeaderIn = NameHeader,                 & 
-         NameVarIn = NamePlotVar, nStepIn= nint(time/dt),TimeIn=time,     &
+         NameVarIn = NamePlotVar, nStepIn= 1,TimeIn=time,     &
          nDimIn=1,CoordIn_I = Coord_I, VarIn_IV = PlotState_IV,           &
          ParamIn_I = (/gamma/))
     
