@@ -26,7 +26,9 @@ subroutine polar_wind
   use ModPwPlots, ONLY: PW_print_plot,DoPlotNeutral,plot_neutral_pw
   use ModOvation, ONLY:DoPlotOvation,plot_ovation_polar
   use ModParticle, ONLY: put_to_particles, run_particles,get_from_particles,&
-       IsVerboseParticle,write_restart_particle
+       IsVerboseParticle,write_restart_particle,UseOverlapRegion,nOverlap
+  use ModConst,ONLY: cBoltzmann
+  use ModPhotoElectron
   INTEGER NOTP(100)
   
   !     define the output files and attaching units
@@ -37,14 +39,20 @@ subroutine polar_wind
   
   !for particle coupling
   real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
-  
+  integer :: iSpecies
+  integer, parameter :: nParticleSpecies=2
+  real :: ScaleHeight
   !-----------------------------------------------------------------------
   nDim = nAlt
   !set species dependent upper boundary to nAlt when not using particles
   nAltTop_I(:)=nAlt
   if (UseParticles) then
-     !nAltTop_I(1:2)=iAltParticle
-     nAltTop_I(:)=iAltParticle
+     if(UseOverlapRegion) then
+        nAltTop_I(:)=iAltParticle+nOverlap
+     else
+        nAltTop_I(:)=iAltParticle
+     endif
+     !nAltTop_I(:)=iAltParticle+10
   endif
   call get_field_line(nDim,State_GV(1:nDim,:),                       &
        SmLat,SmLon,Jr,wHorizontal,uJoule2=uJoule2,                &
@@ -106,6 +114,8 @@ subroutine polar_wind
         if (.not.UseExplicitHeat) call PW_eheat_flux
         CALL PW_set_upper_bc
         CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
+        !zero out sources terms in particle region
+        !if (UseParticles) Source_CV(iAltParticle+1:nDim,:)=0.0
         CALL PW_calc_efield(nDim,State_GV(-1:nDim+2,:))         
 
      endif
@@ -131,33 +141,82 @@ subroutine polar_wind
         if(IsVerboseParticle) write(*,*) 'calling run_particles'
         call run_particles(DtCoupleParticles)
         if(IsVerboseParticle) write(*,*) 'done run_particles'
+
         
         if (UseParticleFeedback) then
            !get the particle solution back
            call get_from_particles(nDim,2,1.0e5*ALTD(1:nDim),&
                 Density_IC,Velocity_IC,Temperature_IC)
+
+           ! fill the particle solution back to fluid array above the boundary. 
+           !take the density and  velocity. Float the temperature. Then 
+           !cacluate the pressure
+           do iSpecies=1,nParticleSpecies
+              State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies))=&
+                   Density_IC(iSpecies,iAltParticle+1)*Mass_I(iSpecies)
+              State_GV(iAltParticle+1:iAltParticle+2,iU_I(iSpecies))=&
+                   Velocity_IC(iSpecies,iAltParticle+1)
+              State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))=&
+                   State_GV(iAltParticle,iT_I(iSpecies))
+  !              !calculate temperature boundary
+              State_GV(iAltParticle+1:iAltParticle+2,iP_I(iSpecies))=&
+                   State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))&
+                   *(Rgas_I(iSpecies)&
+                   *State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies)))
+                            
+              
+
+              State_GV(iAltParticle+3:nDim,iRho_I(iSpecies))=&
+                   Density_IC(iSpecies,iAltParticle+3:nDim)*Mass_I(iSpecies)
+              State_GV(iAltParticle+3:nDim,iU_I(iSpecies))=&
+                   Velocity_IC(iSpecies,iAltParticle+3:nDim)
+              State_GV(iAltParticle+3:nDim,iP_I(iSpecies))=&
+                   Temperature_IC(iSpecies,iAltParticle+3:nDim)*Rgas_I(iSpecies)&
+                   *State_GV(iAltParticle+1:nDim,iRho_I(iSpecies))
+
+              State_GV(iAltParticle+3:nDim,iT_I(iSpecies))=&
+                   Temperature_IC(iSpecies,iAltParticle+3:nDim)
+
+!
+              !kludge overwrite nDim and higher values with values form nDim-1
+              State_GV(nDim:nDim+2,iRho_I(iSpecies))=&
+                   Density_IC(iSpecies,nDim-1)*Mass_I(iSpecies)
+              State_GV(nDim:nDim+2,iU_I(iSpecies))=&
+                   Velocity_IC(iSpecies,nDim-1)
+              State_GV(nDim:nDim+2,iP_I(iSpecies))=&
+                   Temperature_IC(iSpecies,nDim-1)*Rgas_I(iSpecies)&
+                   *State_GV(nDim-1,iRho_I(iSpecies))
+
+              State_GV(nDim:nDim+2,iT_I(iSpecies))=&
+                   Temperature_IC(iSpecies,nDim-1)
+              
+
+           enddo
+
+           !update the electron densities and velocities
            
-           !overwrite portion of state array with particle solution
-           State_GV(iAltParticle:nDim,iRho_I(1))=&
-                Density_IC(1,iAltParticle:nDim)*Mass_I(1)
-           State_GV(iAltParticle:nDim,iRho_I(2))=&
-                Density_IC(2,iAltParticle:nDim)*Mass_I(2)
-           State_GV(iAltParticle:nDim,iU_I(1))=&
-                Velocity_IC(1,iAltParticle:nDim)
-           State_GV(iAltParticle:nDim,iU_I(2))=&
-                Velocity_IC(2,iAltParticle:nDim)
-           State_GV(iAltParticle:nDim,iT_I(1))=&
-                Temperature_IC(1,iAltParticle:nDim)
-           State_GV(iAltParticle:nDim,iT_I(2))=&
-                Temperature_IC(2,iAltParticle:nDim)
+           State_GV(1:nDim,RhoE_)= -SeDens_C(:)*Mass_I(nIon)
+           State_GV(1:nDim,uE_)  = -SeFlux_C(:)*Mass_I(nIon)
+           
+           do k=1,nDim
+              do iIon=1,nIon-1
+                 State_GV(K,RhoE_) = &
+                      State_GV(k,RhoE_)+MassElecIon_I(iIon)*State_GV(K,iRho_I(iIon))
+                 State_GV(K,uE_)= &
+                      State_GV(k,uE_)+ &
+                      (MassElecIon_I(iIon)*State_GV(K,iRho_I(iIon))&
+                      *State_GV(K,iU_I(iIon)))
+              enddo
+              State_GV(k,RhoE_) = &
+                   max(State_GV(k,RhoE_),eThermalDensMin*Mass_I(nIon))
+              State_GV(K,uE_)=(State_GV(K,uE_) -1.8965E-18*CURR(K))/State_GV(K,RhoE_)
+           enddo
+           !get T from p and rho
+           State_GV(1:nDim,iP_I(nIon))=&
+              State_GV(1:nDim,iT_I(nIon))&
+              *Rgas_I(nIon)&
+              *State_GV(1:nDim,iRho_I(nIon))
 
-           State_GV(iAltParticle:nDim,iP_I(1))=&
-                Temperature_IC(1,iAltParticle:nDim)*Rgas_I(1)&
-                *State_GV(iAltParticle:nDim,iRho_I(1))
-
-           State_GV(iAltParticle:nDim,iP_I(2))=&
-                Temperature_IC(2,iAltParticle:nDim)*Rgas_I(2)&
-                *State_GV(iAltParticle:nDim,iRho_I(2))
         endif
         
         deallocate(Density_IC,Velocity_IC,Temperature_IC)
@@ -188,6 +247,8 @@ subroutine polar_wind
         CALL advect
         CALL PW_set_upper_bc
         CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
+        !zero out sources terms in particle region
+        !if (UseParticles) Source_CV(iAltParticle+1:nDim,:)=0.0
         CALL PW_calc_efield(nDim,State_GV(-1:nDim+2,:))         
       
      endif
