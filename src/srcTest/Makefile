@@ -132,3 +132,22 @@ unit_test_wpi:
 
 #######################################################################
 
+#######################################################################
+OBJ_COMBINE_FLUID_PARTICLE = \
+	../ModParticle.o 
+
+
+unit_test_combine_fluid_particle_exe:
+	@(cd .. ;make ModParticle.o)
+	@make unit_test_combine_fluid_particle.o 
+	${LINK.f90} -o unit_test_combine_fluid_particle.exe ${OBJ_COMBINE_FLUID_PARTICLE} \
+		unit_test_combine_fluid_particle.o -L${LIBDIR}  -lEMPIRICALIE \
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+
+unit_test_combine_fluid_particle: 
+	@echo unit_test_combine_fluid_particle starting
+	@make unit_test_combine_fluid_particle_exe 
+	@echo ./unit_test_combine_fluid_particle_exe
+	-@(./unit_test_combine_fluid_particle_exe )
+
+
