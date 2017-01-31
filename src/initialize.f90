@@ -244,8 +244,11 @@ subroutine PW_initialize
      iLineGlobalParticle_I=iLineGlobal
 
      !set altitude index for fluid to particle transition
-     iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)+1
-     
+     !iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)+1
+     iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)
+!     write(*,*) 'AltMinPArticles,AltD(1),DRBND,iAltParticle',AltMinPArticles,AltD(1),DRBND,iAltParticle
+!     write(*,*) 'AltD(iAltParticle)',AltD(iAltParticle)
+!     stop
      !for each line restart or 
      !fill the state variables, intially sample the particles 
      !and then bury the line. Each lines particles will be disintered before 
