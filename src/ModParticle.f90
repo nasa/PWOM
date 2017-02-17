@@ -47,10 +47,10 @@ Module ModParticle
   integer :: iLineCurrent
   
   !Frequency of outputs
-  real :: DtSaveProfile=60.0 !300
-  real :: DtSaveDF=60.0!300.0
+  real :: DtSaveProfile=300
+  real :: DtSaveDF=300.0
 
-  
+  real :: DtSplitJoin=5.0
   
   !How many and which altitudes should the DF be saved
   !integer,parameter :: nSaveDfAlts=3
@@ -109,7 +109,7 @@ Module ModParticle
   !plot variables for profile (depends on planet)
   character(len=150):: NameProfilePlotVar
   integer, allocatable :: iDen_I(:),iVel_I(:),&
-            iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:)
+            iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:),iHpar_I(:),iHperp_I(:)
   integer :: nVarProfile
 
   !should the output associated with particles be verbose
@@ -197,25 +197,30 @@ contains
        
        !set plotting variables
        NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
-            //'TOperp[k] nH[cm-3] uH[km/s] pH TH[k] THpar[k] THperp[k] g r'
+            //'TOperp[k] HOpar HOperp '&
+            //'nH[cm-3] uH[km/s] pH TH[k] THpar[k] THperp[k] HHpar HHperp g r'
        !index arrays for location in plotting routine
        allocate(iDen_I(nSpecies),iVel_I(nSpecies),&
             iPres_I(nSpecies), iTemp_I(nSpecies),iTpar_I(nSpecies),&
-            iTperp_I(nSpecies))
+            iTperp_I(nSpecies), iHpar_I(nSpecies), iHperp_I(nSpecies))
        iDen_I(O_) =1
        iVel_I(O_) =2
        iPres_I(O_)=3
        iTemp_I(O_)=4
        iTpar_I(O_)=5
        iTperp_I(O_)=6
+       iHpar_I(O_)=7
+       iHperp_I(O_)=8
        
-       iDen_I(H_) =7
-       iVel_I(H_) =8
-       iPres_I(H_)=9
-       iTemp_I(H_)=10
-       iTpar_I(H_)=11
-       iTperp_I(H_)=12
-       nVarProfile=12
+       iDen_I(H_) =9
+       iVel_I(H_) =10
+       iPres_I(H_)=11
+       iTemp_I(H_)=12
+       iTpar_I(H_)=13
+       iTperp_I(H_)=14
+       iHpar_I(H_)=15
+       iHperp_I(H_)=16
+       nVarProfile=16
     case DEFAULT
        call con_stop('particles not for planet')
     end select
@@ -272,7 +277,7 @@ contains
     ! based on grid type set the grid
     select case(TypeGrid)
     case('Uniform')
-       dAlt=(AltMax-AltMin)/nAlt
+       dAlt=(AltMax-AltMin)/(nAlt-1)
        dAlt_G=dAlt
 
        ! set area coef if A=alpha r^3 assuming crossection of 1 cm2 at base
@@ -815,7 +820,7 @@ contains
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
     real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
-    real :: Tpar,Tperp
+    real :: Tpar,Tperp,Hpar,Hperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
@@ -851,15 +856,17 @@ contains
              PlotState_IV(iCell,iTemp_I(iSpecies)) = 0.0
              PlotState_IV(iCell,iTpar_I(iSpecies)) = 0.0
              PlotState_IV(iCell,iTperp_I(iSpecies)) = 0.0
+             PlotState_IV(iCell,iHpar_I(iSpecies)) = 0.0
+             PlotState_IV(iCell,iHperp_I(iSpecies)) = 0.0
           else
              ! get moments in cell. note weighted calculation falls apart 
              ! next to ghost cell so revert to basic calcuation
              if (iCell<=1 .or. iCell==nAlt) then
                 call calc_moments_cell(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
              else
                 call calc_moments_cell_weighted(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
              endif
              PlotState_IV(iCell,iDen_I(iSpecies))  = density
              PlotState_IV(iCell,iVel_I(iSpecies)) = uBulkPar*cCmToKm
@@ -867,6 +874,8 @@ contains
              PlotState_IV(iCell,iTemp_I(iSpecies)) = Temp
              PlotState_IV(iCell,iTpar_I(iSpecies)) = Tpar
              PlotState_IV(iCell,iTperp_I(iSpecies)) = Tperp
+             PlotState_IV(iCell,iHpar_I(iSpecies)) = Hpar
+             PlotState_IV(iCell,iHperp_I(iSpecies)) = Hperp
           end if
        enddo
     end do
@@ -901,7 +910,7 @@ contains
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
     real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
-    real :: Tpar,Tperp
+    real :: Tpar,Tperp,Hpar,Hperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
     integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
@@ -925,7 +934,7 @@ contains
     
     ! get moments in cell so we can calculate thermal velocity
     call calc_moments_cell(iSpecies,iCell,&
-         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
     
     write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
          ,density,uBulkPar,uBulkPerp,Pressure,Temp
@@ -1101,13 +1110,14 @@ contains
 
   !=============================================================================
   subroutine calc_moments_cell(iSpecies,iCell,&
-       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
     integer,intent(in) :: iSpecies,iCell
     integer :: nParticleInCell,iParticle
     real :: uParTmp,uPerpTmp
     real :: Ppar,Pperp
     real :: weight
     real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp
+    real, intent(out) :: Hpar,Hperp
     real :: TrueParticles
     !--------------------------------------------------------------------------
     
@@ -1122,6 +1132,8 @@ contains
        Temp=0.0
        Tpar=0.0
        Tperp=0.0
+       Hpar=0.0
+       Hperp=0.0
        return
     endif
 
@@ -1151,6 +1163,8 @@ contains
     Pressure=0.0
     Ppar=0.0
     Pperp=0.0
+    Hpar =0.0
+    Hperp=0.0
     do iParticle=1,nParticleInCell
        uParTmp =SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar
        uPerpTmp=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp
@@ -1163,15 +1177,24 @@ contains
        
        Pperp = Pperp&
             +weight*((uPerpTmp-uBulkPerp)**2)
+
+       !from eq 37-38 in demars et al 1992 
+       Hpar = Hpar+weight*(&
+            (uParTmp-uBulkPar)*(uParTmp-uBulkPar)**2)
+       Hperp= Hperp+weight*(&
+            (uParTmp-uBulkPar)*(uPerpTmp)**2)
     enddo
     Pressure=Pressure*Mass_I(iSpecies)*density/(3.0*TrueParticles)
     Ppar=Ppar*Mass_I(iSpecies)*density/(TrueParticles)
     Pperp=Pperp*Mass_I(iSpecies)*density/(TrueParticles)
-
+    Hpar=Hpar*Mass_I(iSpecies)*density/(TrueParticles)
+    Hperp=0.5*Hperp*Mass_I(iSpecies)*density/(TrueParticles)
+    
     !get temperature from ideal gas law P=nkT
     Temp = Pressure/(density*cBoltzmannCGS)
     Tpar = Ppar/(density*cBoltzmannCGS)
     Tperp = Pperp/(density*cBoltzmannCGS)
+
 
   end subroutine calc_moments_cell
   !============================================================================
@@ -1304,12 +1327,13 @@ contains
 
   !=============================================================================
   subroutine calc_moments_cell_weighted(iSpecies,iCell,&
-       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+       density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
     integer,intent(in) :: iSpecies,iCell
     integer :: nParticleInCell,iParticle,iAlt
     real :: uParTmp,uPerpTmp,weight,TotalWeight,Alt
     real :: Ppar,Pperp
     real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp
+    real, intent(out) :: Hpar,Hperp
     real :: TrueParticles
     !--------------------------------------------------------------------------
     TrueParticles=0
@@ -1318,6 +1342,8 @@ contains
     Pressure=0.0
     Ppar=0.0
     Pperp=0.0
+    Hpar=0.0
+    Hperp=0.0
     uBulkPar=0.0
     uBulkPerp=0.0
     Temp=0.0
@@ -1390,12 +1416,23 @@ contains
           Pperp = Pperp&
                +(uPerpTmp-uBulkPerp)**2*weight*&
                SortParticles_III(iParticle,iSpecies,iAlt)%Particle%NumPerParticle
+          !from eq 37-38 in demars et al 1992
+          Hpar = Hpar+weight*(&
+               (uParTmp-uBulkPar)*(uParTmp-uBulkPar)**2)*&
+               SortParticles_III(iParticle,iSpecies,iAlt)%Particle%NumPerParticle
+          Hperp = Hperp+weight*(&
+               (uParTmp-uBulkPar)*(uPerpTmp)**2)*&
+               SortParticles_III(iParticle,iSpecies,iAlt)%Particle%NumPerParticle
+
        end do PARTICLE_LOOP2
     end do ALT_LOOP2
 
     Pressure=Pressure*Mass_I(iSpecies)*density/(3.0*TrueParticles)
     Ppar=Ppar*Mass_I(iSpecies)*density/(TrueParticles)
     Pperp=Pperp*Mass_I(iSpecies)*density/(TrueParticles)
+    Hpar=Hpar*Mass_I(iSpecies)*density/(TrueParticles)
+    Hperp=0.5*Hperp*Mass_I(iSpecies)*density/(TrueParticles)
+    
     !get temperature from ideal gas law P=nkT
     Temp = Pressure/(density*cBoltzmannCGS)
     Tpar = Ppar/(density*cBoltzmannCGS)
@@ -1419,6 +1456,7 @@ contains
     integer :: iParticle,MaxSortedParticle
     integer :: nThreads,iThread,nThreadsOrig
     integer,parameter :: nThreadsReduced=8
+    
     !comment next lines when not using openmp
 !    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
 !         OMP_get_num_threads
@@ -1463,7 +1501,7 @@ contains
        iCell=Particles_I(iParticle)%iCell
        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
        iSpecies=Particles_I(iParticle)%iSpecies
-       if(iSpecies==0)write(*,*)iParticle,nParticle
+!       if(iSpecies==0)write(*,*)iParticle,nParticle
        
        SortParticles_III(iParticleCell_II(iSpecies,iCell),&
             iSpecies,iCell)%Particle& 
@@ -1473,78 +1511,79 @@ contains
        
     enddo PARTICLE_LOOP
     deallocate(iParticleCell_II)
+
+
+
     
-!!!     !\
-!!!     ! the openmp version
-!!!     !/
-!!!     !allocate a sortparticle array specific to each thread, after soring 
-!!!     !
-!!!     !reduce the number of threads and save the origional amount
-!!!     nThreadsOrig = OMP_get_max_threads()
-!!!     call OMP_set_num_threads(nThreadsReduced)
-!!!     nThreads=nThreadsReduced
-!!! !    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
-!!! !    allocate(SortParticlesT_III(0:nThreads-1,nSpecies,0:nAlt+1,&
-!!! !         maxval(nSortedParticle_II)))
-!!! 
-!!!     if(allocated(SortParticlesT_III))deallocate(SortParticlesT_III)
-!!!     allocate(SortParticlesT_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
-!!! !    write(*,*) nThreads
-!!! !    stop
-!!!     ! loop through particles and assign pointer index to target particle from 
-!!!     !global list
-!!!     allocate(iParticleCell_IIT(nSpecies,0:nAlt+1,0:nThreads-1))
-!!! !    allocate(iParticleCellT_II(nSpecies,0:nAlt+1))
-!!!     iParticleCell_IIT=1
-!!!     
-!!!     !$OMP PARALLEL PRIVATE(iCell,iSpecies,iThread, &
-!!!     !$OMP iParticle, SortParticlesT_III, &
-!!!     !$OMP iUpper,iLower) 
-!!!     !$OMP DO  
-!!!     PARTICLE_LOOP: do iParticle=1,nParticle
-!!!        !write(*,*) 'number of threads=',OMP_get_num_threads()
-!!!        iThread=OMP_get_thread_num()
-!!!        !write(*,*) 'iThread=',iThread
-!!!        iCell=Particles_I(iParticle)%iCell
-!!!        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
-!!!        iSpecies=Particles_I(iParticle)%iSpecies
-!!!        if(iSpecies==0)write(*,*)iParticle,nParticle
-!!!        
-!!!        SortParticlesT_III(iParticleCell_IIT(iSpecies,iCell,iThread),&
-!!!             iSpecies,iCell)%Particle& 
-!!!             =>Particles_I(iParticle)
-!!!        iParticleCell_IIT(iSpecies,iCell,iThread)=&
-!!!             iParticleCell_IIT(iSpecies,iCell,iThread)+1
-!!!        
-!!!     enddo PARTICLE_LOOP
-!!!     !$OMP END DO 
-!!! 
-!!!     !Now combine the results from each thread
-!!! 
-!!!     do iCell=0,nAlt+1
-!!!        do iSpecies=1,nSpecies
-!!!           if(iParticleCell_IIT(iSpecies,iCell,iThread)>1) then
-!!!              !write(*,*) 'iThread,par1,par2',iThread,&
-!!!              !     iParticleCell_TII(:,iSpecies,iCell),iSpecies,iCell
-!!! 
-!!!              iLower=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread-1))-iThread+1
-!!!              iUpper=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread))-iThread-1
-!!!              !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
-!!!              !write(*,*) 'iThread,iParticleCell_TII(iThread,iSpecies,iCell)',&
-!!!              !     iThread,iParticleCell_TII(iThread,iSpecies,iCell)
-!!!              SortParticles_III(iLower:iUpper,iSpecies,iCell) = &
-!!!                   SortParticlesT_III(&
-!!!                   1:iParticleCell_IIT(iSpecies,iCell,iThread)-1,&
-!!!                   iSpecies,iCell)
-!!!           endif
-!!!        enddo
-!!!     enddo
-!!! 
-!!!     !$OMP END PARALLEL
-!!! 
-!!!     !set number of threads back to origional value
-!!!     call OMP_set_num_threads(nThreadsOrig)
-!!!     deallocate(iParticleCell_IIT,SortParticlesT_III)
+     !\
+     ! the openmp version
+     !/
+     !allocate a sortparticle array specific to each thread, after soring 
+     !
+     !reduce the number of threads and save the origional amount
+!     nThreadsOrig = OMP_get_max_threads()
+!     call OMP_set_num_threads(nThreadsReduced)
+!     nThreads=nThreadsReduced
+! !    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
+! !    allocate(SortParticlesT_III(0:nThreads-1,nSpecies,0:nAlt+1,&
+! !         maxval(nSortedParticle_II)))
+! 
+!     if(allocated(SortParticlesT_III))deallocate(SortParticlesT_III)
+!     allocate(SortParticlesT_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
+! !    write(*,*) nThreads
+! !    stop
+!     ! loop through particles and assign pointer index to target particle from 
+!     !global list
+!     allocate(iParticleCell_IIT(nSpecies,0:nAlt+1,0:nThreads-1))
+! !    allocate(iParticleCellT_II(nSpecies,0:nAlt+1))
+!     iParticleCell_IIT=1
+!     
+!     !$OMP PARALLEL PRIVATE(iCell,iSpecies,iThread, &
+!     !$OMP iParticle, SortParticlesT_III, &
+!     !$OMP iUpper,iLower) 
+!     !$OMP DO  
+!     PARTICLE_LOOP: do iParticle=1,nParticle
+!        !write(*,*) 'number of threads=',OMP_get_num_threads()
+!        iThread=OMP_get_thread_num()
+!        !write(*,*) 'iThread=',iThread
+!        iCell=Particles_I(iParticle)%iCell
+!        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
+!        iSpecies=Particles_I(iParticle)%iSpecies
+!        if(iSpecies==0)write(*,*)iParticle,nParticle
+!        
+!        SortParticlesT_III(iParticleCell_IIT(iSpecies,iCell,iThread),&
+!             iSpecies,iCell)%Particle& 
+!             =>Particles_I(iParticle)
+!        iParticleCell_IIT(iSpecies,iCell,iThread)=&
+!             iParticleCell_IIT(iSpecies,iCell,iThread)+1
+!        
+!     enddo PARTICLE_LOOP
+!     !$OMP END DO 
+! 
+!     !Now combine the results from each thread
+!     do iCell=0,nAlt+1
+!        do iSpecies=1,nSpecies
+!           if(iParticleCell_IIT(iSpecies,iCell,iThread)>1) then
+!              !write(*,*) 'iThread,par1,par2',iThread,&
+!              !     iParticleCell_TII(:,iSpecies,iCell),iSpecies,iCell
+! 
+!              iLower=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread-1))-iThread+1
+!              iUpper=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread))-iThread-1
+!              !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
+!              !write(*,*) 'iThread,iParticleCell_TII(iThread,iSpecies,iCell)',&
+!              !     iThread,iParticleCell_TII(iThread,iSpecies,iCell)
+!              SortParticles_III(iLower:iUpper,iSpecies,iCell) = &
+!                   SortParticlesT_III(&
+!                   1:iParticleCell_IIT(iSpecies,iCell,iThread)-1,&
+!                   iSpecies,iCell)
+!           endif
+!        enddo
+!     enddo
+!     !$OMP END PARALLEL
+! 
+!     !set number of threads back to origional value
+!     call OMP_set_num_threads(nThreadsOrig)
+!     deallocate(iParticleCell_IIT,SortParticlesT_III)
   end subroutine sort_particles
 
   !=============================================================================
@@ -1614,7 +1653,7 @@ contains
     real :: N11,N12,N21,N22,N11w,N12w,N21w,N22w,P1,P2
     real :: weight_II(2,2), weight1, weight2
     real :: SimPArticleRatio, DensityRatio
-    real :: Tpar,Tperp
+    real :: Tpar,Tperp,Hpar,Hperp
     logical :: DoTest=.false.
 
     real :: Delta,sintheta,OneMinusCosTheta
@@ -1728,7 +1767,7 @@ contains
     if (iSpeciesIn==jSpeciesIn) then
        call calc_moments_cell(iSpeciesIn,iCell,&
             Density1,uBulkPar,uBulkPerp,Pressure,Temp1,&
-            Tpar,Tperp)
+            Tpar,Tperp,Hpar,Hperp)
        Density2=Density1
        Temp2=Density1
        
@@ -1744,10 +1783,10 @@ contains
     else
        call calc_moments_cell(iSpeciesIn,iCell,&
             Density1,uBulkPar,uBulkPerp,Pressure,Temp1,&
-            Tpar,Tperp)
+            Tpar,Tperp,Hpar,Hperp)
        call calc_moments_cell(jSpeciesIn,iCell,&
             Density2,uBulkPar,uBulkPerp,Pressure,Temp2,&
-            Tpar,Tperp)
+            Tpar,Tperp,Hpar,Hperp)
        
        DensityMin = min(Density1,Density2)
        
@@ -2103,12 +2142,12 @@ contains
   ! particles in the cell are equal to the target number of particles per cell 
   ! if outside the target then split or join particles as required to reach 
   ! target number of particles in a cell. Then resort when done
-  subroutine split_join_particles(iSpecies,Tolerance)
-    integer, intent(in) :: iSpecies
+  subroutine split_join_particles(Tolerance)
+    !integer, intent(in) :: iSpecies
     real   , intent(in) :: Tolerance
     integer :: iCell, nParticleInCell
     integer,parameter :: LowerLimit=10
-    
+    integer :: iSpecies
     !variables for splitting joining and holding new paritcles
     integer :: nJoin, nSplit, nNew, nNewOld
     type(particle),allocatable :: NewParticles_I(:), NewParticlesOld_I(:)
@@ -2124,92 +2163,94 @@ contains
     
     nNew=0
     nNewOld=0
-
-    !loop over cells
-    cell_loop: do iCell=1,nAlt
-       ! get the number of particles in the cell of a given species
-       nParticleInCell=nSortedParticle_II(iSpecies,iCell)
-       
-       ! if particle in cell are less than some lower limit cycle
-       if (nParticleInCell <= LowerLimit) cycle cell_loop
-       
-       !Compare to tolerance and if inside then cycle
-       if(nParticleInCell>=nParticlePerCell_I(iSpecies)*(1.0-Tolerance) &
-            .and. nParticleInCell<=nParticlePerCell_I(iSpecies)*(1.0+Tolerance)) then
-          cycle cell_loop
-       endif
-       
-       !Save the number of new particles
-       nNewOld=nNew
-
-       ! on first time through loop nNewOld is zero so special case
-       if (nNewOld>0) then
-          allocate(NewParticlesOld_I(nNewOld))
-          NewParticlesOld_I=NewParticles_I
-       endif
-
-       !Check if we need to split or join
-       if (nParticleInCell>nParticlePerCell_I(iSpecies)) then
-          !set number of joined particles to create never letting the number 
-          !exceed 10% of the particles at a time
-          nJoin=min(abs(nParticleInCell-nParticlePerCell_I(iSpecies)),&
-               floor(0.1*nParticleInCell))
-          !nJoin=abs(nParticleInCell-nParticlePercell)
+    
+    species_loop: do iSpecies=1,nSpecies
+       !loop over cells
+       cell_loop: do iCell=1,nAlt
+          ! get the number of particles in the cell of a given species
+          nParticleInCell=nSortedParticle_II(iSpecies,iCell)
           
-          !need loop to deal with case when not all particles can be joined
-          IsJoinSuccess=.false.
-          join: do while (.not.IsJoinSuccess)
+          ! if particle in cell are less than some lower limit cycle
+          if (nParticleInCell <= LowerLimit) cycle cell_loop
+          
+          !Compare to tolerance and if inside then cycle
+          if(nParticleInCell>=nParticlePerCell_I(iSpecies)*(1.0-Tolerance) &
+               .and. nParticleInCell<=nParticlePerCell_I(iSpecies)&
+               *(1.0+Tolerance)) then
+             cycle cell_loop
+          endif
+          
+          !Save the number of new particles
+          nNewOld=nNew
+          
+          ! on first time through loop nNewOld is zero so special case
+          if (nNewOld>0) then
+             allocate(NewParticlesOld_I(nNewOld))
+             NewParticlesOld_I=NewParticles_I
+          endif
+          
+          !Check if we need to split or join
+          if (nParticleInCell>nParticlePerCell_I(iSpecies)) then
+             !set number of joined particles to create never letting the number 
+             !exceed 10% of the particles at a time
+             nJoin=min(abs(nParticleInCell-nParticlePerCell_I(iSpecies)),&
+                  floor(0.1*nParticleInCell))
+             !nJoin=abs(nParticleInCell-nParticlePercell)
+             
+             !need loop to deal with case when not all particles can be joined
+             IsJoinSuccess=.false.
+             join: do while (.not.IsJoinSuccess)
+                if(.not.allocated(NewParticlesTmp_I))&
+                     allocate(NewParticlesTmp_I(nJoin))
+                call join_particles_cell(iCell,iSpecies,nJoin,NewParticlesTmp_I,&
+                     nJoinRevise)
+                ! check if nJoin particles could be combined while keeping 
+                ! reasonable descretization in velocity space
+                if (nJoin == nJoinRevise) then
+                   IsJoinSuccess=.true.
+                else
+                   deallocate(NewParticlesTmp_I)
+                   nJoin=nJoinRevise
+                endif
+             end do join
+             nNew=nNewOld+nJoin
+          else
+             !set number of particles to split never letting the number 
+             !exceed 10% of the particles at a time
+             nSplit=min(abs(nParticleInCell-nParticlePerCell_I(iSpecies)),&
+                  floor(0.4*nParticleInCell))
+             !nSplit=abs(nParticleInCell-nParticlePercell)
+             nNew=nNewOld+2*nSplit
              if(.not.allocated(NewParticlesTmp_I))&
-                  allocate(NewParticlesTmp_I(nJoin))
-             call join_particles_cell(iCell,iSpecies,nJoin,NewParticlesTmp_I,&
-                  nJoinRevise)
-             ! check if nJoin particles could be combined while keeping 
-             ! reasonable descretization in velocity space
-             if (nJoin == nJoinRevise) then
-                IsJoinSuccess=.true.
-             else
-                deallocate(NewParticlesTmp_I)
-                nJoin=nJoinRevise
-             endif
-          end do join
-          nNew=nNewOld+nJoin
-       else
-          !set number of particles to split never letting the number 
-          !exceed 10% of the particles at a time
-          nSplit=min(abs(nParticleInCell-nParticlePerCell_I(iSpecies)),&
-               floor(0.4*nParticleInCell))
-          !nSplit=abs(nParticleInCell-nParticlePercell)
-          nNew=nNewOld+2*nSplit
-          if(.not.allocated(NewParticlesTmp_I))&
-               allocate(NewParticlesTmp_I(2*nSplit))
-          call split_particles_cell(iCell,iSpecies,nSplit,NewParticlesTmp_I)
-       endif
-       
-       ! append new particles to new particle list
-       
-       if (nNewOld>0) then
-          deallocate(NewParticles_I)
-          allocate(NewParticles_I(nNew))
-          NewParticles_I(1:nNewOld)=NewParticlesOld_I
-          NewParticles_I(nNewOld+1:nNew)=NewParticlesTmp_I
-          deallocate(NewParticlesOld_I)
-       else
-          if(allocated(NewParticles_I)) deallocate(NewParticles_I)
-          allocate(NewParticles_I(nNew))
-          NewParticles_I=NewParticlesTmp_I
-       endif
-       
-
-       !deallocate these arrays as they need to be allocated the next time
-       !around the loop
-       deallocate(NewParticlesTmp_I)
-       
-       ! now add new particles to the list, note that the old particles 
-       ! involved in spliting or joining are already removed from the main 
-       ! particle list
-              
-    end do cell_loop
-
+                  allocate(NewParticlesTmp_I(2*nSplit))
+             call split_particles_cell(iCell,iSpecies,nSplit,NewParticlesTmp_I)
+          endif
+          
+          ! append new particles to new particle list
+          
+          if (nNewOld>0) then
+             deallocate(NewParticles_I)
+             allocate(NewParticles_I(nNew))
+             NewParticles_I(1:nNewOld)=NewParticlesOld_I
+             NewParticles_I(nNewOld+1:nNew)=NewParticlesTmp_I
+             deallocate(NewParticlesOld_I)
+          else
+             if(allocated(NewParticles_I)) deallocate(NewParticles_I)
+             allocate(NewParticles_I(nNew))
+             NewParticles_I=NewParticlesTmp_I
+          endif
+          
+          
+          !deallocate these arrays as they need to be allocated the next time
+          !around the loop
+          deallocate(NewParticlesTmp_I)
+          
+          ! now add new particles to the list, note that the old particles 
+          ! involved in spliting or joining are already removed from the main 
+          ! particle list
+          
+       end do cell_loop
+    end do species_loop
     ! rebuild master particle list including new particles
     if (nNew >0) then
 
@@ -2428,7 +2469,7 @@ contains
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
     real :: dVel, vParMin, vPerpMin
-    real :: Tpar,Tperp
+    real :: Tpar,Tperp,Hpar,Hperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
     integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
@@ -2487,7 +2528,7 @@ contains
 
     ! get moments in cell so we can calculate thermal velocity
     call calc_moments_cell(iSpecies,iCell,&
-         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
     
     !write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
     !     ,density,uBulkPar,uBulkPerp,Pressure,Temp
@@ -2842,7 +2883,7 @@ contains
     integer,intent(in) :: iSpecies
     real:: SoundSpeed,Flux, FluxL, FluxR, DenToInject,VelToInject, TempToInject
     real:: SoundSpeedL,SoundSpeedR
-    real:: Density,VelocityPar,VelocityPerp,Temp,TparIon,TperpIon,Pressure
+    real:: Density,VelocityPar,VelocityPerp,Temp,TparIon,TperpIon,Hpar,Hperp,Pressure
     real,parameter :: gamma=1.66666666666666666666
     !--------------------------------------------------------------------------
         
@@ -2857,7 +2898,7 @@ contains
     !get flux on right side of interface
     call calc_moments_cell(iSpecies,1,&
          Density,VelocityPar,VelocityPerp,Pressure,Temp,&
-         TparIon,TperpIon)
+         TparIon,TperpIon,Hpar,Hperp)
 
     !Determine the sound speed
     SoundSpeedR=sqrt(gamma*cBoltzmannCGS*Temp&
@@ -2896,7 +2937,7 @@ contains
   !============================================================================
   ! 
   subroutine get_from_particles(nAltIn,nSpeciesIn,AltIn_C,&
-       DensityOut_IC,VelocityOut_IC,TemperatureOut_IC)
+       DensityOut_IC,VelocityOut_IC,TemperatureOut_IC,HeatFluxOut_IC)
     use ModInterpolate, only: linear
     integer, intent(in) :: nAltIn,nSpeciesIn
     real,    intent(in) :: AltIn_C(nAltIn)
@@ -2905,11 +2946,13 @@ contains
     real,    intent(out) :: DensityOut_IC(nSpeciesIn,nAltIn)
     real,    intent(out) :: VelocityOut_IC(nSpeciesIn,nAltIn)
     real,    intent(out) :: TemperatureOut_IC(nSpeciesIn,nAltIn)
+    real,    intent(out) :: HeatFluxOut_IC(nSpeciesIn,nAltIn)
     
     integer :: iSpecies, nParticleInCell, iAlt
     real :: density, Velocity,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,&
-         Tperp,Temperature
+         Tperp,Temperature,Hpar,Hperp
     real, allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
+    real, allocatable :: HeatFlux_IC(:,:)
     
     !min values for density and temperature
     real, parameter :: DensityMin=1e-4 !cm-3
@@ -2918,7 +2961,7 @@ contains
     !---------------------------------------------------------------------------
     
     allocate(Density_IC(nSpeciesIn,nAlt),Velocity_IC(nSpeciesIn,nAlt),&
-         Temperature_IC(nSpeciesIn,nAlt))    
+         Temperature_IC(nSpeciesIn,nAlt),HeatFlux_IC(nSpeciesIn,nAlt))
     
     do iAlt=1,nAlt
        do iSpecies=1,nSpeciesIn
@@ -2934,6 +2977,7 @@ contains
                 Density_IC(iSpecies,iAlt)    =0.0
                 Velocity_IC(iSpecies,iAlt)   =0.0
                 Temperature_IC(iSpecies,iAlt)=0.0
+                HeatFlux_IC(iSpecies,iAlt)=0.0
              else
                 ! get moments in each cell so we can later interpolate to fluid 
                 !call calc_moments_cell(iSpecies,iAlt,&
@@ -2942,14 +2986,15 @@ contains
                 ! so revert to regualr moment calculation
                 if (iAlt==1 .or. iAlt==nAlt) then
                    call calc_moments_cell(iSpecies,iAlt,&
-                        density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                        density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
                 else
                    call calc_moments_cell_weighted(iSpecies,iAlt,&
-                        density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp)
+                        density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
                 endif
                 Density_IC(iSpecies,iAlt)    =density
                 Velocity_IC(iSpecies,iAlt)   =uBulkPar
                 Temperature_IC(iSpecies,iAlt)=Temp
+                HeatFlux_IC(iSpecies,iAlt)=Hpar
              endif
 !          end if
        enddo
@@ -2964,6 +3009,7 @@ contains
              DensityOut_IC(iSpecies,iAlt) = DensityMin
              VelocityOut_IC(iSpecies,iAlt)    = 0.0
              TemperatureOut_IC(iSpecies,iAlt) = TemperatureMin
+             HeatFlux_IC(iSpecies,iAlt) = 0.0
           else
              !interpolate
              DensityOut_IC(iSpecies,iAlt)  = &
@@ -2975,6 +3021,9 @@ contains
              TemperatureOut_IC(iSpecies,iAlt) = &
                   max(linear(Temperature_IC(iSpecies,:),1,     &
                   nAlt,AltIn_C(iAlt),Alt_G(1:nAlt)),TemperatureMin)
+             HeatFluxOut_IC(iSpecies,iAlt) = &
+                  linear(HeatFlux_IC(iSpecies,:),1,     &
+                  nAlt,AltIn_C(iAlt),Alt_G(1:nAlt))
           endif
           !if (iSpecies==1) write(*,*) iSpecies,AltIn_C(iAlt),&
           !     DensityOut_IC(iSpecies,iAlt),VelocityOut_IC(iSpecies,iAlt),&
@@ -2984,7 +3033,7 @@ contains
     enddo
 
     deallocate(Density_IC,Velocity_IC,&
-         Temperature_IC)    
+         Temperature_IC,HeatFlux_IC)    
     
   end subroutine get_from_particles
 
@@ -3012,7 +3061,11 @@ contains
     !interpolate the incomming efield 
     If(Present(EfieldIn_C)) then
        do iAlt=-1,nAlt+1
-          Efield_G(iAlt)= linear(EfieldIn_C(:),1,nAltIn,Alt_G(iAlt),AltIn_C)
+          if (Alt_G(iAlt)<AltIn_C(1) .or. Alt_G(iAlt)>AltIn_C(nAltIn) ) then
+             Efield_G(iAlt)=0.0
+          else
+             Efield_G(iAlt)= linear(EfieldIn_C(:),1,nAltIn,Alt_G(iAlt),AltIn_C)
+          endif
        enddo
     endif
 
@@ -3170,12 +3223,20 @@ contains
           call timing_stop('apply_wave_particle_interaction')
        endif
 
-       !split and join particles to be within 5% of the target particles/cell
-       do iSpecies=1,nSpecies
-          call split_join_particles(iSpecies,0.05)
-          call sort_particles
-       enddo
        
+       ! split and join particles to be within 5% of the target particles/cell
+       ! for speed up, only split and join every DtSplitJoin 
+       if (floor((Time+1.0e-5)/DtSplitJoin) &
+            /=floor((Time+1.0e-5-DtMove)/DtSplitJoin) )then 
+          call timing_start('split_join_particles')
+          call split_join_particles(0.05)
+          call timing_stop('split_join_particles')
+          
+          call timing_start('sort_particles')
+          call sort_particles
+          call timing_stop('sort_particles')
+       endif
+
        !advance the time
        Time=Time+DtMove
        TimeAdvance=TimeAdvance+DtMove
@@ -3207,7 +3268,7 @@ contains
     real :: AltMin, AltMax, Density, uBulk, Temperature
     character(len=100):: TypeGrid
     real :: densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
-                     TempTmp,TparTmp,TperpTmp
+                     TempTmp,TparTmp,TperpTmp,Hpar,Hperp
     !--------------------------------------------------------------------------
     !set global line info
     allocate(iLineGlobal_I(nLine))
@@ -3248,13 +3309,13 @@ contains
 !         SortParticles_III(iSpecies)%CellParticle)
     call calc_moments_cell_weighted(iSpecies,iCell,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
-         TempTmp,TparTmp,TperpTmp)    
+         TempTmp,TparTmp,TperpTmp,Hpar,Hperp)    
     write(*,*) 'moments',densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
          TempTmp,TparTmp,TperpTmp
 
     call calc_moments_cell(iSpecies,iCell,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
-         TempTmp,TparTmp,TperpTmp)    
+         TempTmp,TparTmp,TperpTmp,Hpar,Hperp)    
     write(*,*) 'moments',densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
          TempTmp,TparTmp,TperpTmp
 
@@ -3270,7 +3331,7 @@ contains
     integer :: nSplit, nJoin,iCount
     character(len=100):: TypeGrid
     real :: densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
-         TparTmp,TperpTmp    
+         TparTmp,TperpTmp,Hpar,Hperp    
     !--------------------------------------------------------------------------
     !set global line info
     allocate(iLineGlobal_I(nLine))
@@ -3311,13 +3372,13 @@ contains
        nParticlePerCell_I(iSpecies)=nParticlePerCell_I(iSpecies)+nSplit
 
        !now plot from sorted
-       call split_join_particles(iSpecies,0.03)
+       call split_join_particles(0.03)
        call sort_particles
        
        call plot_distribution_cell(iSpecies,iCell)
        call calc_moments_cell(iSpecies,iCell,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
-            TparTmp,TperpTmp) 
+            TparTmp,TperpTmp,Hpar,Hperp) 
        write(*,*) 'After Split:'
        write(*,*) '   ','nParticle   ', nParticle
        write(*,*) '   ','densityTmp  ', densityTmp   
@@ -3338,7 +3399,7 @@ contains
        !update target particles per cell 
        nParticlePerCell_I(iSpecies)=nParticlePerCell_I(iSpecies)-nJoin
        
-       call split_join_particles(iSpecies,0.03)
+       call split_join_particles(0.03)
 
        call sort_particles
        !now plot from sorted
@@ -3346,7 +3407,7 @@ contains
        
        call calc_moments_cell(iSpecies,iCell,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
-            TparTmp,TperpTmp) 
+            TparTmp,TperpTmp,Hpar,Hperp) 
        write(*,*) 'After Join:'
        write(*,*) '   ','nParticle   ', nParticle
        write(*,*) '   ','densityTmp  ', densityTmp   
@@ -3379,16 +3440,16 @@ contains
     
     !nTime=1000
 !    nTime=10000
-    DtSavePlot=1.
+    DtSavePlot=10.
     nAltIn=10
     AltMin=1000.0e5
     AltMax=1200.0e5
     TypeGrid='Uniform'
     iAltBC = 0
     iSpecies=1
-    Density=1e5
-    uBulk=1.0e5
-!    uBulk=0.0
+    Density=1e2
+!    uBulk=1.0e5
+    uBulk=0.0
     Temperature=3000.0
     nParticlePerCell_I(1)=5000
     write(*,*) 'init_particle'
@@ -3409,8 +3470,8 @@ contains
     call timing_start('sample_maxwellian_cell_boxmuller')
     call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temperature)
 !    call inject_source_boundary(iSpecies)
-    call combine_fluid_particle_cell(1,iSpecies,DensityBC_I(iSpecies),&
-         VelocityBC_I(iSpecies),TemperatureBC_I(iSpecies),0.5)
+!    call combine_fluid_particle_cell(1,iSpecies,DensityBC_I(iSpecies),&
+!         VelocityBC_I(iSpecies),TemperatureBC_I(iSpecies),0.5)
 
     call timing_stop('sample_maxwellian_cell_boxmuller')
     !push the guiding center 100 times and reinitialize ghost cell each time
@@ -3419,7 +3480,7 @@ contains
        !call push_guiding_center
        call push_guiding_center_rk4
        call timing_stop('push_guiding_center')
-       
+       write(*,*) 'test1'
        !advance the time
        Time=Time+DtMove
        
@@ -3428,8 +3489,9 @@ contains
        call timing_start('sample_maxwellian_cell_boxmuller')
        call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,Density,uBulk,Temperature)    
        !call inject_source_boundary(iSpecies)
-       call combine_fluid_particle_cell(1,iSpecies,DensityBC_I(iSpecies),&
-            VelocityBC_I(iSpecies),TemperatureBC_I(iSpecies),0.5)
+!       write(*,*) 'test2'
+!       call combine_fluid_particle_cell(1,iSpecies,DensityBC_I(iSpecies),&
+!            VelocityBC_I(iSpecies),TemperatureBC_I(iSpecies),0.5)
        call timing_stop('sample_maxwellian_cell_boxmuller')
 
        !Sort the particles
@@ -3438,7 +3500,7 @@ contains
        call timing_stop('sort_particles')
        
        call timing_start('split_join_particles')
-       call split_join_particles(iSpecies,0.05)
+       call split_join_particles(0.05)
        call timing_stop('split_join_particles')
        
        !Sort the particles
@@ -3495,7 +3557,7 @@ contains
     real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2,ckToEv=.00008617328
     real,parameter ::cElectronChargeCGS=1.602176487e-20
     real :: nu0, nueq,dt,CoulLog
-    real :: TparIon,TperpIon,TparElec,TperpElec
+    real :: TparIon,TperpIon,TparElec,TperpElec,Hpar,Hperp
     !--------------------------------------------------------------------------
 !    nTime=10
 !    nTime=1000
@@ -3597,13 +3659,13 @@ contains
 
     call calc_moments_cell(iSpeciesIon,iAltBC,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon,&
-         TparIon,TperpIon)
+         TparIon,TperpIon,Hpar,Hperp)
     write(*,*) 'Initial paramerters Ion:'
     write(*,*) '   ',densityTmp,uBulkParTmp,PressureTmp,TempIon
 
     call calc_moments_cell(iSpeciesElec,iAltBC,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec,&
-         TparElec,TperpElec)
+         TparElec,TperpElec,Hpar,Hperp)
     write(*,*) 'Initial paramerters Elec:'
     write(*,*) '   ',densityTmp,uBulkParTmp,PressureTmp,TempElec
     
@@ -3631,10 +3693,10 @@ contains
 
        call calc_moments_cell(iSpeciesIon,iAltBC,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempIon,&
-            TparIon,TperpIon)
+            TparIon,TperpIon,Hpar,Hperp)
        call calc_moments_cell(iSpeciesElec,iAltBC,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempElec,&
-            TparElec,TperpElec)
+            TparElec,TperpElec,Hpar,Hperp)
 
     write(*,*) nu0*Time,(TempIon-TempElec)/(TempIon0-TempElec0),exp(-2.0*nueq*Time)
 !    write(*,*) TempIon,TempElec
@@ -3678,7 +3740,7 @@ contains
     real,parameter::cCm3ToM3=1e6,cGtoKg=1e-3,cCmToM=1e-2,ckToEv=.00008617328
     real,parameter ::cElectronChargeCGS=1.602176487e-20
     real :: dt,uTherm
-    real :: Temp,Tpar,Tperp
+    real :: Temp,Tpar,Tperp,Hpar,Hperp
     !--------------------------------------------------------------------------
 !    nTime=10
 !    nTime=1000
@@ -3724,7 +3786,7 @@ contains
 
     call calc_moments_cell(iSpecies,iAltBC,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
-         Tpar,Tperp)
+         Tpar,Tperp,Hpar,Hperp)
 
     uTherm=sqrt(8.0*cBoltzmannCGS*TempTmp/Mass_I(iSpecies)/cPi)
     write(*,*) 0.01*uTherm**2/(9.55e2*((6375e5+AltMin)/6375.0e5)**13.3)
@@ -3745,7 +3807,7 @@ contains
 
        call calc_moments_cell(iSpecies,iAltBC,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,TempTmp,&
-            Tpar,Tperp)
+            Tpar,Tperp,Hpar,Hperp)
        write(*,*) densityTmp,uBulkParTmp,TempTmp,Tpar,Tperp
 
        if (floor((Time+1.0e-5)/DtSavePlot) &
@@ -3764,7 +3826,7 @@ contains
     real :: DensityFluid, uBulkFluid, TemperatureFluid
     character(len=100):: TypeGrid
     real :: densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
-                     TempTmp,TparTmp,TperpTmp
+                     TempTmp,TparTmp,TperpTmp,Hpar,Hperp
     !--------------------------------------------------------------------------
     !set global line info
     allocate(iLineGlobal_I(nLine))
@@ -3808,7 +3870,7 @@ contains
        !sort the particles
        call sort_particles
 
-       call split_join_particles(iSpecies,0.05)       
+       call split_join_particles(0.05)       
 
        call sort_particles
 
@@ -3817,7 +3879,7 @@ contains
        
        call calc_moments_cell(iSpecies,iCell,&
             densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
-            TempTmp,TparTmp,TperpTmp)    
+            TempTmp,TparTmp,TperpTmp,Hpar,Hperp)    
        !write(*,*) 'combined moments',densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
         !    TempTmp,TparTmp,TperpTmp
 
