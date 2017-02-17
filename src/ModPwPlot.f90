@@ -10,7 +10,7 @@ Module ModPwPlots
   public :: plot_neutral_pw
 
   character(len=5),  public    :: TypePlot   = 'ascii'
-  logical,  public             :: DoPlotNeutral   = .true.
+  logical,  public             :: DoPlotNeutral   = .false.
   character(len=22), parameter :: NameHeader = 'Polarwind output_var11'  
 contains
   !=============================================================================
