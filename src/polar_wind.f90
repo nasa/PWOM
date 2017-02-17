@@ -6,13 +6,6 @@ subroutine polar_wind
   ! This subroutine solves the polar wind solution along a given field line
   ! called by advance_line. A. Glocer
   !
-  ! photoelectron impact ionization modified for no conjugate hemisphere
-  ! P. E. sources. See Subroutine Glowex, variable 'rat' D. Cannata 9May90
-  ! 
-  ! ADDED SUBROUTINE CALL FOR IMPACT IONIZATION "call precip" PRESENTLY
-  ! HARD WIRED FOR POLAR RAIN FOR INVARIENT LATITUDES GREATER THAN 75 DEG.
-  ! CHANGES FOR CUSP OR AURORAL PRECIPITATION CAN BE MADE BY CHANGING
-  ! ALF1(x) AND FLUX1(x) ARRAY, x=1->4. MODIFIFIED BY DICK AND STEVE 6-90.
   !
   
   use ModPWOM, only: DtVertical,nLine,IsStandAlone,DoSavePlot,iLine,&
@@ -39,6 +32,7 @@ subroutine polar_wind
   
   !for particle coupling
   real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
+  real,allocatable :: HeatFlux_IC(:,:)
   integer :: iSpecies
   integer, parameter :: nParticleSpecies=2
   real :: ScaleHeight
@@ -122,7 +116,8 @@ subroutine polar_wind
 
      if (UseParticles .and. (floor((Time+1.0e-5)/DtCoupleParticles) &
           /=floor((Time+1.0e-5-DT)/DtCoupleParticles)) )then 
-        allocate(Density_IC(2,nDim),Velocity_IC(2,nDim),Temperature_IC(2,nDim))
+        allocate(Density_IC(2,nDim),Velocity_IC(2,nDim),&
+             Temperature_IC(2,nDim),HeatFlux_IC(2,nDim))
         Density_IC(1,:)=State_GV(1:nDim,iRho_I(1))/Mass_I(1)
         Density_IC(2,:)=State_GV(1:nDim,iRho_I(2))/Mass_I(2)
         Velocity_IC(1,:)=State_GV(1:nDim,iU_I(1))
@@ -146,19 +141,38 @@ subroutine polar_wind
         if (UseParticleFeedback) then
            !get the particle solution back
            call get_from_particles(nDim,2,1.0e5*ALTD(1:nDim),&
-                Density_IC,Velocity_IC,Temperature_IC)
+                Density_IC,Velocity_IC,Temperature_IC,HeatFlux_IC)
 
            ! fill the particle solution back to fluid array above the boundary. 
-           !take the density and  velocity. Float the temperature. Then 
+           !take the density and  velocity. Set T conserving heatflux. Then 
            !cacluate the pressure
            do iSpecies=1,nParticleSpecies
               State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies))=&
                    Density_IC(iSpecies,iAltParticle+1)*Mass_I(iSpecies)
               State_GV(iAltParticle+1:iAltParticle+2,iU_I(iSpecies))=&
                    Velocity_IC(iSpecies,iAltParticle+1)
-              State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))=&
-                   State_GV(iAltParticle,iT_I(iSpecies))
-  !              !calculate temperature boundary
+              
+              !float T
+              ! State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))=&
+              !      State_GV(iAltParticle,iT_I(iSpecies))
+  !              
+              ! calculate temperature boundary following the approach of 
+              ! Estep et al 1999 equation 2 where the temperature is chosen 
+              ! to ensure that the heatflux in the fluid on the boundary 
+              ! matches the heatflux of the particles. 
+              !-kappa (T(i+1)-T(i))/dr = Qpart
+              ! T(i+1)=T(i) - dr*Qpart/kappa
+              State_GV(iAltParticle+1,iT_I(iSpecies))=&
+                   State_GV(iAltParticle,iT_I(iSpecies))&
+                   -DrBnd*HeatFlux_IC(iSpecies,iAltParticle+1)&
+                   /HeatCon_GI(iAltParticle+1,iSpecies)
+
+              State_GV(iAltParticle+2,iT_I(iSpecies))=&
+                   State_GV(iAltParticle+1,iT_I(iSpecies))&
+                   -DrBnd*HeatFlux_IC(iSpecies,iAltParticle+2)&
+                   /HeatCon_GI(iAltParticle+2,iSpecies)
+
+
               State_GV(iAltParticle+1:iAltParticle+2,iP_I(iSpecies))=&
                    State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))&
                    *(Rgas_I(iSpecies)&
@@ -172,23 +186,23 @@ subroutine polar_wind
                    Velocity_IC(iSpecies,iAltParticle+3:nDim)
               State_GV(iAltParticle+3:nDim,iP_I(iSpecies))=&
                    Temperature_IC(iSpecies,iAltParticle+3:nDim)*Rgas_I(iSpecies)&
-                   *State_GV(iAltParticle+1:nDim,iRho_I(iSpecies))
+                   *State_GV(iAltParticle+3:nDim,iRho_I(iSpecies))
 
               State_GV(iAltParticle+3:nDim,iT_I(iSpecies))=&
                    Temperature_IC(iSpecies,iAltParticle+3:nDim)
 
 !
-              !kludge overwrite nDim and higher values with values form nDim-1
-              State_GV(nDim:nDim+2,iRho_I(iSpecies))=&
-                   Density_IC(iSpecies,nDim-1)*Mass_I(iSpecies)
-              State_GV(nDim:nDim+2,iU_I(iSpecies))=&
-                   Velocity_IC(iSpecies,nDim-1)
-              State_GV(nDim:nDim+2,iP_I(iSpecies))=&
-                   Temperature_IC(iSpecies,nDim-1)*Rgas_I(iSpecies)&
-                   *State_GV(nDim-1,iRho_I(iSpecies))
+              !kludge overwrite nDim+1 and higher values with values form nDim-1
+              State_GV(nDim+1:nDim+2,iRho_I(iSpecies))=&
+                   Density_IC(iSpecies,nDim)*Mass_I(iSpecies)
+              State_GV(nDim+1:nDim+2,iU_I(iSpecies))=&
+                   Velocity_IC(iSpecies,nDim)
+              State_GV(nDim+1:nDim+2,iP_I(iSpecies))=&
+                   Temperature_IC(iSpecies,nDim)*Rgas_I(iSpecies)&
+                   *State_GV(nDim,iRho_I(iSpecies))
 
-              State_GV(nDim:nDim+2,iT_I(iSpecies))=&
-                   Temperature_IC(iSpecies,nDim-1)
+              State_GV(nDim+1:nDim+2,iT_I(iSpecies))=&
+                   Temperature_IC(iSpecies,nDim)
               
 
            enddo
@@ -219,7 +233,7 @@ subroutine polar_wind
 
         endif
         
-        deallocate(Density_IC,Velocity_IC,Temperature_IC)
+        deallocate(Density_IC,Velocity_IC,Temperature_IC,HeatFlux_IC)
 
      endif
 
