@@ -11,7 +11,7 @@ subroutine polar_wind
   use ModPWOM, only: DtVertical,nLine,IsStandAlone,DoSavePlot,iLine,&
        IsFullyImplicit,UseExplicitHeat,DoTimeAccurate,MaxStep,DnOutput,&
        nAlt, IsVariableDt, UseParticles,DtCoupleParticles,UseParticleFeedback,&
-       iAltParticle
+       iAltParticle,UseIE
   use ModIoUnit, ONLY: UnitTmp_
   use ModCommonVariables
   use ModFieldLine
@@ -36,6 +36,8 @@ subroutine polar_wind
   integer :: iSpecies
   integer, parameter :: nParticleSpecies=2
   real :: ScaleHeight
+  logical :: IsCuspOrAurora
+  real, parameter :: CuspAuroraPrecipThreshold=0.5
   !-----------------------------------------------------------------------
   nDim = nAlt
   !set species dependent upper boundary to nAlt when not using particles
@@ -64,6 +66,18 @@ subroutine polar_wind
      DT=DtVertical
   endif
   
+  !kludge set the eflux based on location
+!  UseIe=.true.
+!  if(SmLat>65.0 .and. SmLat<75. .and. (SmLon>340. .or. SmLon<20.)) then
+!     EfluxIE=1.0
+!     AveIE=100.0
+!  else
+!     EfluxIE=0.0
+!     AveIE=100.0
+!  endif
+
+
+
   CURR(1) = Jr
 
   NTS = 1
@@ -132,9 +146,14 @@ subroutine polar_wind
         if(IsVerboseParticle) &
              write(*,*) 'done put_to_particles at time',Time,DtCoupleParticles
         
+
+        !define if this is a cusp or auroral line based on particle precip
+        !threshold of eflux>0.5ergs/cm2/s
+        IsCuspOrAurora=(EfluxIE>CuspAuroraPrecipThreshold)
+
         !advance the particle solution to the next coupling time
         if(IsVerboseParticle) write(*,*) 'calling run_particles'
-        call run_particles(DtCoupleParticles)
+        call run_particles(DtCoupleParticles,IsCuspOrAurora)
         if(IsVerboseParticle) write(*,*) 'done run_particles'
 
         
@@ -354,6 +373,12 @@ contains
                EMeanDiffPW=EMeanDiff,EFluxDiffPW=EFluxDiff, &
                EMeanWavePW=EMeanWave,EFluxWavePW=EFluxWave, &
                EMeanMonoPW=EMeanMono,EFluxMonoPW=EFluxMono)
+       elseif (UseIE) then
+          call get_se_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
+            (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &
+            State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),&
+            Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C, &
+            EMeanIePW=AveIE,EfluxIePW=EfluxIE)  
        else
           call get_se_for_pwom(Time,UTsec,iLine,(/min(GmLat,88.0),GmLon/),&
             (/GLAT,GLONG/),(/GLAT2,GLONG2/),                   &

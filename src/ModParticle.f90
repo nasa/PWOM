@@ -48,9 +48,9 @@ Module ModParticle
   
   !Frequency of outputs
   real :: DtSaveProfile=300
-  real :: DtSaveDF=300.0
+  real :: DtSaveDF=60.0
 
-  real :: DtSplitJoin=5.0
+  real :: DtSplitJoin=60.0
   
   !How many and which altitudes should the DF be saved
   !integer,parameter :: nSaveDfAlts=3
@@ -187,12 +187,12 @@ contains
        allocate(Dperp_I(nSpecies))
        allocate(Dexp_I(nSpecies))
        
-!       Dperp_I(O_)=9.55e2  !polar cap value
-       Dperp_I(O_)=6.94e5   !auroral/cusp value
+       Dperp_I(O_)=9.55e2  !polar cap value
+!       Dperp_I(O_)=6.94e5   !auroral/cusp value
        Dexp_I(O_)=13.3
        
-!       Dperp_I(H_)=5.77e3  !polar cap value
-       Dperp_I(H_)=4.45e7   !auroral/cusp value
+       Dperp_I(H_)=5.77e3  !polar cap value
+!       Dperp_I(H_)=4.45e7   !auroral/cusp value
        Dexp_I(H_)=7.95
        
        !set plotting variables
@@ -1652,7 +1652,7 @@ contains
     !variables to hold the weights and things to calculate them
     real :: N11,N12,N21,N22,N11w,N12w,N21w,N22w,P1,P2
     real :: weight_II(2,2), weight1, weight2
-    real :: SimPArticleRatio, DensityRatio
+    real :: SimParticleRatio, DensityRatio
     real :: Tpar,Tperp,Hpar,Hperp
     logical :: DoTest=.false.
 
@@ -1815,7 +1815,10 @@ contains
             SortParticles_III(iCollider1,iSpecies1,iCell)%Particle%NumPerParticle
        weight2 = &
             SortParticles_III(iCollider2,iSpecies2,iCell)%Particle%NumPerParticle
-       
+       if (weight1==0.0 .or. weight2==0.0) then
+          write(*,*)weight1,iCell,iSpecies1,iCollider1
+          write(*,*)weight2,iCell,iSpecies2,iCollider2
+       endif
        Density12=Density12 + (weight1*weight2)/max(weight1,weight2)
     enddo
     if (iSpecies1==iSpecies2) Density12=2.0*Density12
@@ -2292,6 +2295,9 @@ contains
     end if
     !deallocate to save memory
     if(allocated(NewParticles_I))deallocate(NewParticles_I)
+
+    !clean up any particles split too far so weight is zero
+    call clean_zero_weight_particles
 
   end subroutine split_join_particles
   !============================================================================
@@ -2815,6 +2821,7 @@ contains
     integer, intent(in) :: iLine
     character(len=150) :: NameRestart
     integer :: iParticle
+    
     !---------------------------------------------------------------------------
     !set restart name
     write(NameRestart,"(a,i4.4,a)") &
@@ -2834,8 +2841,59 @@ contains
     enddo
     close(UnitTmp_)
     
-  end subroutine read_restart_particle
 
+    call clean_zero_weight_particles
+
+    
+  end subroutine read_restart_particle
+  
+  !============================================================================
+  ! remove any particle split al the way to zero weight 
+  subroutine clean_zero_weight_particles
+    integer,allocatable::Index_I(:)
+    integer :: nZero, nParticleOld, iParticle,iParticleOld
+    type(particle),allocatable ::ParticlesOld_I(:)
+    !--------------------------------------------------------------------------
+    
+    !get number of zero weight particles
+    allocate(Index_I(nParticle))
+    Index_I=0
+    !$OMP PARALLEL DO  
+    do iParticle=1,nParticle
+       if(Particles_I(iParticle)%NumPerParticle==0.0) then
+          Index_I(iParticle)=1
+       else
+          Index_I(iParticle)=0
+       endif
+    end do
+    !$OMP END PARALLEL DO
+
+    nZero=sum(Index_I)
+    
+    !if no zero particles then return
+    if(nZero==0) return
+
+    !save old particle array information
+    nParticleOld=nParticle
+    allocate(ParticlesOld_I(nParticleOld))
+    ParticlesOld_I=Particles_I
+    deallocate(Particles_I)
+       
+    !allocate new Particles_I array
+    nParticle=nParticleOld-nZero
+    allocate(Particles_I(nParticle))
+    
+    !fill in particle array with non-zero particles
+    iParticle=1
+    do iParticleOld=1,nParticleOld
+       if(ParticlesOld_I(iParticleOld)%NumPerParticle/=0) then
+          Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+          iParticle=iParticle+1
+       endif
+    end do
+
+    deallocate(Index_I, ParticlesOld_I)
+  end subroutine clean_zero_weight_particles
   !============================================================================
   ! combine a fluid solution and a particle solution with some percent from the 
   ! fluid and some from the particle. Idea is to sample the maxwellian 
@@ -3137,8 +3195,9 @@ contains
   end subroutine put_to_particles
   !============================================================================
   ! advance the particle solution for some DtAdvance
-  subroutine run_particles(DtAdvance)
+  subroutine run_particles(DtAdvance,IsCuspOrAurora)
     real, intent(in) :: DtAdvance
+    logical, intent(in) :: IsCuspOrAurora
 
     integer :: iAlt, iSpecies,nTime,iTime,iAltPlot,iCollide
     integer, parameter :: iAltBC=0
@@ -3218,6 +3277,15 @@ contains
 
        !apply the WPI
        if (UseWPI) then
+          !set appropriate WPI coefficients
+          if(IsCuspOrAurora) then
+             Dperp_I(O_)=6.94e5   !auroral/cusp value
+             Dperp_I(H_)=4.45e7   !auroral/cusp value
+          else
+             Dperp_I(O_)=9.55e2  !polar cap value
+             Dperp_I(H_)=5.77e3  !polar cap value
+          endif
+
           call timing_start('apply_wave_particle_interaction')
           call apply_wave_particle_interaction
           call timing_stop('apply_wave_particle_interaction')
