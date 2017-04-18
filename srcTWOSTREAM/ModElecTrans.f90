@@ -8,7 +8,7 @@ Module ModElecTrans
        DELM(:), DELS(:), DEN(:)
   real :: FAC
   
-  logical :: IsDebug=.true.
+  logical :: IsDebug=.false.
 
   real,public,allocatable :: HeatingRate_C(:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_C(:) ! number density of SE [/cm3]
@@ -214,7 +214,7 @@ contains
     if (.not.allocated(PrecipCombinedPhi_I))&
          allocate(PrecipCombinedPhi_I(NBINS))
     if (UsePrecipitation) then
-       write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
+       !write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
        !call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
        call maxt(0.0, PrecipEmean, ENER, DEL,0, PrecipEflux, PrecipEmean, PrecipPhi_I)
     else
@@ -1494,10 +1494,10 @@ contains
     !set the reference radius
     rRef = rPlanet+AltRef
     ! find corresponding l-shell
-    Lshell = 1.0/(cos(mLat*cDegToRad))**2.0
+    Lshell = 1.0/(cos(min(mLat,88.)*cDegToRad))**2.0
     
     ! find corresponding latitude for location on l-shell
-    Lat = acos(sqrt(rRef/(Lshell*rPlanet)))
+    Lat = acos(min(sqrt(rRef/(Lshell*rPlanet)),1.0))
     
     ! get the magnetic field of the reference altitude
     B0ref = &
