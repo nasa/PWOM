@@ -245,7 +245,7 @@ test_restart:
 	make   test_check MYTEST=_restart
 
 test_restart_save:
-	cp data/input/${PLANET}/restart_iline* ${TESTDIR}/PW/restartIN/
+	cp data/input/${PLANET}/restartfiles/restart_iline* ${TESTDIR}/PW/restartIN/
 	cp input/${PLANET}/PARAM.in.restartsave ${TESTDIR}/PARAM.in
 	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe
 	cd ${TESTDIR}; mv PW/restartOUT/* PW/restartIN/
