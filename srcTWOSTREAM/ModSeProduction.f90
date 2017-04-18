@@ -667,7 +667,7 @@ contains
              ! Generate Auger electrons if energy is sufficient:
              !
              IF (WAVE1(L) .LE. AugWave_I(I)) THEN
-                write (*,*) '*************** auger'
+                !write (*,*) '*************** auger'
                 E1 = AugEnergy_I(I)
                 E2 = AugEnergy_I(I)
                 CALL BOXNUM (E1, E2, M1, M2, R1, R2, DEL, ENER)
@@ -1078,7 +1078,7 @@ contains
     IYR = IYR+1900
     
     CALL SunCoordsGEI (IYR, IDAY, UT, SDEC, SRASN, GST)
-    write(*,*) IDATE, SDEC,SRASN,GST
+    !write(*,*) IDATE, SDEC,SRASN,GST
     RH = SRASN - (GST+RLONG)
     COSSZA = SIN(SDEC)*SIN(RLAT) + COS(SDEC)*COS(RLAT)*COS(RH)
     SZA = ACOS(COSSZA) * 180./PI
@@ -2024,11 +2024,11 @@ contains
     
     call get_plas_resonant_scattering(Xy_D,'LyBeta',Flux)
     
-    write(*,*) 'For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
+    !write(*,*) 'For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
 
     call get_plas_resonant_scattering(Xy_D,'LyBeta',Flux)
     
-    write(*,*) 'AGAIN!For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
+    !write(*,*) 'AGAIN!For SZA=',Xy_D(1),' and Alt=',Xy_D(2),' Flux=',Flux
 
     ! now test file
     open(UnitTmp_,FILE='StrobelLyBeta.dat')
