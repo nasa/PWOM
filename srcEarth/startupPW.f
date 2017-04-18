@@ -14,7 +14,8 @@ C
       use ModGlow, ONLY: get_ionization
 C
       use ModConst ,ONLY: cBoltzmann
-      use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine
+      use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine, 
+     &     UseParticles,iAltParticle
       use ModAurora,ONLY: get_aurora,AuroralIonRateO_C
       use ModPwTime,ONLY: CurrentTime,StartTime,iStartTime,
      &                    Hour_,Minute_,Second_, iCurrentTime_I
@@ -322,6 +323,14 @@ C                                                                      C
      &           EMeanWavePW=EMeanWave,EFluxWavePW=EFluxWave,
      &           EMeanMonoPW=EMeanMono,EFluxMonoPW=EFluxMono)
         
+         elseif(UseIE) then
+            call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
+     &           (/GLAT,GLONG/),(/GLAT2,GLONG2/),
+     &           State_GV(1:nDim,RhoE_)/Mass_I(Ion4_),State_GV(1:nDim,Te_),
+     &           Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
+     &           IonRatePW_C=IonRateO_C(1:nDim),EMeanIePW=AveIE,
+     &           EFluxIePW=EFluxIE)
+
          else
             call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
      &           (/GLAT,GLONG/),(/GLAT2,GLONG2/),
@@ -573,6 +582,8 @@ C      READ(5,3) NCNPRT
 
       
       CALL COLLIS(NDIM,State_GV(-1:nDim+2,:))
+!     zero out sources terms in particle region
+      !if (UseParticles) Source_CV(iAltParticle+1:nDim,:)=0.0
 
       CALL PW_CALC_EFIELD(nDim,State_GV(-1:nDim+2,:))
 
@@ -1406,7 +1417,10 @@ C     DEFINE THE HE PHOTOIONIZATION RATE
 C     
 C      PHIHE=1.30E-7
       PHIHE=3.87E-8
+      !PHIHE=3.87E-12
 
+      !kludge remove He       
+      !PHIHE=1e-4*PHIHE
 C     
 C     C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC

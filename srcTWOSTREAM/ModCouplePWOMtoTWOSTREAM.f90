@@ -134,13 +134,13 @@ contains
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
        SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C, PhotoIonRatePW_IC, &
        SecIonRatePW_IC,EMeanDiffPW,EFluxDiffPW,EMeanWavePW,&
-       EFluxWavePW,EMeanMonoPW,EFluxMonoPW)
+       EFluxWavePW,EMeanMonoPW,EFluxMonoPW,EMeanIePW,EFluxIePW)
     use ModSeGrid, only: Efield_C,iLineGlobal,IsVerbose,calc_potential
     use ModSeBackground,only: mLat,mLon, gLat,gLon,&
          Idate, UT,fill_thermal_plasma_empirical,&
          plot_background,plot_ephoto_prod,get_neutrals_and_pe_spectrum
     use ModElecTrans,only: Time, EMeanDiff,EFluxDiff,EMeanWave,&
-         EFluxWave,EMeanMono,EFluxMono,etrans
+         EFluxWave,EMeanMono,EFluxMono,etrans,EMeanIe,EFluxIe,UseIePrecip
 
     implicit none
     ! Incomming time from PWOM
@@ -168,6 +168,9 @@ contains
     !OVATION precipitation parameters
     real,optional,  intent(in) :: EmeanDiffPW,EFluxDiffPW,EMeanWavePW,&
          EFluxWavePW, EMeanMonoPW,EFluxMonoPW
+
+    !IE precipitation parameters
+    real,optional,  intent(in) :: EmeanIePW,EFluxIePW
     
     ! named parameters for coordinates
     integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
@@ -213,6 +216,16 @@ contains
        EFluxWave=EFluxWavePW
        EMeanMono=EMeanMonoPW
        EFluxMono=EFluxMonoPW
+    endif
+
+
+    !set IE precip 
+    if (present(EMeanIePW).or.present(EFluxIePW))then
+       EMeanIe=EMeanIePW
+       EFluxIe=EFluxIePW
+       UseIePrecip = .true.
+    else
+       UseIePrecip = .false.
     endif
 
     ! Get the neutral atmosphere and photo e production spectrum

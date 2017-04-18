@@ -8,14 +8,15 @@ Module ModElecTrans
        DELM(:), DELS(:), DEN(:)
   real :: FAC
   
-  logical :: IsDebug=.true.
+  logical :: IsDebug=.false.
 
   real,public,allocatable :: HeatingRate_C(:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_C(:) ! number density of SE [/cm3]
   real,public,allocatable :: NumberFlux_C(:) ! number flux of SE [/cm2/s]
   real,public,allocatable :: SecondaryIonRate_IC(:,:) 
   real,public,allocatable :: TotalIonizationRate_C(:) 
-
+  
+  
   !Precipitation info
   real,allocatable :: PrecipCombinedPhi_I(:)
   logical, public :: UsePrecipitation = .false.
@@ -25,9 +26,17 @@ Module ModElecTrans
   real   , public :: PolarRainEmin=80.0,  PolarRainEmax=300.0, &
        PolarRainEmean=100.0, PolarRainEflux=1.0e-2
   !Ovation Precipitation info
-  logical, public :: UseOvation
+  logical, public :: UseOvation=.false.
   real   , public :: OvationEmin=0,OvationEmax=0
   real   , public :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,EFluxMono
+
+  !IE precipitation info
+  logical,public :: UseIePrecip=.false.
+  real   ,public :: EMeanIe,EFluxIe
+  
+  !Variables regarding whether we assume preciptation is paired with current
+  logical :: DoPrecipCurrent = .true.
+  integer :: MaxEnergyInt
 
   !time, used for output only
   real,public ::Time=0.0
@@ -133,7 +142,7 @@ contains
     real:: PHITOP(NBINS),EFRAC, SION(NMAJ,AltMax), &
          UFLX(NBINS,AltMax), DFLX(NBINS,AltMax), AGLW(NEI,NMAJ,AltMax), &
          EHEAT(AltMax), TEZ(AltMax)
-    real :: PolarRainPhi_I(NBINS),PrecipPhi_I(NBINS)
+    real :: PolarRainPhi_I(NBINS),PrecipPhi_I(NBINS),IePhi_I(NBINS)
     real :: OvationDiffPhi_I(NBINS),OvationWavePhi_I(NBINS),&
          OvationMonoPhi_I(NBINS)
 
@@ -170,13 +179,24 @@ contains
     LastPhiUp = 0.0
     LastPhiDwn = 0.0
 
-
+    !when assuming that all primary precipitation is matched with a current 
+    !then only integrate below 90eV (to get secondary and photoelectron)
+    !otherwise integrate over entire range
+    if(DoPrecipCurrent) then
+       !loop unitl max energy index is found and then exit
+       do iEnergy=1,nBINS
+          MaxEnergyInt=iEnergy
+          if(ener(iEnergy)>90.0) exit
+       end do
+    else
+       MaxEnergyInt=nBINS
+    endif
     !kludge
-!    UsePrecipitation=.true.
-!    PrecipEflux=2.0
-!    PrecipEmean=400.0
-!    PrecipEmin=100.
-!    PrecipEmax=800.
+    !UsePrecipitation=.true.
+    !PrecipEflux=1.0
+    !PrecipEmean=100.0
+    !PrecipEmin=80.
+    !PrecipEmax=800.
     !PESPEC=0.0
     
 !    PrecipCoef=get_precip_norm(PrecipEmean,PrecipEmin,&
@@ -194,8 +214,9 @@ contains
     if (.not.allocated(PrecipCombinedPhi_I))&
          allocate(PrecipCombinedPhi_I(NBINS))
     if (UsePrecipitation) then
-       call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
-       !call maxt(0.0, PrecipEmean, ENER, DEL,0, PrecipEflux, PrecipEmean, PrecipPhi_I)
+       !write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
+       !call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
+       call maxt(0.0, PrecipEmean, ENER, DEL,0, PrecipEflux, PrecipEmean, PrecipPhi_I)
     else
        PrecipPhi_I(:)=0.0
     endif
@@ -206,6 +227,14 @@ contains
     else
        PolarRainPhi_I(:)=0.0
     endif
+
+    if (UseIePrecip) then
+       call maxt(EfluxIe, EmeanIe, ENER, DEL,0, 0.0, 0.0, &
+            IePhi_I)
+    else
+       IePhi_I(:)=0.0
+    endif
+
 
     if (UseOvation) then
        call maxt(EfluxDiff, EMeanDiff, ENER, DEL,0, 0.0, 0.0, &
@@ -233,6 +262,10 @@ contains
             .and. ENER(iEnergy)<PolarRainEmax) then
           PrecipCombinedPhi_I(iEnergy)=&
                PrecipCombinedPhi_I(iEnergy)+PolarRainPhi_I(iEnergy)
+       endif
+       if (UseIePrecip .and. ENER(iEnergy)>90.0 ) then
+          PrecipCombinedPhi_I(iEnergy)=&
+               PrecipCombinedPhi_I(iEnergy)+IePhi_I(iEnergy)
        endif
        if (UseOvation .and. ENER(iEnergy)>OvationEmin &
             .and. ENER(iEnergy)<OvationEmax) then
@@ -1111,8 +1144,10 @@ contains
                (uFlux_IC(iEnergy,iAlt)/AVMU+dFlux_IC(iEnergy,iAlt)/AVMU)&
                /sqrt(EnergyGrid_I(iEnergy))
        enddo ENERGY
-       CALL midpnt_int(NumberDens_C(iAlt),NumDensIntegrand_I,&
-            EnergyGrid_I,1,nEnergy,nEnergy,1)
+!       CALL midpnt_int(NumberDens_C(iAlt),NumDensIntegrand_I,&
+!            EnergyGrid_I,1,nEnergy,nEnergy,1)
+       NumberDens_C(iAlt)=&
+            sum(NumDensIntegrand_I(1:MaxEnergyInt)*DeltaE_I(1:MaxEnergyInt))
 !       NumberDens_C(iAlt)=4.*cPi*1.7E-8*NumberDens_C(iAlt)
        NumberDens_C(iAlt)=1.7E-8*NumberDens_C(iAlt)
        
@@ -1121,7 +1156,9 @@ contains
 !            uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt),&
 !            DeltaE_I,1,nEnergy,nEnergy,2)
 !       NumberFlux_C(iAlt)=2.0*cPi*sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
-       NumberFlux_C(iAlt)=sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
+
+       NumberFlux_C(iAlt)=sum((uFlux_IC(1:MaxEnergyInt,iAlt)&
+            -dFlux_IC(1:MaxEnergyInt,iAlt))*DeltaE_I(1:MaxEnergyInt))
        
     enddo ALT
 
@@ -1280,14 +1317,18 @@ contains
 !       NumberDens_C(iAlt)=4.0*cPi*1.7E-8*sum(NumDensIntegrand_I*dKE_I)
 !       NumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I*dKE_I)
 
-       NumberDens_C(iAlt)=1.7E-8*sum(NumDensIntegrand_I*dKE_I)
-       NumberFlux_C(iAlt)=sum(NumFluxIntegrand_I*dKE_I)
+       NumberDens_C(iAlt)=&
+            1.7E-8*sum(NumDensIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
+       NumberFlux_C(iAlt)=&
+            sum(NumFluxIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
 
-       !get contribution from losscone filling aurora
-       call map_precip(AVMU,PrecipCombinedPhi_I,PrecNumberDens_C,PrecNumberFlux_C)
-       NumberDens_C(iAlt)=NumberDens_C(iAlt)+PrecNumberDens_C(iAlt)
-       NumberFlux_C(iAlt)=NumberFlux_C(iAlt)+PrecNumberFlux_C(iAlt)
-       
+       if(.not.DoPrecipCurrent) then
+          !get contribution from losscone filling aurora
+          call map_precip(AVMU,PrecipCombinedPhi_I,PrecNumberDens_C,&
+               PrecNumberFlux_C)
+          NumberDens_C(iAlt)=NumberDens_C(iAlt)+PrecNumberDens_C(iAlt)
+          NumberFlux_C(iAlt)=NumberFlux_C(iAlt)+PrecNumberFlux_C(iAlt)
+       endif
        
     enddo ALT_LOOP
     
@@ -1359,7 +1400,7 @@ contains
           IntdMu0=sum(dmu0_I(1:nPAforInt))
           DnOmni_I(iEnergy) = IntdMu0*pFlux_I(iEnergy)/AVMU
           DnFlux_I(iEnergy) = IntMu0*pFlux_I(iEnergy)/AVMU
-          
+           
           !get precipitating number flux and number dens
           NumDensIntegrand_I(iEnergy) = &
                (DnOmni_I(iEnergy))&
@@ -1453,10 +1494,10 @@ contains
     !set the reference radius
     rRef = rPlanet+AltRef
     ! find corresponding l-shell
-    Lshell = 1.0/(cos(mLat*cDegToRad))**2.0
+    Lshell = 1.0/(cos(min(mLat,88.)*cDegToRad))**2.0
     
     ! find corresponding latitude for location on l-shell
-    Lat = acos(sqrt(rRef/(Lshell*rPlanet)))
+    Lat = acos(min(sqrt(rRef/(Lshell*rPlanet)),1.0))
     
     ! get the magnetic field of the reference altitude
     B0ref = &
