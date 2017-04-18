@@ -283,7 +283,7 @@ contains
                              + log (CI(II,IJ)/CI(I,IJ)) * FAC)
           ENDIF
    80   CONTINUE
-        write(*,*) IJ,':',PIN(IJ,:)
+        !write(*,*) IJ,':',PIN(IJ,:)
    90 CONTINUE
 !
 !
