@@ -125,6 +125,7 @@ Module ModParticle
   
   ! use a fixed number of particles per cell
   integer :: nParticlePerCell_I(2)=(/20000,3000/)
+  !integer :: nParticlePerCell_I(2)=(/3000,3000/)
 
 
   real, parameter :: cBoltzmannCGS = 1.3807E-16
@@ -1458,16 +1459,23 @@ contains
     integer,parameter :: nThreadsReduced=8
     
     !comment next lines when not using openmp
+    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
+         OMP_get_num_threads
+    integer, allocatable :: nOffset_TIG(:,:,:),nParticleCell_TIG(:,:,:)
+
 !    integer,external :: OMP_get_max_threads,OMP_get_thread_num, &
 !         OMP_get_num_threads
 !    type(particleCellSpecies), allocatable:: SortParticlesT_III(:,:,:)
 !    integer,allocatable :: iParticleCell_IIT(:,:,:)
 !    integer :: iUpper, iLower
     !--------------------------------------------------------------------------
+
+    !the no openmp version
     
     ! Find the number of particles of a given species in a cell and build 
     ! an array of indicies connecting the local index and the particle index
-    allocate(Index_I(nParticle))
+
+        allocate(Index_I(nParticle))
     
     do iSpecies=1,nSpecies
        !$OMP PARALLEL DO  PRIVATE(Index_I)
@@ -1494,7 +1502,7 @@ contains
     allocate(SortParticles_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
 
 
-    !the no openmp version
+    
     allocate(iParticleCell_II(nSpecies,0:nAlt+1))
     iParticleCell_II=1
     PARTICLE_LOOP: do iParticle=1,nParticle
@@ -1514,76 +1522,121 @@ contains
 
 
 
-    
-     !\
-     ! the openmp version
-     !/
-     !allocate a sortparticle array specific to each thread, after soring 
-     !
-     !reduce the number of threads and save the origional amount
-!     nThreadsOrig = OMP_get_max_threads()
-!     call OMP_set_num_threads(nThreadsReduced)
-!     nThreads=nThreadsReduced
-! !    if(allocated(SortParticles_TIII))deallocate(SortParticles_TIII)
-! !    allocate(SortParticlesT_III(0:nThreads-1,nSpecies,0:nAlt+1,&
-! !         maxval(nSortedParticle_II)))
-! 
-!     if(allocated(SortParticlesT_III))deallocate(SortParticlesT_III)
-!     allocate(SortParticlesT_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
-! !    write(*,*) nThreads
-! !    stop
-!     ! loop through particles and assign pointer index to target particle from 
-!     !global list
-!     allocate(iParticleCell_IIT(nSpecies,0:nAlt+1,0:nThreads-1))
-! !    allocate(iParticleCellT_II(nSpecies,0:nAlt+1))
-!     iParticleCell_IIT=1
-!     
-!     !$OMP PARALLEL PRIVATE(iCell,iSpecies,iThread, &
-!     !$OMP iParticle, SortParticlesT_III, &
-!     !$OMP iUpper,iLower) 
-!     !$OMP DO  
-!     PARTICLE_LOOP: do iParticle=1,nParticle
-!        !write(*,*) 'number of threads=',OMP_get_num_threads()
-!        iThread=OMP_get_thread_num()
-!        !write(*,*) 'iThread=',iThread
-!        iCell=Particles_I(iParticle)%iCell
-!        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP
-!        iSpecies=Particles_I(iParticle)%iSpecies
-!        if(iSpecies==0)write(*,*)iParticle,nParticle
-!        
-!        SortParticlesT_III(iParticleCell_IIT(iSpecies,iCell,iThread),&
-!             iSpecies,iCell)%Particle& 
-!             =>Particles_I(iParticle)
-!        iParticleCell_IIT(iSpecies,iCell,iThread)=&
-!             iParticleCell_IIT(iSpecies,iCell,iThread)+1
-!        
-!     enddo PARTICLE_LOOP
-!     !$OMP END DO 
-! 
-!     !Now combine the results from each thread
-!     do iCell=0,nAlt+1
-!        do iSpecies=1,nSpecies
-!           if(iParticleCell_IIT(iSpecies,iCell,iThread)>1) then
-!              !write(*,*) 'iThread,par1,par2',iThread,&
-!              !     iParticleCell_TII(:,iSpecies,iCell),iSpecies,iCell
-! 
-!              iLower=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread-1))-iThread+1
-!              iUpper=sum(iParticleCell_IIT(iSpecies,iCell,0:iThread))-iThread-1
-!              !write(*,*) 'iThread,iLower,iUpper',iThread,iLower,iUpper
-!              !write(*,*) 'iThread,iParticleCell_TII(iThread,iSpecies,iCell)',&
-!              !     iThread,iParticleCell_TII(iThread,iSpecies,iCell)
-!              SortParticles_III(iLower:iUpper,iSpecies,iCell) = &
-!                   SortParticlesT_III(&
-!                   1:iParticleCell_IIT(iSpecies,iCell,iThread)-1,&
-!                   iSpecies,iCell)
-!           endif
-!        enddo
-!     enddo
-!     !$OMP END PARALLEL
-! 
-!     !set number of threads back to origional value
-!     call OMP_set_num_threads(nThreadsOrig)
-!     deallocate(iParticleCell_IIT,SortParticlesT_III)
+!!!    !\
+!!!    ! the new openmp version
+!!!    !/
+!!!    
+!!!    allocate(iParticleCell_II(nSpecies,0:nAlt+1))
+!!!    iParticleCell_II=1
+!!!
+!!!    ! go through particle list once to find how many particle in a given cell
+!!!    !are on a given thread. This is used to build an offset list
+!!!
+!!!    !get the number of threads
+!!!    nThreads = OMP_get_max_threads()
+!!!
+!!!    ! allocate an offset array
+!!!    allocate(nOffset_TIG(0:nThreads-1,nSpecies,0:nAlt+1))
+!!!    nOffset_TIG=0
+!!!    
+!!!    ! allocate counter array of number of particles on a given thread 
+!!!    allocate(nParticleCell_TIG(0:nThreads-1,nSpecies,0:nAlt+1))
+!!!    nParticleCell_TIG=0
+!!!
+!!!    !$OMP PARALLEL PRIVATE(iCell, iSpecies, iThread,iParticle)
+!!!    
+!!!    !$OMP DO SCHEDULE(STATIC)
+!!!    PARTICLE_LOOP1: do iParticle=1,nParticle
+!!!       iCell=Particles_I(iParticle)%iCell
+!!!       if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP1
+!!!       iSpecies=Particles_I(iParticle)%iSpecies
+!!!
+!!!       !get the thread number
+!!!       iThread=OMP_get_thread_num()
+!!!       
+!!!       ! count number of particles on given thread of given species in a given
+!!!       ! cell
+!!!       nParticleCell_TIG(iThread,iSpecies,iCell)=&
+!!!            nParticleCell_TIG(iThread,iSpecies,iCell)+1
+!!!       
+!!!    enddo PARTICLE_LOOP1
+!!!    !$OMP END DO 
+!!!
+!!!
+!!!    !First thread will always have no offset
+!!!    nOffset_TIG(0,:,:) = 0
+!!!
+!!!    !find offset for other threads
+!!!    !$OMP DO 
+!!!    do iThread=1,nThreads-1
+!!!       do iSpecies=1,nSpecies
+!!!          do iCell=0,nAlt+1
+!!!             nOffset_TIG(iThread,iSpecies,iCell) = &
+!!!                  sum(nParticleCell_TIG(0:iThread-1,iSpecies,iCell))
+!!!          enddo
+!!!       enddo
+!!!    enddo
+!!!    !$OMP END DO 
+!!!
+!!!    !find maximum number of particles in a given cell
+!!!    !$OMP DO 
+!!!    do iCell=0,nAlt+1
+!!!       do iSpecies=1,nSpecies
+!!!          nSortedParticle_II(iSpecies,iCell) = &
+!!!               sum(nParticleCell_TIG(:,iSpecies,iCell))
+!!!       enddo
+!!!    enddo
+!!!    !$OMP END DO
+!!!
+!!!    !$OMP END PARALLEL
+!!!
+!!!    MaxSortedParticle=maxval(nSortedParticle_II)
+!!!    
+!!!    !deallocate previous pointer and reallocate
+!!!    if (allocated(SortParticles_III)) then
+!!!       deallocate(SortParticles_III)
+!!!    endif
+!!!    allocate(SortParticles_III(maxval(nSortedParticle_II),nSpecies,0:nAlt+1))
+!!!
+!!!
+!!!    !$OMP PARALLEL PRIVATE(iCell, iSpecies, iThread,iParticleCell_II,iParticle)
+!!!
+!!!    iParticleCell_II = 1
+!!!    !now bucket sort the particles    
+!!!    
+!!!    !$OMP DO SCHEDULE(STATIC)
+!!!    PARTICLE_LOOP2: do iParticle=1,nParticle
+!!!       iCell=Particles_I(iParticle)%iCell
+!!!       if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP2
+!!!       iSpecies=Particles_I(iParticle)%iSpecies
+!!!!       if(iSpecies==0)write(*,*)iParticle,nParticle
+!!!       
+!!!       !get the thread number
+!!!       iThread=OMP_get_thread_num()
+!!!
+!!!       !write(*,*) iThread,nOffset_TIG(iThread,iSpecies,iCell),iParticleCell_II(iSpecies,iCell)
+!!!!       if (nOffset_TIG(iThread,iSpecies,iCell)&
+!!!!            +iParticleCell_II(iSpecies,iCell) > maxval(nSortedParticle_II))&
+!!!!            write(*,*) 'ha', iThread,nOffset_TIG(iThread,iSpecies,iCell),&
+!!!!            iParticleCell_II(iSpecies,iCell),maxval(nSortedParticle_II)
+!!!       
+!!!       !sort the particles
+!!!       SortParticles_III(nOffset_TIG(iThread,iSpecies,iCell)&
+!!!            +iParticleCell_II(iSpecies,iCell),&
+!!!            iSpecies,iCell)%Particle& 
+!!!            =>Particles_I(iParticle)
+!!!
+!!!       iParticleCell_II(iSpecies,iCell)=iParticleCell_II(iSpecies,iCell)+1
+!!!       
+!!!    enddo PARTICLE_LOOP2
+!!!    !$OMP END DO
+!!!    
+!!!    !$OMP END PARALLEL
+!!!
+!!!    deallocate(iParticleCell_II,nOffset_TIG,nParticleCell_TIG)
+
+
+
   end subroutine sort_particles
 
   !=============================================================================
