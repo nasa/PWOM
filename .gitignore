@@ -45,3 +45,6 @@ Makefile.DEPEND
 Makefile.def
 Makefile.conf
 Makefile.planet
+
+#run directories
+run*
