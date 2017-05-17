@@ -92,7 +92,9 @@ rundir:
 		mkdir restartIN restartOUT plots; \
 		cp ${MYDIR}/data/input/${PLANET}/restartfiles/restart_iline* restartIN/ ;\
 		cp ${MYDIR}/data/input/${PLANET}/*.dat .;\
+		cp ${MYDIR}/data/input/${PLANET}/*.txt .;\
 		cp -r ${MYDIR}/data/IRI_DATA .;\
+		cp -r ${MYDIR}/data/crossection_data/*dat .;\
 		cp -r ${MYDIR}/data/nightside_fluxes/*dat .;\
 		cp ${MYDIR}/data/input/*dat .
 	@(if [ "$(STANDALONE)" != "NO" ]; then \
