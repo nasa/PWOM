@@ -14,6 +14,7 @@ C
       use ModPhotoElectron
       use ModPWOM  ,ONLY: UseAurora,UseIndicies, UseIE, iLine
       use ModCouplePWOMtoSE, only: get_se_for_pwom
+      use ModJupiterAtmos, ONLY: JupiterAtmos
 C
       NPT1=14
       NPT2=16
@@ -96,7 +97,7 @@ C      READ (5,2) CURR(1)
 ! Jupiter-specific
       do I=1,nDim
          GRAVTY(I)=-1.2657786e23/RAD(I)**2 ! accel in cm/s^2, w/ Rad in cm
-         Centrifugal(I)=RAD(I)*((sin((90.-GLAT)*3.14159/180.))**2)*Omega**2
+         Centrifugal(I)=RAD(I)*((sin((90.-SmLat)*3.14159/180.))**2)*Omega**2
       enddo
 
       CURR(1)=2.998E2*CURR(1)
@@ -178,8 +179,8 @@ C                                                                      C
       gLon=SmLon
       gLat2=-SmLat
       gLon2=SmLon
-      
-      CALL JupiterAtmos(XH2,XH,XH2O,XCH4,XTN)
+      UTsec=0.0
+      CALL JupiterAtmos(gmLat,gmLon,XH2,XH,XH2O,XCH4,XTN)
       NDensity_CI(1:nDim,H2_) = XH2(1:NDIM)
       NDensity_CI(1:nDim,H_)  = XH(1:NDIM)
       NDensity_CI(1:nDim,H2O_)= XH2O(1:NDIM)
@@ -200,7 +201,7 @@ C                                                                      C
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
      &     .and.DoCoupleSE) then 
          call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
-     &        (/GLAT,GLONG/),(/GLAT2,GLONG2/),
+     &        (/GLAT,GLON/),(/GLAT2,GLON2/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
      &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
      &        PhotoIonRatePW_IC=PhotoIonRate_IC,
@@ -484,7 +485,6 @@ C KGS this subroutine needs to be modified
       State_GV(-1:0,RhoH2_)=Mass_I(Ion3_)*DensityH2p
       write(*,*) 'H+(1400km)=',DensityHp,', H3+(1400km)=',DensityH3p,
      &     ', H2+(1400km)=',DensityH2p
-
 
 C I have used numerically calculated chemical equilibrium
 C solution for T=800k.       
