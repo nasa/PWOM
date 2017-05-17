@@ -185,7 +185,7 @@ contains
     !--------------------------------------------------------------------------
 
     !set the solar flux
-    CALL SSFLUX(0,F107,F107A,0.,0.,0.,0.,1.)
+    CALL SSFLUX(1,F107,F107A,0.,0.,0.,0.,1.)
 
 
     ! on first call initialize the production parameters
