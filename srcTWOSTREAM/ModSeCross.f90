@@ -3,8 +3,8 @@ Module ModSeCross
   private !except
   
   public :: EXSECT
-
   public :: cross_jupiter
+
   !number of excited states
   integer, public,parameter :: NEI=10
   
@@ -83,7 +83,14 @@ Module ModSeCross
          12.10,16.10,16.90,18.2,20.30,23.00,37.00, 0.,0.,0., &
          15.58,16.73,18.75,22.0,23.60,40.00, 0.00, 0.,0.,0./
 
-  
+    ! Temporary parameters and arrays to hold jupiter PE and PIN
+    integer, parameter :: nEnergyTmp = 312
+    integer, parameter :: nBackscatterSpecies = 3
+    real :: pa_tsm(nBackscatterSpecies,nEnergyTmp)
+    real :: pe_tsm(nBackscatterSpecies,nEnergyTmp)
+    real :: EnergyGridTmp_I(nEnergyTmp)
+
+    
 contains
 
   ! Subroutine EXSECT
@@ -570,7 +577,7 @@ contains
   subroutine cross_jupiter(nNeutralSpecies)
     
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I, &
-         EnergyMin, BINNUM
+         EnergyMin, BINNUM, IsVerbose
     !jupiter
     integer,parameter  :: H2_=1, He_=2, H_=3, CH4_=4
     
@@ -593,27 +600,37 @@ contains
     PE(:,:)      = 0.5
     PIN(:,:)     = 0.5
     IIMAXX(:)    = 0.0
+
+    call read_backscatter_prob
+    write(*,*) 'PA',pa_tsm(:,1)
+    write(*,*) 'PA',pa_tsm(:,nEnergyTmp-4:nEnergyTmp)
+    write(*,*) 'PE',pe_tsm(:,1)
+    write(*,*) 'PE',pe_tsm(:,nEnergyTmp-4:nEnergyTmp)
     
     write(*,*) 'Neutrals: ',nNeutralSpecies
     
     do iNeutral = 1, nNeutralSpecies
-
+       
        write(*,*) 'getting H2 cross'
        call get_excitation_crossection('H2', SIGA(H2_,:,:))
        call get_crossection_diffion('H2', SEC(H2_,:,:), SIGA(H2_,:,:))
        call get_scattering_crossection('H2',SIGS(H2_,:))
+       call interp_backscatter(H2_)
        write(*,*) 'getting He cross'
        call get_excitation_crossection('He', SIGA(He_,:,:))
        call get_crossection_diffion('He', SEC(He_,:,:), SIGA(He_,:,:))
        call get_scattering_crossection('He',SIGS(He_,:))
+       call interp_backscatter(He_)
        write(*,*) 'getting H cross'
        call get_excitation_crossection('H', SIGA(H_,:,:))
        call get_crossection_diffion('H',  SEC(H_,:,:), SIGA(H_,:,:))
        call get_scattering_crossection('H',SIGS(H_,:))
+       call interp_backscatter(H_)
        write(*,*) 'getting CH4 cross'
        call get_excitation_crossection('CH4', SIGA(CH4_,:,:))
        call get_crossection_diffion('CH4',SEC(CH4_,:,:), SIGA(CH4_,:,:))
        call get_scattering_crossection('CH4',SIGS(CH4_,:))
+       ! assume CH4 backscatter is 0.5
        
     end do
     
@@ -623,10 +640,10 @@ contains
 
   !=============================================================================
   subroutine get_excitation_crossection(NameNeutralSpecies,SigA)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM,IsVerbose
     
     character(len=*), intent(in) :: NameNeutralSpecies
-    real, intent(out) :: SigA(nEnergy,nEnergy)
+    real, intent(inout) :: SigA(nEnergy,nEnergy)
     integer :: nStates
 
     real, allocatable :: SigExcitation(:,:),Threshold(:)
@@ -637,7 +654,7 @@ contains
     !
     ! Calculate electron impact excitation cross sections (put into SIGA):
     !
-    write(*,*) 'Getting excitation crossections for ',NameNeutralSpecies
+    if (IsVerbose) write(*,*) 'Getting excitation crossections for ',NameNeutralSpecies
     
     select case(NameNeutralSpecies)
     case('O')
@@ -744,7 +761,7 @@ contains
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
 
     character(len=*), intent(in) :: NameNeutralSpecies
-    real, intent(out) :: SigS(nEnergy)
+    real, intent(inout) :: SigS(nEnergy)
 
     real, allocatable :: SigTotalI(:)
     integer :: iEnergy,iEnergySec
@@ -809,11 +826,10 @@ contains
   
  !=============================================================================
   subroutine get_crossection_diffion(NameNeutralSpecies,SigDiffI,SigDiffA)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM,IsVerbose
 
     character(len=*), intent(in) :: NameNeutralSpecies
-    real, intent(out) :: SigDiffI(nEnergy,nEnergy), SigDiffA(nEnergy,nEnergy)
-
+    real, intent(inout) :: SigDiffI(nEnergy,nEnergy), SigDiffA(nEnergy,nEnergy)
     real :: Ethreshold,Ebar,OpalCoef
     real :: S_kr,t_kr,coef_kr,coef2_kr,w_kr,dfdw_kr,Term1_kr,Term2_kr,Term3_kr
     real, allocatable :: SigTotalI(:)
@@ -828,7 +844,7 @@ contains
     !for testing
     SigTotalI(:) = 0.0
 
-    write(*,*) 'Getting ',NameNeutralSpecies
+    if (IsVerbose) write(*,*) 'Getting ',NameNeutralSpecies
     
     select case(NameNeutralSpecies)
     case('O')
@@ -956,7 +972,7 @@ contains
   !=============================================================================
   ! crossection for H taken from Shyn 1992
   subroutine read_diff_ionization_crossection(NameSpecies,SigDiffI)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,IsVerbose
     use ModIoUnit, ONLY : UnitTmp_
     use ModInterpolate, ONLY: bilinear
     
@@ -969,7 +985,7 @@ contains
     real :: DataArray(3,DataLen)
     real :: Energy1Array(nE1,nE2),Energy2Array(nE1,nE2),CrossSecArray(nE1,nE2)
     
-    write(*,*) 'getting total ionization crossection for species ', &
+    if (IsVerbose) write(*,*) 'getting total ionization crossection for species ', &
          NameSpecies
 
     write(DatafileName,"(3a)") 'PW/DiffIon',NameSpecies,'.dat'
@@ -1016,7 +1032,7 @@ contains
   end subroutine read_diff_ionization_crossection
   !=============================================================================
   subroutine read_total_ionization_crossection(NameSpecies,SigTotalI)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,IsVerbose
     use ModIoUnit, ONLY : UnitTmp_
     use ModInterpolate, ONLY: linear
     
@@ -1026,7 +1042,7 @@ contains
     integer :: DataLen
     real, allocatable :: EnergyArray(:),CrossSecArray(:)
     
-    write(*,*) 'getting total ionization crossection for species ', &
+    if (IsVerbose) write(*,*) 'getting total ionization crossection for species ', &
          NameSpecies
 
     write(DatafileName,"(3a)") 'PW/IonCross',NameSpecies,'.dat'
@@ -1064,7 +1080,7 @@ contains
   end subroutine read_total_ionization_crossection
   !============================================================================
   subroutine read_excitation_crossection(NameSpecies,nStates,Threshold,SigEx)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,IsVerbose
     use ModIoUnit, ONLY : UnitTmp_
     use ModInterpolate, ONLY: linear
     
@@ -1076,7 +1092,7 @@ contains
     integer :: DataLen,iState,iEnergy
     real, allocatable :: EnergyArray(:),CrossSecArray(:)
     
-    write(*,*) 'getting excitation/absorption crossections for species ', &
+    if (IsVerbose) write(*,*) 'getting excitation/absorption crossections for species ', &
          NameSpecies
 
     write(DatafileName,"(3a)") 'PW/',NameSpecies,'Across.dat'
@@ -1117,7 +1133,7 @@ contains
   end subroutine read_excitation_crossection
   !============================================================================
   subroutine read_scattering_crossection(NameSpecies,SigS)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,IsVerbose
     use ModIoUnit, ONLY : UnitTmp_
     use ModInterpolate, ONLY: linear
     
@@ -1127,7 +1143,7 @@ contains
     integer :: DataLen
     real, allocatable :: EnergyArray(:),CrossSecArray(:)
     
-    write(*,*) 'getting elastic scattering crossection for species ', &
+    if (IsVerbose) write(*,*) 'getting elastic scattering crossection for species ', &
          NameSpecies
 
     write(DatafileName,"(3a)") 'PW/',NameSpecies,'Scross.dat'
@@ -1163,6 +1179,158 @@ contains
     deallocate(CrossSecArray)
 
   end subroutine read_scattering_crossection
+  !============================================================================
+  ! read in Jupiter backscatter probabilities
+  !============================================================================
+  subroutine read_backscatter_prob
+    use ModIoUnit, ONLY : UnitTmp_
+    use ModSeGrid, ONLY : IsVerbose
+    
+    integer, parameter :: TmpDim = 25
+    character(len=100) :: DatafileName
+    real :: tmp(nEnergyTmp,TmpDim), tmp2(nBackscatterSpecies,nEnergyTmp)
+
+    integer :: M6,iEnergyCounter
+    real :: NMM(21),DDDE(16), EEE,DD7,ND7,DELE(nEnergyTmp)
+    
+    if (IsVerbose) write(*,*) 'getting backscatter probabilities'
+
+    write(DatafileName,"(1a)") 'PW/DGAEICSF1.txt'
+
+    open(UnitTmp_,FILE=DatafileName,STATUS='OLD')
+
+200 format(8ES10.3)
+778 format(8(ES12.5))
+355 format(8F10.6)
+    
+    !Read in cross-sections for the production of various airglow features
+    do k=1,TmpDim
+       READ(UnitTmp_,200) (tmp(iEnergyCounter,k),iEnergyCounter=1,nEnergyTmp)                   !(1)
+    end do
+    
+    ! Read Elastic Cross-Sections and In/Elastic Backscatter Probabilities
+    ! --------------------------------------------------------------------
+    do n=1,nBackscatterSpecies
+       READ(UnitTmp_,778) (tmp2(n,j),j=1,nEnergyTmp)                     !(2)
+       READ(UnitTmp_,355) (pe_tsm(n,j),j=1,nEnergyTmp)                       !(3)
+       READ(UnitTmp_,355) (pa_tsm(n,j),j=1,nEnergyTmp)                       !(4)
+    end do
+    
+    !Inelastic cross sections and something else ("tion") also present
+    ! not read in
+    CLOSE(UnitTmp_)
+    
+    !ENERGY GRID SETUP
+    !-----------------
+    !***DG (~~~ARE: Tabulated this comment)
+    ! dz_tsm    : Altitude step (cm)
+    ! EE        : Energy (eV)
+    ! DELE      : Energy step size (eV)
+    ! M6        : Number of energy intervals
+    ! NMM       : Number of bins in given interval
+    ! nnspec    : Number of neutral species included in electron-impact reactions
+    ! nbins     : Number of energy bins used when generating XSECT output
+    
+    M6 = 16
+    
+    !Set up interval bins
+    !--------------------
+    NMM(1)  = 20
+    NMM(2)  = 90
+    NMM(3)  = 10
+    NMM(4)  = 16
+    NMM(5)  = 10
+    NMM(6)  =  5
+    NMM(7)  =  6
+    NMM(8)  = 13
+    NMM(9)  = 10
+    NMM(10) = 15
+    NMM(11) = 15
+    NMM(12) = 14
+    NMM(13) = 22
+    NMM(14) = 17
+    NMM(15) = 28
+    NMM(16) = 21
+    
+    !Set up interval bin sizes
+    !-------------------------
+    DDDE(1)  = 0.5
+    DDDE(2)  = 1.0
+    DDDE(3)  = 2.0
+    DDDE(4)  = 5.0
+    DDDE(5)  = 10.0
+    DDDE(6)  = 20.0
+    DDDE(7)  = 50.0
+    DDDE(8)  = 100.0
+    DDDE(9)  = 200.0
+    DDDE(10) = 400.0
+    DDDE(11) = 800.0
+    DDDE(12) = 1000.0
+    DDDE(13) = 2000.0
+    DDDE(14) = 10000.0
+    DDDE(15) = 25000.0
+    DDDE(16) = 50000.0
+    
+    EEE = 0.0 !Energy grid level placeholder
+    iEnergyCounter  = 0   !Counter
+    
+    !Set up the energy grid
+    !----------------------
+    do i=1,M6
+       DD7 = DDDE(i)
+       ND7 = NMM(i)
+       
+       do j=1,ND7
+          EEE      = EEE + DD7
+          iEnergyCounter       = iEnergyCounter + 1
+          DELE(iEnergyCounter) = DD7
+          EnergyGridTmp_I(iEnergyCounter)   = EEE - 0.5*DD7
+       end do
+       
+    end do
+    
+    check_nbins: IF (iEnergyCounter .ne. nEnergyTmp) THEN
+       WRITE(*,*) 'nEnergyTmp does not agree with iEnergyCounter'
+       WRITE(*,*) 'nEnergyTmp =',nbins
+       WRITE(*,*) 'iEnergyCounter =',iEnergyCounter
+    end if check_nbins
+  end subroutine read_backscatter_prob
+  !============================================================================
+
+  !============================================================================
+  subroutine interp_backscatter(iSpecies)
+  !============================================================================
+    use ModSeGrid, ONLY: nEnergy, EnergyGrid_I, IsVerbose
+    use ModInterpolate, ONLY: linear
+
+    integer, intent(in) :: iSpecies    !H2_=1, He_=2, H_=3
+    
+    integer :: iEnergy,iUnder
+
+    iUnder = 0
+    
+    do iEnergy = 1,nEnergy
+       if (EnergyGrid_I(iEnergy).LT.EnergyGridTmp_I(1)) then
+          iUnder = iEnergy
+       else if (EnergyGrid_I(iEnergy).LE.EnergyGridTmp_I(nEnergyTmp)) then
+          PIN(iSpecies,iEnergy) = linear(pa_tsm(iSpecies,:),1,nEnergyTmp, &
+               EnergyGrid_I(iEnergy),EnergyGridTmp_I(:))
+          PE(iSpecies,iEnergy)  = linear(pe_tsm(iSpecies,:),1,nEnergyTmp, &
+               EnergyGrid_I(iEnergy),EnergyGridTmp_I(:))
+       else
+          if (PIN(iSpecies,iEnergy-1).LT.0.2) PIN(iSpecies,iEnergy) = 0.0
+          if (PE(iSpecies,iEnergy-1).LT.0.2)  PE(iSpecies,iEnergy)  = 0.0
+       endif
+    end do
+
+    do iEnergy=iUnder,1,-1
+       if (PIN(iSpecies,iEnergy+1).LT.0.2) PIN(iSpecies,iEnergy) = 0.0
+       if (PE(iSpecies,iEnergy+1).LT.0.2)  PE(iSpecies,iEnergy)  = 0.0
+    end do
+    
+  end subroutine interp_backscatter
+  !============================================================================
+
   !============================================================================
   ! plot differential ionization crossection
   subroutine plot_diffion_cross
