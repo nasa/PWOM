@@ -121,8 +121,6 @@ Module ModParticle
   
   integer :: iSeed = 1
   
-  integer, allocatable :: nNumPerParticle_I(:)
-  
   ! use a fixed number of particles per cell
   integer :: nParticlePerCell_I(2)=(/20000,3000/)
   !integer :: nParticlePerCell_I(2)=(/3000,3000/)
@@ -174,15 +172,6 @@ contains
        allocate(NameSpecies_I(nSpecies))
        NameSpecies_I(O_)='O_'
        NameSpecies_I(H_)='H_'
-       
-       !set the relative weights of particles
-       allocate(nNumPerParticle_I(nSpecies))
-       !nNumPerParticle_I(O_)=1.0e5
-       !nNumPerParticle_I(H_)=5.0e5
-       nNumPerParticle_I(O_)=5.0e5
-       nNumPerParticle_I(H_)=1.0e5
-       !nNumPerParticle_I(O_)=5.0e7
-       !nNumPerParticle_I(H_)=1.0e7
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
@@ -578,106 +567,6 @@ contains
   end subroutine push_guiding_center_rk4
 
 
-!  !=============================================================================
-!  ! sample maxwellian in cell
-!  subroutine sample_maxwellian_cell(iCell,iSpecies,Density,uBulk,Temperature)
-!    use ModNumConst, ONLY: cPi
-!    ! index of cell to sample
-!    integer,intent(in):: iCell
-!
-!    ! Species to Sample
-!    integer,intent(in):: iSpecies
-!    
-!    ! parameters of maxwellian for sampling
-!    real, intent(in) :: density ![cm-3]
-!    real, intent(in) :: uBulk ![cm/s]
-!    real, intent(in) :: Temperature ![k]
-!    
-!    real :: uTherm,uMax,uMin,uRange, uRand, uMostProb,RandNum, PitchAngle
-!    real :: uMagRel, uPar,uPerp
-!    real :: fmax, ftemp
-!    !variable to hold new particle info before inserting it to particles array
-!    type(particle),allocatable :: NewParticle_I(:)
-!    integer :: nNew,iParticle
-!    logical :: DoTest=.true.
-!    !--------------------------------------------------------------------------
-!    
-!    ! Find number of particles to create by taking Ntrue=density*volume and 
-!    !dividing by nNumPerParticle
-!    nNew=Density * Volume_G(iCell)/nNumPerParticle
-!    write(*,*) nNew
-!
-!    ! allocate array to hold new particles
-!    allocate(NewParticle_I(nNew))
-!
-!    ! set bounds on velocity magnitude range to sample from based on thermal 
-!    !velocity. note that there are very few particles beyond 5*vtherm 
-!    uTherm=sqrt(8.0*cBoltzmannCGS*Temperature/Mass_I(iSpecies)/cPi)
-!    
-!!    uMin = max(uBulk-50.0*uTherm,0.0)
-!    uMin = uBulk-5.0*uTherm
-!    uMax = uBulk+5.0*uTherm
-!    uRange = uMax-uMin
-!    
-!    ! Find peak probability by evaluating maxwellian at most probable velocity
-!    !found when df/dv=0 
-!    uMostProb = sqrt(2.0*cBoltzmannCGS*Temperature/Mass_I(iSpecies))
-!    !fmax=maxwellian(Mass_I(iSpecies),uMostProb,Temperature)
-!    fmax=maxwellian(Mass_I(iSpecies),0.0,Temperature)
-!    write(*,*) 'fmax',fmax
-!
-!    !use accept-reject algorithm for distribution sampling
-!    iParticle=1
-!    sample_loop: do while (iParticle<nNew)
-!       
-!       ! randomly choose velocity in range
-!       RandNum=random_real(iSeed)
-!       uRand = RandNum*uRange+uMin
-!       !now randomly choose pitchangle and azimuth to set
-!       RandNum=random_real(iSeed)
-!       PitchAngle=RandNum*cPi
-!       
-!       !set par and perp vel
-!       uPar=uRand*cos(PitchAngle)
-!       uPerp=abs(uRand*sin(PitchAngle))
-!       
-!       !set velocity magnitude relative to bulk
-!       uMagRel=sqrt((uPar-uBulk)**2+uPerp**2)
-!       
-!       !evaluate Maxwellian with this random velocity
-!       ftemp=maxwellian(Mass_I(iSpecies),uMagRel,Temperature)
-!       
-!       !determine probabalisitcally if this is a good choice
-!       RandNum=random_real(iSeed)
-!       if (ftemp>RandNum*fmax)then
-!          !choice found
-!          
-!          NewParticle_I(iParticle)%vpar =uPar
-!          NewParticle_I(iParticle)%vperp=uPerp
-!          
-!          !randomly place particle in cell
-!          RandNum=random_real(iSeed)
-!          NewParticle_I(iParticle)%Alt=RandNum*dAlt_G(iCell)+AltBot_F(iCell)
-!          
-!          !assign remaining particle properties
-!          NewParticle_I(iParticle)%iSpecies=iSpecies
-!          NewParticle_I(iParticle)%IsOpen=.true.
-!          
-!          !increment particle counter
-!          iParticle=iParticle+1
-!       else
-!          !try again
-!          cycle sample_loop
-!       endif
-!    end do sample_loop
-!    write(*,*) 'nNew',nNew
-!    if(DoTest) call plot_distribution_cell(iSpecies,iCell,nNew,NewParticle_I)
-!
-!    !Now newly sampled particles need to be put into main particle array
-!
-!    !deallocate to save memory
-!    deallocate(NewParticle_I)
-!  end subroutine sample_maxwellian_cell
 
   !=============================================================================
   ! sample maxwellian in cell
@@ -914,7 +803,7 @@ contains
     real :: Tpar,Tperp,Hpar,Hperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
-    integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
+    integer :: iVel, iParticle, iVpar,iVperp
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
     !grid parameters
     integer, parameter :: nDim =2, Vperp_=1,Vpar_=2,nVar=1, PSD_=1
@@ -1023,7 +912,7 @@ contains
     real :: dVel, vParMin, vParMax, vPerpMin, vPerpMax
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
-    integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
+    integer :: iVel, iParticle, iVpar,iVperp
     real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
     !grid parameters
     integer, parameter :: nDim =2, Vperp_=1,Vpar_=2,nVar=1, PSD_=1
@@ -1284,7 +1173,6 @@ contains
   subroutine calc_moments_cell_orig(iSpecies,iCell,nParticleInCell,CellParticle_I,&
        density,uBulkPar,uBulkPerp,Pressure,Temp)
     integer,intent(in) :: iSpecies,iCell, nParticleInCell
-    integer :: nNumPerParticle
     type(particle), intent(in) :: CellParticle_I(nParticleInCell)
     real, intent(out) :: density,uBulkPar,uBulkPerp,Pressure,Temp
     real :: TrueParticles
@@ -2531,7 +2419,7 @@ contains
     real :: Tpar,Tperp,Hpar,Hperp
     integer, parameter :: nVel = 100
     real :: vPar_C(nVel), vPerp_C(nVel)
-    integer :: iVel, iParticle, iVpar,iVperp,nNumPerParticle
+    integer :: iVel, iParticle, iVpar,iVperp
     integer, allocatable   :: IndexBinParticle_III(:,:,:)
     integer, allocatable   :: IndexVpar_I(:),IndexVperp_I(:)
     integer, allocatable   :: nParticleBin_II(:,:)
@@ -3732,12 +3620,6 @@ contains
 
     write(*,*) CoulLog,cElectronCharge,cCm3ToM3,Density,&
             cPi,cEps,cGtoKg,Mass_I(iSpeciesElec),TempElec0
-
-    ! adjust the particle weightings to test different weightings per 
-    !species
-    !nNumPerParticle_I(:)=1.0e6
-!    nNumPerParticle_I(1)=1.0e6
-    !nNumPerParticle_I(2)=3.0*nNumPerParticle_I(1)
 
     !set the relaxation frequencies
     nu0= cElectronCharge**4*cCm3ToM3*Density*CoulLog&
