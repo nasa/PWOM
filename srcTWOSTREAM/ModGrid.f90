@@ -8,33 +8,30 @@ Module ModSeGrid
   real,public :: Time
  
   !E Grid
-  integer,parameter,public :: nEnergy=190 ! Earth
-!  integer,parameter,public :: nEnergy=990 ! Jupiter
+  integer, public :: nEnergy
 
-  real, public :: DeltaE_I(nEnergy),EnergyGrid_I(nEnergy)
+  real, allocatable, public :: DeltaE_I(:),EnergyGrid_I(:)
   real,   public :: EnergyMin, EnergyMax, DeltaE
 !  real, allocatable,public  :: KineticEnergy_IIC(:,:,:)
 
   !Alt Grid
-  integer,parameter,public :: nAlt=120 ! Earth
-  !integer,parameter,public :: nAlt=385 ! Jupiter
-  real,public :: Alt_C(nAlt) !altitude grid in cm
+  integer, public :: nAlt
+  real, allocatable, public :: Alt_C(:) !altitude grid in cm
 
   !Alt Grid Extended above two stream calculation by mapping.
   ! should be nAlt+some points
-  integer,parameter,public :: nAltExtended=220 ! Earth
-  !integer,parameter,public :: nAltExtended=480 ! Jupiter
-  real,public :: AltExtended_C(nAltExtended) !altitude grid in cm
+  integer, public :: nAltExtended
+  real, allocatable, public :: AltExtended_C(:) !altitude grid in cm
   real,public :: AltPwUpper=8000.0e5 !alt of PW upper boundary in CM
 
-  real,public :: DeltaPot_C(nAltExtended),Efield_C(nAltExtended)
+  real, allocatable, public :: DeltaPot_C(:),Efield_C(:)
 
   ! information on how global line number (as opposed to line number on 
   ! given proc)
   integer, public :: iLineGlobal
   
   ! public methods
-!  public :: allocate_grid_arrays
+  public :: allocate_grid_arrays
   public :: set_egrid
   public :: set_altgrid
   public :: BINNUM
@@ -53,33 +50,50 @@ contains
   ! For more information see the file glow.txt.
   !
   SUBROUTINE set_egrid
+    use ModPlanetConst, ONLY: Planet_, rPlanet_I, NamePlanet_I
     implicit none
 
     ! Local:
-    Integer iEnergy, i2
-    real C
+    Integer iEnergy, i0,i1,i2
+    real A,B,B1,C,C2
 
-    i2 = 33  ! 21 for 0.005; 33 for 0.001
+    if (NamePlanet_I(Planet_).EQ.'JUPITER') then
+       A = 2.     ! use 1.-2.
+       B = 16.    ! use 16.-20.
+       C = 0.01   ! use 0.01-0.002
+       
+       i0 = A/(60./740.)
+       B1 = B/(60./740.)*2.
+       i1=i0+B1*(B-A)/B
+       C2 = 740
+       i2=i1+C2*(60.-B)/60.
+       ! nEnergy = i2 + 0.05/C*50  for jupiter EUV
+       ! nEnergy = i2 + 0.05/C*110 for jupiter precip
 
-    i2 = 740
-    DO iEnergy=1,nEnergy
-       IF (iEnergy .LE. 21) THEN
-          EnergyGrid_I(iEnergy) = 0.5 * REAL(iEnergy)
-       ELSE
-          EnergyGrid_I(iEnergy) = EXP (0.05 * REAL(iEnergy+26))
-       ENDIF
-! *** Jupiter Test Grid ***
-!!$       IF (iEnergy .LE. i2) THEN
-!!$          EnergyGrid_I(iEnergy) = 60./real(i2) * REAL(iEnergy)
-!!$       ELSE
-!!$          EnergyGrid_I(iEnergy) = EXP(0.05*81.887)*EXP(0.01*REAL(iEnergy-i2))
-!!$          write(*,*) iEnergy,EnergyGrid_I(iEnergy)
-!!$       ENDIF
-!!$       ! nEnergy = i2 + 0.05/C*50
-
-! *** Done w/ Test Grid
-    end do
+       DO iEnergy=1,nEnergy
+          IF (iEnergy .LE. i0) THEN
+             EnergyGrid_I(iEnergy) = A/real(i0) * REAL(iEnergy)
+          ELSE IF (iEnergy .LE. i1) THEN
+             EnergyGrid_I(iEnergy) = B/real(B1) * REAL(iEnergy-i0+A/(B/B1))
+          ELSE IF (iEnergy .LE. i2) THEN
+             EnergyGrid_I(iEnergy) = 60./real(C2) * REAL(iEnergy-i1+B/(60./C2))
+          ELSE
+             EnergyGrid_I(iEnergy) = EXP(0.05*81.887)*EXP(C*REAL(iEnergy-i2))
+             if (IsVerbose) write(*,*) iEnergy,EnergyGrid_I(iEnergy)
+          ENDIF
+       end do
+    else   
+       DO iEnergy=1,nEnergy
+          IF (iEnergy .LE. 21) THEN
+             EnergyGrid_I(iEnergy) = 0.5 * REAL(iEnergy)
+          ELSE
+             EnergyGrid_I(iEnergy) = EXP (0.05 * REAL(iEnergy+26))
+          ENDIF
+       end do
+    end if
     
+    if (IsVerbose) write(*,*) 'Energy Grid: ',EnergyGrid_I(:)
+
     DeltaE_I(1) = EnergyGrid_I(1)
     DO iEnergy=2,nEnergy
        DeltaE_I(iEnergy) = EnergyGrid_I(iEnergy)-EnergyGrid_I(iEnergy-1)
@@ -219,17 +233,28 @@ contains
   end subroutine calc_potential
 
   
-
-
-!  subroutine allocate_grid_arrays
-!    
-!    ! Allocate PA related grid
-!
-!    if(.not.allocated(DeltaE_I))        allocate(DeltaE_I(nEnergy+1))
-!    if(.not.allocated(EnergyGrid_I))    allocate(EnergyGrid_I(nEnergy))
-!
-!!    if (.not.allocated(iLineGlobal_I))  allocate(iLineGlobal_I(nLine))
-!  end subroutine allocate_grid_arrays
+  subroutine allocate_grid_arrays
+    use ModPlanetConst, ONLY: Planet_, rPlanet_I, NamePlanet_I
+    
+    if (NamePlanet_I(Planet_).EQ.'JUPITER') then
+       nEnergy = 1463 ! use 1163 w/o precip; 1463 w/ precip
+       nAlt    = 385
+       nAltExtended = 480
+    else
+       nEnergy = 190
+       nAlt    = 120
+       nAltExtended = 220
+    endif
+    
+    if(.not.allocated(DeltaE_I))      allocate(DeltaE_I(nEnergy))
+    if(.not.allocated(EnergyGrid_I))  allocate(EnergyGrid_I(nEnergy))
+    if(.not.allocated(Alt_C))         allocate(Alt_C(nAlt))
+    if(.not.allocated(AltExtended_C)) allocate(AltExtended_C(nAltExtended))
+    if(.not.allocated(DeltaPot_C))    allocate(DeltaPot_C(nAltExtended))
+    if(.not.allocated(Efield_C))      allocate(Efield_C(nAltExtended))
+    
+!    if (.not.allocated(iLineGlobal_I))  allocate(iLineGlobal_I(nLine))
+  end subroutine allocate_grid_arrays
 
   SUBROUTINE midpnt_int(sum,f,x,a,b,N,ii)
     IMPLICIT NONE
