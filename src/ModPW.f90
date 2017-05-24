@@ -28,7 +28,7 @@ module ModPWOM
   integer :: nLine,nLog=0
 
   !particle variables
-  logical :: UseParticles=.true.,DoInitAltParticles=.true.
+  logical :: UseParticles=.false.,DoInitAltParticles=.false.
   logical :: UseParticleFeedback=.false.
   real    :: DtCoupleParticles=1.0
   integer :: nAltParticles,iAltParticle
