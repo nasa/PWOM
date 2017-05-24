@@ -303,15 +303,28 @@ contains
   !
   !
   SUBROUTINE VCD(ZZ,ZMAJ,ZVCD,IONO,nNeutralIn)
+    use ModSeGrid, only: IsVerbose
     DIMENSION ZZ(IONO), ZMAJ(nNeutralIn,IONO), ZVCD(nNeutralIn,IONO)
+    REAL :: m,g, H,RAT
+    REAL, PARAMETER :: eps=0.005, T=850.0 !K 
+    REAL, PARAMETER :: k=1.38E-16
     !
+    g=gSurface/4.0
+    !g = 24.79 ! m/s^2
     DO I=1,nNeutralIn
        ZVCD(I,IONO) =   ZMAJ(I,IONO) &
             * (ZZ(IONO)-ZZ(IONO-1)) &
             / ALOG(ZMAJ(I,IONO-1)/ZMAJ(I,IONO))
 
+       m = 1.662E-24*NeutralMassAMU_I(I)
+
        DO J=IONO-1,1,-1
           RAT = ZMAJ(I,J+1) / ZMAJ(I,J)
+          if (abs(RAT-1.0).LT.eps) then
+             H = k*T/(m*g)
+             RAT = exp(-(ZZ(J)-ZZ(J+1))/H)
+             if(IsVerbose) write(*,*) IONO,J,I,RAT,exp(-(ZZ(J+1)-ZZ(J))/H)
+          endif
           ZVCD(I,J) =   ZVCD(I,J+1) &
                + ZMAJ(I,J) * (ZZ(J)-ZZ(J+1)) / ALOG(RAT) * (1.-RAT)
        enddo

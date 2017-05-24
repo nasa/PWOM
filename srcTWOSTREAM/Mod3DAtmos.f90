@@ -17,7 +17,7 @@ contains
   subroutine get_jupiter_atmos(mLat,mLon,nSpecies,NeutralDens_IC,NeutralTemp_C)
 
     use ModInterpolate,  ONLY : trilinear,linear
-    use ModSeGrid,       ONLY : Alt_C, nAlt
+    use ModSeGrid,       ONLY : Alt_C, nAlt, IsVerbose
 !    use ModSeBackground, ONLY : mLat,mLon
     
     integer,            intent(in) :: nSpecies     ! 4
@@ -43,7 +43,7 @@ contains
     CALL read_Atreya
     CALL read_JGITM_3D
 
-    write(*,*) ReadArray_II
+    if(IsVerbose) write(*,*) 'Neutral Array:',ReadArray_II
     
     if(.not.allocated(param3d_III)) allocate(param3d_III(nAtmos,nLat,nLon))
 
