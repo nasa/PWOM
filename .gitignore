@@ -48,3 +48,6 @@ Makefile.planet
 
 #run directories
 run*
+
+# Backup files
+*~
