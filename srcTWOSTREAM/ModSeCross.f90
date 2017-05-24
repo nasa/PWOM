@@ -635,10 +635,184 @@ contains
     end do
     
     ! plot the differential ion crossection (for testing)
-    call plot_diffion_cross
+    ! call plot_diffion_cross
+    ! call plot_siga_cross
+    ! call plot_sigs(SIGS,PE,nNeutralSpecies)
+    
   end subroutine cross_jupiter
 
-  !=============================================================================
+   !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  ! save crossection plot for verification
+  ! doesn't work for Earth yet
+  ! for debugging only one line
+  !--------------------------------------------------------------------------
+  subroutine plot_sigs(SIGS,PE,nNeutralSpecies)
+    use ModSeGrid,     ONLY: Alt_C,nAlt,nEnergy,  &
+         DeltaE_I,EnergyGrid_I, IsVerbose
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    real, intent(in) :: SIGS(nNeutralSpecies,nEnergy),PE(nNeutralSpecies,nEnergy)
+
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+    !grid parameters
+    integer, parameter :: nDim =1
+    integer :: nVar,iEnergy
+    integer, parameter ::iLine=1
+    !Jupiter
+    integer, parameter :: H2_=1,He_=2,H_=3,CH4_=4
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'E[eV] Var g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'E[eV] SigS_H2 PE_H2 SigS_He PE_He SigS_H PE_H SigS_CH4 PE_CH4 g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='SigmaS Cross Sec and Backscatter'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iAlt
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+    nVar=2*nNeutralSpecies
+    allocate(Coord_I(nEnergy),PlotState_IV(nEnergy,nVar))
+
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+       NamePlotVar=NamePlotVarJupiter
+    end select
+       
+       do iEnergy=1,nEnergy
+          Coord_I(iEnergy) = EnergyGrid_I(iEnergy)
+          PlotState_IV(iEnergy,1) = SIGS(H2_,iEnergy)
+          PlotState_IV(iEnergy,2) = PE(H2_,iEnergy)
+          PlotState_IV(iEnergy,3) = SIGS(He_,iEnergy)
+          PlotState_IV(iEnergy,4) = PE(He_,iEnergy)
+          PlotState_IV(iEnergy,5) = SIGS(H_,iEnergy)
+          PlotState_IV(iEnergy,6) = PE(H_,iEnergy)
+          PlotState_IV(iEnergy,7) = SIGS(CH4_,iEnergy)
+          PlotState_IV(iEnergy,8) = PE(CH4_,iEnergy)
+       enddo       
+       
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'PW/plots/SIGS.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_I, PlotState_IV)
+  end subroutine plot_sigs
+
+   !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  !--------------------------------------------------------------------------
+  ! save crossection plot for verification
+  ! doesn't work for Earth yet
+  ! for debugging only one line
+  !--------------------------------------------------------------------------
+  subroutine plot_sigex(SIGEX,nStates)
+    use ModSeGrid,     ONLY: Alt_C,nAlt,nEnergy,  &
+         DeltaE_I,EnergyGrid_I, IsVerbose
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+
+    real, intent(in) :: SIGEX(nEnergy,nStates)
+
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+    !grid parameters
+    integer, parameter :: nDim =1
+    integer :: nVar,iEnergy,iState
+    integer, parameter ::iLine=1
+    !Jupiter
+    integer, parameter :: H2_=1,He_=2,H_=3,CH4_=4
+    
+    !Earth
+    integer, parameter :: Oplus_=1
+    
+    character(len=100),parameter :: NamePlotVarEarth=&
+         'E[eV] Var g r'
+    character(len=100),parameter :: NamePlotVarJupiter=&
+         'E[eV] Sig1 Sig2 Sig3 Sig4 Sig5 Sig6 Sig7 Sig8 Sig9 Sig10 Sig11 Sig12 g r'
+
+    character(len=100) :: NamePlotVar
+    character(len=*),parameter :: NameHeader='SigmaEx Cross Sec'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iIon,iAlt
+    character(len=100) :: NamePlot
+    logical,save :: IsFirstCall =.true.
+    !--------------------------------------------------------------------------
+
+    nVar=nStates
+    allocate(Coord_I(nEnergy),PlotState_IV(nEnergy,nVar))
+
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       NamePlotVar=NamePlotVarEarth
+    case('JUPITER')
+       NamePlotVar=NamePlotVarJupiter
+    end select
+       
+    do iEnergy=1,nEnergy
+       Coord_I(iEnergy) = EnergyGrid_I(iEnergy)
+       do iState=1,nStates
+          PlotState_IV(iEnergy,iState) = SIGEX(iEnergy,iState)
+       enddo
+    enddo
+       
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'PW/plots/SIGEX.out'
+    
+    !Plot grid for given line
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/)) !***
+    endif
+    
+    deallocate(Coord_I, PlotState_IV)
+  end subroutine plot_sigex
+
+ !=============================================================================
   subroutine get_excitation_crossection(NameNeutralSpecies,SigA)
     use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM,IsVerbose
     
@@ -674,6 +848,7 @@ contains
        if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
        if(.not.allocated(Threshold)) allocate(Threshold(nStates))
        call read_excitation_crossection(NameNeutralSpecies,nStates,Threshold,SigExcitation)
+       ! call plot_sigex(SigExcitation,nStates)
     case('H')
        nStates = 6
        if(.not.allocated(SigExcitation)) allocate(SigExcitation(nEnergy,nStates))
@@ -1353,7 +1528,7 @@ contains
 
     integer :: iNeutral
     
-    character(len=100) :: NamePlot = 'DiffIonCross.out'
+    character(len=100) :: NamePlot = 'PW/plots/DiffIonCross.out'
     
     character(len=*),parameter :: NameHeader='SE output iono'
     character(len=5) :: TypePlot='ascii'
@@ -1405,7 +1580,7 @@ contains
             VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
        IsFirstCall = .false.
     else
-       call save_plot_file(NamePlot, TypePositionIn='append', &
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
             TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
             NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
             nDimIn=nDim,CoordIn_DII=Coord_DII,                &
@@ -1414,6 +1589,89 @@ contains
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_diffion_cross
+  !============================================================================
+  ! plot absorption crossection
+  subroutine plot_siga_cross
+    use ModSeGrid,     ONLY: nEnergy, EnergyGrid_I
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModPlanetConst, ONLY: Planet_, NamePlanet_I
+    
+    real, allocatable   :: Coord_DII(:,:,:), PlotState_IIV(:,:,:)
+
+    real    :: time=0
+    integer :: nStep =0
+    
+    !grid parameters
+    integer, parameter :: nDim =2, E1_=1, E2_=2
+    
+    ! planet-specific values
+    integer :: nVar, nNeutral
+    character(len=100) :: NamePlotVar
+
+    integer :: iNeutral
+    
+    character(len=100) :: NamePlot = 'PW/plots/SIGA.out'
+    
+    character(len=*),parameter :: NameHeader='SE output iono'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iEnergyPrimary,iEnergySecondary
+
+    logical :: IsFirstCall=.true.
+    
+    !--------------------------------------------------------------------------
+
+    select case(NamePlanet_I(Planet_))
+    case('EARTH')
+       nVar=3
+       nNeutral=3
+       NamePlotVar= &
+            'Es[eV] Ep[eV]  sigmaO[/cc/eV] sigmaO2[/cc/eV] sigmaN2[/cc/eV] g r'
+
+    case('JUPITER')
+       nVar=4
+       nNeutral=4
+       NamePlotVar= 'Es[eV] Ep[eV]  sigmaH2[/cc/eV] sigmaHe[/cc/eV] sigmaH[/cc/eV] sigmaCH4[/cc/eV] g r'
+
+    end select
+    
+    allocate(Coord_DII(nDim,nEnergy,nEnergy),PlotState_IIV(nEnergy,nEnergy,nVar))
+    
+    !    do iLine=1,nLine
+    PlotState_IIV = 0.0
+    Coord_DII     = 0.0
+    
+    !Set values
+    do iEnergyPrimary=1,nEnergy
+       do iEnergySecondary=1,nEnergy
+          Coord_DII(E1_,iEnergySecondary,iEnergyPrimary) = EnergyGrid_I(iEnergySecondary)             
+          Coord_DII(E2_,iEnergySecondary,iEnergyPrimary) = EnergyGrid_I(iEnergyPrimary)             
+          ! set plot state
+          do iNeutral=1,nNeutral
+             PlotState_IIV(iEnergySecondary,iEnergyPrimary,iNeutral) = &
+                  SIGA(iNeutral,iEnergySecondary,iEnergyPrimary)
+          enddo
+       enddo
+    enddo
+    
+    !Plot crossection
+    if(IsFirstCall) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+       IsFirstCall = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=nStep,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+    endif
+    
+    deallocate(Coord_DII, PlotState_IIV)
+  end subroutine plot_siga_cross
   !=============================================================================
   subroutine calc_backscatter
     use ModSeGrid,only:NBINS=>nEnergy,ener=>EnergyGrid_I, &
