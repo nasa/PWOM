@@ -102,7 +102,6 @@ rundir:
 			ln -s ${BINDIR}/PWOM.exe .; \
 			cp ${MYDIR}/input/${PLANET}/${PARAMIN} PARAM.in; \
 			touch core ; chmod 444 core ; \
-			ln -s PW/* .; \
 	fi)
 
 
