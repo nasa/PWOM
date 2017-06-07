@@ -230,7 +230,7 @@ contains
        SZA=acos(cos(gLat*cDegToRad)*cos(gLon*cDegToRad))
        if (IsVerbose) print *, '***** solar zenith angle, Lat, Lon *****',SZA*cRadToDeg,gLat,gLon
     end select
-    write(*,*) 'SZA ',SZA*cRadToDeg
+    !write(*,*) 'SZA ',SZA*cRadToDeg
     
     !  Set the slant path column densities for O,O2 and N2
     CALL RCOLUM(SZA,Alt_C(1:nAlt), &
