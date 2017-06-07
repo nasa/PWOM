@@ -1276,8 +1276,11 @@ contains
 !                  nPAforInt,2)
              IntMu0=sum(mu0_I(1:nPAforInt)*dmu0_I(1:nPAforInt))
              IntdMu0=sum(dmu0_I(1:nPAforInt))
-             UpOmni_I(iEnergy) = IntdMu0*uFlux_IC(iEnergy,nAlt)/AVMU
-             UpFlux_I(iEnergy) = IntMu0*uFlux_IC(iEnergy,nAlt)/AVMU
+             !recall it is PSD conserved not flux hence the ke/e multiplication
+             UpOmni_I(iEnergy) = (KE_I(iEnergy)/EnergyGrid_I(iEnergy))&
+                  *IntdMu0*uFlux_IC(iEnergy,nAlt)/AVMU
+             UpFlux_I(iEnergy) = (KE_I(iEnergy)/EnergyGrid_I(iEnergy))&
+                  *IntMu0*uFlux_IC(iEnergy,nAlt)/AVMU
 
              !set downward flux due to reflection and PA change
              if(nReflect==nPA) then
@@ -1292,10 +1295,11 @@ contains
                     IntMu0=sum(mu0_I(nPA-nReflect:nPAforInt)&
                          *dmu0_I(nPA-nReflect:nPAforInt))
                     IntdMu0=sum(dmu0_I(nPA-nReflect:nPAforInt))
-                    DnOmni_I(iEnergy) = &
-                         IntdMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
-                    DnFlux_I(iEnergy) = &
-                         IntMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
+                    !recall it is PSD conserved not flux hence the ke/e multiplication
+                    DnOmni_I(iEnergy) = (KE_I(iEnergy)/EnergyGrid_I(iEnergy))&
+                         *IntdMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
+                    DnFlux_I(iEnergy) = (KE_I(iEnergy)/EnergyGrid_I(iEnergy))&
+                         *IntMu0*(uFlux_IC(iEnergy,nAlt)/AVMU)
                  endif
               endif
           endif
