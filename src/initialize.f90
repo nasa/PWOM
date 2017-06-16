@@ -1,7 +1,8 @@
 !  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine PW_initialize
-
+  
+  use ModPlanetConst, ONLY: Planet_, NamePlanet_I
   use ModNumConst, ONLY: cDegToRad
   use ModMpi
   use ModIoUnit, ONLY: io_unit_new,UnitTmp_
@@ -31,6 +32,9 @@ subroutine PW_initialize
   integer:: iYear, iDOY
 
   integer, external :: julianday
+
+  ! AMU in grams
+  real, parameter :: AMUinGrams=1.6606655E-24
   
   !for particles
   real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
@@ -234,7 +238,80 @@ subroutine PW_initialize
   end if
   
 
-  
+  !Set mass of species for each fluid/particle population
+  select case(NamePlanet_I(Planet_))
+  case('EARTH')
+     ! Mass of atomic O in grams
+     Mass_I(Ion1_)=15.994*AMUinGrams
+     ! Mass of atomic H in grams
+     Mass_I(Ion2_)=1.00797*AMUinGrams
+     ! Mass of atomic He in grams
+     Mass_I(Ion3_)=4.0026*AMUinGrams
+     ! Mass of electron in grams
+     Mass_I(Ion4_)=9.109534E-28
+
+     ! Relative mass of atomic O to electron
+     MassElecIon_I(Ion1_)=Mass_I(Ion4_)/Mass_I(Ion1_)
+     ! Relative mass of atomic H to electron
+     MassElecIon_I(Ion2_)=Mass_I(Ion4_)/Mass_I(Ion2_)
+     ! Relative mass of atomic He to electron
+     MassElecIon_I(Ion3_)=Mass_I(Ion4_)/Mass_I(Ion3_)
+     ! kB/m_O
+     RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
+     ! kB/m_H
+     RGAS_I(Ion2_)=RGAS*XAMU/Mass_I(Ion2_)
+     ! kB/m_He
+     RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
+     ! kB/m_e
+     RGAS_I(Ion4_)=RGAS*XAMU/Mass_I(Ion4_)
+  case('JUPITER')
+     ! Mass of atomic H3 in grams
+      Mass_I(Ion1_)=3.0237*AMUinGrams
+      ! Mass of atomic H in grams
+      Mass_I(Ion2_)=1.00797*AMUinGrams
+      ! Mass of H2 in grams
+      Mass_I(Ion3_)=2.0159*AMUinGrams
+      ! Mass of electron in grams
+      Mass_I(nIon)=9.109534E-28
+      ! Relative mass of H3 to electron
+      MassElecIon_I(Ion1_)=Mass_I(nIon)/Mass_I(Ion1_)
+      ! Relative mass of atomic H to electron
+      MassElecIon_I(Ion2_)=Mass_I(nIon)/Mass_I(Ion2_)
+      ! Relative mass of H2 to electron
+      MassElecIon_I(Ion3_)=Mass_I(nIon)/Mass_I(Ion3_)
+      ! kB/m_H3
+      RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
+      ! kB/m_H
+      RGAS_I(Ion2_)=RGAS*XAMU/Mass_I(Ion2_)
+      ! kB/m_H2
+      RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
+      ! kB/m_e
+      RGAS_I(nIon)=RGAS*XAMU/Mass_I(nIon)
+   case('SATURN')
+      ! Mass of atomic H3 in grams
+      Mass_I(Ion1_)=3.0237*AMUinGrams
+      ! Mass of atomic H in grams
+      Mass_I(Ion2_)=1.00797*AMUinGrams
+      ! Mass of H2 in grams
+      Mass_I(Ion3_)=2.0159*AMUinGrams
+      ! Mass of electron in grams
+      Mass_I(nIon)=9.109534E-28
+      ! Relative mass of H3 to electron
+      MassElecIon_I(Ion1_)=Mass_I(nIon)/Mass_I(Ion1_)
+      ! Relative mass of atomic H to electron
+      MassElecIon_I(Ion2_)=Mass_I(nIon)/Mass_I(Ion2_)
+      ! Relative mass of H2 to electron
+      MassElecIon_I(Ion3_)=Mass_I(nIon)/Mass_I(Ion3_)
+      ! kB/m_H3
+      RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
+      ! kB/m_H
+      RGAS_I(Ion2_)=RGAS*XAMU/Mass_I(Ion2_)
+      ! kB/m_H2
+      RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
+      ! kB/m_e
+      RGAS_I(nIon)=RGAS*XAMU/Mass_I(nIon)
+   end select
+      
   if (UseParticles) then
      
      call init_particle(nAltParticles,AltMinParticles,AltMaxParticles,&
@@ -244,11 +321,8 @@ subroutine PW_initialize
      iLineGlobalParticle_I=iLineGlobal
 
      !set altitude index for fluid to particle transition
-     !iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)+1
      iAltParticle=ceiling((AltMinParticles-ALTD(1))/DRBND)
-!     write(*,*) 'AltMinPArticles,AltD(1),DRBND,iAltParticle',AltMinPArticles,AltD(1),DRBND,iAltParticle
-!     write(*,*) 'AltD(iAltParticle)',AltD(iAltParticle)
-!     stop
+
      !for each line restart or 
      !fill the state variables, intially sample the particles 
      !and then bury the line. Each lines particles will be disintered before 
@@ -260,18 +334,17 @@ subroutine PW_initialize
         enddo
      else
         
-        allocate(Density_IC(2,nAlt),Velocity_IC(2,nAlt),Temperature_IC(2,nAlt))
+        allocate(Density_IC(nIon-1,nAlt),Velocity_IC(nIon-1,nAlt),Temperature_IC(nIon-1,nAlt))
         do iLine=1,nLine
-           Density_IC(1,:)=State_CVI(1:nAlt,iRho_I(1),iLine)/(16.*1.66e-24)!Mass_I(1)
-           Density_IC(2,:)=State_CVI(1:nAlt,iRho_I(2),iLine)/(1.66e-24)!Mass_I(2)
-           Velocity_IC(1,:)=State_CVI(1:nAlt,iU_I(1),iLine)
-           Velocity_IC(2,:)=State_CVI(1:nAlt,iU_I(2),iLine)
-           Temperature_IC(1,:)=State_CVI(1:nAlt,iT_I(1),iLine)
-           Temperature_IC(2,:)=State_CVI(1:nAlt,iT_I(2),iLine)        
-           call put_to_particles(nAlt,2,ALTD(1:nAlt), &
+           do iIon=1,nIon-1
+              Density_IC(iIon,:)=State_CVI(1:nAlt,iRho_I(iIon),iLine)/Mass_I(iIon)
+              Velocity_IC(iIon,:)=State_CVI(1:nAlt,iU_I(iIon),iLine)
+              Temperature_IC(iIon,:)=State_CVI(1:nAlt,iT_I(iIon),iLine)
+           enddo
+           call put_to_particles(nAlt,nIon-1,ALTD(1:nAlt), &
                 DoInitAltParticles,Density_IC,Velocity_IC,Temperature_IC)
-           !stop
            call bury_line(iLine)
+           
         enddo
         deallocate(Density_IC,Velocity_IC,Temperature_IC)
      endif

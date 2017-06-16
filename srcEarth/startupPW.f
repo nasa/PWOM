@@ -61,28 +61,8 @@ C Adiabatic index
       GAMMA=5./3.
 C AMU in gramms
       XAMU=1.6606655E-24
-C Mass of atomic O in gramms
-      Mass_I(Ion1_)=15.994*XAMU
-C Mass of atomic H in gramms
-      Mass_I(Ion2_)=1.00797*XAMU
-C Mass of atomic He in gramms
-      Mass_I(Ion3_)=4.0026*XAMU
-C Mass of electron in gramms
-      Mass_I(Ion4_)=9.109534E-28
-C Relative mass of atomic O to electron
-      MassElecIon_I(Ion1_)=Mass_I(Ion4_)/Mass_I(Ion1_)
-C Relative mass of atomic H to electron
-      MassElecIon_I(Ion2_)=Mass_I(Ion4_)/Mass_I(Ion2_)
-C Relative mass of atomic He to electron
-      MassElecIon_I(Ion3_)=Mass_I(Ion4_)/Mass_I(Ion3_)
-C kB/m_O
-      RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
-C kB/m_H
-      RGAS_I(Ion2_)=RGAS*XAMU/Mass_I(Ion2_)
-C kB/m_He
-      RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
-C kB/m_e
-      RGAS_I(Ion4_)=RGAS*XAMU/Mass_I(Ion4_)
+
+
       GMIN1=GAMMA-1.
       GMIN2=GMIN1/2.
       GPL1=GAMMA+1.
