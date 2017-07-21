@@ -99,18 +99,12 @@ Module ModParticle
   
   !particle variables
   real,allocatable :: Mass_I(:)
-  integer, parameter :: O_=1, H_=2, He_=3
+  integer :: O_, H_, He_
   real,allocatable::ReducedMass_II(:,:)
 
   !variable for WPI
   real,allocatable :: Dperp_I(:),Dexp_I(:)
   logical,public :: UseWPI=.false.
-
-  !plot variables for profile (depends on planet)
-  character(len=150):: NameProfilePlotVar
-  integer, allocatable :: iDen_I(:),iVel_I(:),&
-            iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:),iHpar_I(:),iHperp_I(:)
-  integer :: nVarProfile
 
   !should the output associated with particles be verbose
   logical,public :: IsVerboseParticle = .false.
@@ -163,15 +157,21 @@ contains
     !set number of species and mass
     select case(NamePlanet_I(Planet_))
     case('EARTH')
-       nSpecies=2
+       nSpecies=3
+       O_=1
+       H_=2
+       He_=3
+
        allocate(Mass_I(nSpecies))
        Mass_I(O_) = cGramsPerAMU*16.0
        Mass_I(H_) = cGramsPerAMU
+       Mass_I(He_) = cGramsPerAMU*4.0
               
        !Mass_I(He_) = cGramsPerAMU*4.0
        allocate(NameSpecies_I(nSpecies))
        NameSpecies_I(O_)='O_'
        NameSpecies_I(H_)='H_'
+       NameSpecies_I(He_)='He'
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
@@ -184,33 +184,10 @@ contains
        Dperp_I(H_)=5.77e3  !polar cap value
 !       Dperp_I(H_)=4.45e7   !auroral/cusp value
        Dexp_I(H_)=7.95
-       
-       !set plotting variables
-       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
-            //'TOperp[k] HOpar HOperp '&
-            //'nH[cm-3] uH[km/s] pH TH[k] THpar[k] THperp[k] HHpar HHperp g r'
-       !index arrays for location in plotting routine
-       allocate(iDen_I(nSpecies),iVel_I(nSpecies),&
-            iPres_I(nSpecies), iTemp_I(nSpecies),iTpar_I(nSpecies),&
-            iTperp_I(nSpecies), iHpar_I(nSpecies), iHperp_I(nSpecies))
-       iDen_I(O_) =1
-       iVel_I(O_) =2
-       iPres_I(O_)=3
-       iTemp_I(O_)=4
-       iTpar_I(O_)=5
-       iTperp_I(O_)=6
-       iHpar_I(O_)=7
-       iHperp_I(O_)=8
-       
-       iDen_I(H_) =9
-       iVel_I(H_) =10
-       iPres_I(H_)=11
-       iTemp_I(H_)=12
-       iTpar_I(H_)=13
-       iTperp_I(H_)=14
-       iHpar_I(H_)=15
-       iHperp_I(H_)=16
-       nVarProfile=16
+
+       Dperp_I(He_)=0.0  
+       Dexp_I(He_)=7.95
+
     case DEFAULT
        call con_stop('particles not for planet')
     end select
@@ -701,11 +678,13 @@ contains
          *exp(-mass*vel**2/(2.0*cBoltzmannCGS*Temp))
   end function maxwellian
   !=============================================================================
-  ! plot a altitude profile of the integrated moments
-  subroutine plot_profile
+  ! plot a altitude profile of the integrated moments for a given species
+  subroutine plot_profile(iSpecies)
     use ModNumConst, ONLY: cPi,cTwoPi
     use ModPlotFile,   ONLY: save_plot_file
-    integer :: iSpecies,iCell
+    integer, intent(in) :: iSpecies
+    
+    integer :: iCell
     integer :: nParticleInCell
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
@@ -716,7 +695,7 @@ contains
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
     !grid parameters
     integer, parameter :: nDim =1
-    integer :: nVar=1
+
     !plot variables
     character(len=100) :: NamePlot
 
@@ -725,6 +704,16 @@ contains
     character(len=5) :: TypePlot='ascii'
     logical, save :: IsFirstCall=.true.
     logical,allocatable,save :: IsFirstCall_I(:)
+
+    !indices for plots
+    integer, parameter :: iDen_=1,iVel_=2,iPres_=3, iTemp_=4,iTpar_=5,iTperp_=6,&
+         iHpar_=7,iHperp_=8
+    integer, parameter :: nVar = 8
+
+    !name for plot output
+    character(len=150)::NameProfilePlotVar=&
+         'Alt[km] n[cm-3] u[km/s] p T[k] Tpar[k] '&
+         //'Tperp[k] Hpar Hperp g r'
     !---------------------------------------------------------------------------
     if (IsFirstCall) then
        allocate(IsFirstCall_I(nLine))
@@ -732,42 +721,38 @@ contains
        IsFirstCall = .false.
     endif
     
-    nVar=nVarProfile
-    
     allocate(Coord_I(0:nAlt),PlotState_IV(0:nAlt,nVar))    
     do iCell=0,nAlt
        Coord_I(iCell)=Alt_G(iCell)*1e-5
-       do iSpecies=1,nSpecies
-          nParticleInCell=nSortedParticle_II(iSpecies,iCell)
-          if(nParticleInCell==0) then
-             PlotState_IV(iCell,iDen_I(iSpecies))  = 0.0
-             PlotState_IV(iCell,iVel_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iPres_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTemp_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTpar_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTperp_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iHpar_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iHperp_I(iSpecies)) = 0.0
+       nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+       if(nParticleInCell==0) then
+          PlotState_IV(iCell,iDen_)  = 0.0
+          PlotState_IV(iCell,iVel_) = 0.0
+          PlotState_IV(iCell,iPres_) = 0.0
+          PlotState_IV(iCell,iTemp_) = 0.0
+          PlotState_IV(iCell,iTpar_) = 0.0
+          PlotState_IV(iCell,iTperp_) = 0.0
+          PlotState_IV(iCell,iHpar_) = 0.0
+          PlotState_IV(iCell,iHperp_) = 0.0
+       else
+          ! get moments in cell. note weighted calculation falls apart 
+          ! next to ghost cell so revert to basic calcuation
+          if (iCell<=1 .or. iCell==nAlt) then
+             call calc_moments_cell(iSpecies,iCell,&
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
           else
-             ! get moments in cell. note weighted calculation falls apart 
-             ! next to ghost cell so revert to basic calcuation
-             if (iCell<=1 .or. iCell==nAlt) then
-                call calc_moments_cell(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
-             else
-                call calc_moments_cell_weighted(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
-             endif
-             PlotState_IV(iCell,iDen_I(iSpecies))  = density
-             PlotState_IV(iCell,iVel_I(iSpecies)) = uBulkPar*cCmToKm
-             PlotState_IV(iCell,iPres_I(iSpecies)) = Pressure
-             PlotState_IV(iCell,iTemp_I(iSpecies)) = Temp
-             PlotState_IV(iCell,iTpar_I(iSpecies)) = Tpar
-             PlotState_IV(iCell,iTperp_I(iSpecies)) = Tperp
-             PlotState_IV(iCell,iHpar_I(iSpecies)) = Hpar
-             PlotState_IV(iCell,iHperp_I(iSpecies)) = Hperp
-          end if
-       enddo
+             call calc_moments_cell_weighted(iSpecies,iCell,&
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
+          endif
+          PlotState_IV(iCell,iDen_)  = density
+          PlotState_IV(iCell,iVel_) = uBulkPar*cCmToKm
+          PlotState_IV(iCell,iPres_) = Pressure
+          PlotState_IV(iCell,iTemp_) = Temp
+          PlotState_IV(iCell,iTpar_) = Tpar
+          PlotState_IV(iCell,iTperp_) = Tperp
+          PlotState_IV(iCell,iHpar_) = Hpar
+          PlotState_IV(iCell,iHperp_) = Hperp
+       end if
     end do
     !Plot 
     !write(NamePlot,"(a)") 'Profile.out'
@@ -3205,7 +3190,9 @@ contains
        !plot profile of moments
        if (floor((Time+1.0e-5)/DtSaveProfile) &
             /=floor((Time+1.0e-5-DtMove)/DtSaveProfile) )then 
-          call plot_profile
+          do iSpecies=1,nSpecies
+             call plot_profile(iSpecies)
+          enddo
        endif
 
        !plot DF                                                                 
@@ -3281,7 +3268,7 @@ contains
          TempTmp,TparTmp,TperpTmp
 
 
-    call plot_profile
+    call plot_profile(iSpecies)
   end subroutine test_sample
 
   !============================================================================
@@ -3381,7 +3368,7 @@ contains
     enddo
     
 
-!    call plot_profile
+!    call plot_profile(iSpecies)
   end subroutine test_split_join
 
 
@@ -3482,7 +3469,7 @@ contains
        !plot profile of moments
        if (floor((Time+1.0e-5)/DtSavePlot) &
             /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
-          call plot_profile
+          call plot_profile(iSpecies)
        endif
        
        write(*,*) 'nParticle=',nParticle
