@@ -34,7 +34,7 @@ subroutine polar_wind
   real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
   real,allocatable :: HeatFlux_IC(:,:)
   integer :: iSpecies
-  integer, parameter :: nParticleSpecies=2
+
   real :: ScaleHeight
   logical :: IsCuspOrAurora
   real, parameter :: CuspAuroraPrecipThreshold=0.5
@@ -165,7 +165,7 @@ subroutine polar_wind
            ! fill the particle solution back to fluid array above the boundary. 
            !take the density and  velocity. Set T conserving heatflux. Then 
            !cacluate the pressure
-           do iSpecies=1,nParticleSpecies
+           do iSpecies=1,nIon-1
               State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies))=&
                    Density_IC(iSpecies,iAltParticle+1)*Mass_I(iSpecies)
               State_GV(iAltParticle+1:iAltParticle+2,iU_I(iSpecies))=&
