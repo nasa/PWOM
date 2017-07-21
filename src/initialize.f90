@@ -8,7 +8,8 @@ subroutine PW_initialize
   use ModIoUnit, ONLY: io_unit_new,UnitTmp_
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
-  use ModCommonVariables, ONLY:IYD,ALTD,Mass_I,DRBND
+  use ModCommonVariables, ONLY:IYD,ALTD,Mass_I,DRBND,MassElecIon_I,Rgas_I,XAMU,&
+       RGAS,Ion1_,Ion2_,Ion3_,Ion4_,nIon
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora

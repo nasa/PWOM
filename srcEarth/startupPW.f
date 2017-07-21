@@ -55,12 +55,6 @@ C           GAS CONSTANT (RGAS) AND THE SPECIFIC HEAT RATIO (GAMMA)    C
 C                                                                      C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
-C Gas constant = k_Boltzmann/AMU
-      RGAS=8.314E7
-C Adiabatic index
-      GAMMA=5./3.
-C AMU in gramms
-      XAMU=1.6606655E-24
 
 
       GMIN1=GAMMA-1.

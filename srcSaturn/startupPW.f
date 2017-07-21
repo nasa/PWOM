@@ -29,12 +29,6 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
 
 CALEX not I use O for H3 and he for H2
-C Gas constant = k_Boltzmann/AMU
-      RGAS=8.314E7
-C Adiabatic index
-      GAMMA=5./3.
-C AMU in gramms
-      XAMU=1.6606655E-24
 
       GMIN1=GAMMA-1.
       GMIN2=GMIN1/2.
