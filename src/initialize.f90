@@ -9,7 +9,7 @@ subroutine PW_initialize
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
   use ModCommonVariables, ONLY:IYD,ALTD,Mass_I,DRBND,MassElecIon_I,Rgas_I,XAMU,&
-       RGAS,Ion1_,Ion2_,Ion3_,Ion4_,nIon
+       RGAS,Ion1_,Ion2_,Ion3_,nIon
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora
@@ -249,14 +249,14 @@ subroutine PW_initialize
      ! Mass of atomic He in grams
      Mass_I(Ion3_)=4.0026*AMUinGrams
      ! Mass of electron in grams
-     Mass_I(Ion4_)=9.109534E-28
+     Mass_I(nIon)=9.109534E-28
 
      ! Relative mass of atomic O to electron
-     MassElecIon_I(Ion1_)=Mass_I(Ion4_)/Mass_I(Ion1_)
+     MassElecIon_I(Ion1_)=Mass_I(nIon)/Mass_I(Ion1_)
      ! Relative mass of atomic H to electron
-     MassElecIon_I(Ion2_)=Mass_I(Ion4_)/Mass_I(Ion2_)
+     MassElecIon_I(Ion2_)=Mass_I(nIon)/Mass_I(Ion2_)
      ! Relative mass of atomic He to electron
-     MassElecIon_I(Ion3_)=Mass_I(Ion4_)/Mass_I(Ion3_)
+     MassElecIon_I(Ion3_)=Mass_I(nIon)/Mass_I(Ion3_)
      ! kB/m_O
      RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
      ! kB/m_H
@@ -264,7 +264,7 @@ subroutine PW_initialize
      ! kB/m_He
      RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
      ! kB/m_e
-     RGAS_I(Ion4_)=RGAS*XAMU/Mass_I(Ion4_)
+     RGAS_I(nIon)=RGAS*XAMU/Mass_I(nIon)
   case('JUPITER')
      ! Mass of atomic H3 in grams
       Mass_I(Ion1_)=3.0237*AMUinGrams
