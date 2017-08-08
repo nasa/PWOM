@@ -18,7 +18,9 @@ subroutine PW_set_parameters(NameAction)
        DoCoupleSE, UseFeedbackFromSE,IsVerboseSE,DtGetSe
   use ModOvation, ONLY: UseOvation,DoPlotOvation,OvationEmin,OvationEmax,&
        DoPlotOvation
-  use ModParticle,ONLY: UseWPI,IsVerboseParticle
+  use ModParticle,ONLY: UseWPI,IsVerboseParticle, TypeWPI, FracLeftHand, &
+       SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
+       SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap
 
   implicit none
   
@@ -254,6 +256,21 @@ subroutine PW_set_parameters(NameAction)
         call read_var('UseWPI', UseWPI)
         call read_var('IsVerboseParticle', IsVerboseParticle)
         
+     case('#WPI')
+        call read_var('TypeWPI',  TypeWPI)
+        call read_var('FracLeftHand',  FracLeftHand)
+        call read_var('SpectralIndexAur',  SpectralIndexAur)
+        call read_var('rWaveRefAur', rWaveRefAur)
+        call read_var('E2WaveRefAur',  E2WaveRefAur)
+        call read_var('fWaveRefAur', fWaveRefAur)
+        call read_var('SpectralIndexCap',  SpectralIndexCap)
+        call read_var('rWaveRefCap', rWaveRefCap)
+        call read_var('E2WaveRefCap',  E2WaveRefCap)
+        call read_var('fWaveRefCap', fWaveRefCap)
+
+        
+
+
      endselect
   enddo
   
