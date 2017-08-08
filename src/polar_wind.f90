@@ -152,7 +152,7 @@ subroutine polar_wind
 
         !advance the particle solution to the next coupling time
         if(IsVerboseParticle) write(*,*) 'calling run_particles'
-        call run_particles(DtCoupleParticles,IsCuspOrAurora)
+        call run_particles(DtCoupleParticles,IsCuspOrAurora,SmLat)
         if(IsVerboseParticle) write(*,*) 'done run_particles'
 
         
