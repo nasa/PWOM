@@ -1381,6 +1381,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE STRT1
       use ModCommonVariables
       use ModPWOM,ONLY: IsRestart
+      use CON_planet,  ONLY: IsPlanetModified, RotAxisTheta, RotAxisPhi
+      use ModNumConst, ONLY: cDegToRad, cRadToDeg
 C     
 C     
 C     
@@ -1393,9 +1395,23 @@ C      PHIHE=1.30E-7
       PHIHE=3.87E-8
       !PHIHE=3.87E-12
 
-      !kludge remove He       
-      !PHIHE=1e-4*PHIHE
+      ! Set He production to depend on SZA
+      if (IsPlanetModified) then
+         if (RotAxisTheta == 0.0 .and. RotAxisPhi == 0.0) then
+            !IDEALAXES are set. Use SmLat and SmLon to set sza
+            SZA=acos(cos(SmLat*cDegToRad)*cos(SmLon*cDegToRad))*cRadToDeg
+         else
+            !ERROR, planet modified but not IDEALAXES
+            call con_stop()
+         endif
+      else
+         ! Standard situation: Real axes
+         CALL SOLZEN (IYD, SEC, GLAT, GLONG, SZA)
+      endif
+      PHIHE = PHIHE * cos(min(SZA,88.0)*cDegToRad)
+      !write(*,*)' PhiHe,SZA', PhiHe,SZA
 C     
+      
 C     C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     C
