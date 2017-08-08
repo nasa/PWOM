@@ -99,13 +99,26 @@ Module ModParticle
   
   !particle variables
   real,allocatable :: Mass_I(:)
-  integer :: O_, H_, He_
+  integer :: O_, H_, He_,H3_,H2_
   real,allocatable::ReducedMass_II(:,:)
 
   !variable for WPI
   real,allocatable :: Dperp_I(:),Dexp_I(:)
   logical,public :: UseWPI=.false.
+  character(len=100),public :: TypeWPI='Barakat'
+  real,public :: FracLeftHand=0.125
+  
+  real,public :: SpectralIndexAur=1.7
+  real,public :: rWaveRefAur=7375e5
+  real,public :: E2waveRefAur=1.2e-6 !V^2 m^-2 Hz^-1
+  real,public :: fWaveRefAur=5.6    !Hz
 
+  real,public :: SpectralIndexCap=1.7
+  real,public :: rWaveRefCap=7375e5
+  real,public :: E2waveRefCap=1.2e-6 !V^2 m^-2 Hz^-1
+  real,public :: fWaveRefCap=5.6    !Hz
+
+  
   !should the output associated with particles be verbose
   logical,public :: IsVerboseParticle = .false.
 
@@ -163,9 +176,9 @@ contains
        He_=3
 
        allocate(Mass_I(nSpecies))
-       Mass_I(O_) = cGramsPerAMU*16.0
-       Mass_I(H_) = cGramsPerAMU
-       Mass_I(He_) = cGramsPerAMU*4.0
+       Mass_I(O_) = cGramsPerAMU*15.994
+       Mass_I(H_) = cGramsPerAMU*1.00797
+       Mass_I(He_) = cGramsPerAMU*4.0026
               
        !Mass_I(He_) = cGramsPerAMU*4.0
        allocate(NameSpecies_I(nSpecies))
@@ -183,17 +196,34 @@ contains
        !set WPI variables
        allocate(Dperp_I(nSpecies))
        allocate(Dexp_I(nSpecies))
-       
-       Dperp_I(O_)=9.55e2  !polar cap value
-!       Dperp_I(O_)=6.94e5   !auroral/cusp value
-       Dexp_I(O_)=13.3
-       
-       Dperp_I(H_)=5.77e3  !polar cap value
-!       Dperp_I(H_)=4.45e7   !auroral/cusp value
-       Dexp_I(H_)=7.95
+    case('JUPITER')
+       nSpecies=3
+       H3_=1
+       H_=2
+       H2_=3
 
-       Dperp_I(He_)=0.0  
-       Dexp_I(He_)=7.95
+       allocate(Mass_I(nSpecies))
+       Mass_I(H3_) = cGramsPerAMU*3.0237
+       Mass_I(H_) = cGramsPerAMU*1.00797
+       Mass_I(H2_) = cGramsPerAMU*2.0159
+              
+       !Mass_I(He_) = cGramsPerAMU*4.0
+       allocate(NameSpecies_I(nSpecies))
+       NameSpecies_I(H3_)='H3'
+       NameSpecies_I(H_)='H_'
+       NameSpecies_I(H2_)='H2'
+
+       !init the target particle per cell numbers
+       allocate(nParticlePerCell_I(nSpecies))
+       nParticlePerCell_I(H3_)=5000
+       nParticlePerCell_I(H_)=5000
+       nParticlePerCell_I(H2_)=5000
+
+       
+       !set WPI variables
+       allocate(Dperp_I(nSpecies))
+       allocate(Dexp_I(nSpecies))
+       
 
     case DEFAULT
        call con_stop('particles not for planet')
@@ -1967,9 +1997,10 @@ contains
   
   !=============================================================================
   ! 
-  subroutine apply_wave_particle_interaction
+  subroutine apply_wave_particle_interaction(rWaveRef)
     use ModPlanetConst, ONLY: Planet_,rPlanet_I
     use ModNumConst, ONLY: cTwoPi
+    real, intent(in):: rWaveRef
     real :: rPlanetCM, rCoord, Dperp,variance
     integer :: iSpecies, iParticle
     real :: vpar, vperp,vmag,dVx,dVy,theta,phi,Velx,Vely
@@ -2003,7 +2034,7 @@ contains
        vmag =sqrt(vpar**2+vperp**2)
 
        rCoord=rPlanetCM+Particles_I(iParticle)%Alt
-       Dperp=Dperp_I(iSpecies)*(rCoord/rPlanetCM)**Dexp_I(iSpecies)
+       Dperp=Dperp_I(iSpecies)*(rCoord/rWaveRef)**Dexp_I(iSpecies)
        variance=2*Dperp*DtMove
        dVx=sqrt(-2.0*variance*log(RandNum1_I(iParticle)))&
             *cos(cTwoPi*RandNum2_I(iParticle))
@@ -3080,14 +3111,19 @@ contains
   end subroutine put_to_particles
   !============================================================================
   ! advance the particle solution for some DtAdvance
-  subroutine run_particles(DtAdvance,IsCuspOrAurora)
-    real, intent(in) :: DtAdvance
+  subroutine run_particles(DtAdvance,IsCuspOrAurora,SmLat)
+    use ModConst,           ONLY: cElectronCharge
+    use ModPlanetConst,     ONLY: Planet_, NamePlanet_I, rPlanet_I  
+    real, intent(in) :: DtAdvance,SmLat
     logical, intent(in) :: IsCuspOrAurora
 
     integer :: iAlt, iSpecies, jSpecies, nTime,iTime,iAltPlot,iCollide
     integer, parameter :: iAltBC=0
     real :: TimeAdvance
+    real :: WaveCoef, fci, SpectralIndex, E2waveRef,fWaveRef, rWaveRef
     character(len=100):: TypeGrid
+
+    real,parameter :: cGtoKg = 1.0e-3, cMtoCm=1e2
     !---------------------------------------------------------------------------
     
     TimeAdvance=0.0
@@ -3163,16 +3199,61 @@ contains
        !apply the WPI
        if (UseWPI) then
           !set appropriate WPI coefficients
-          if(IsCuspOrAurora) then
-             Dperp_I(O_)=6.94e5   !auroral/cusp value
-             Dperp_I(H_)=4.45e7   !auroral/cusp value
-          else
-             Dperp_I(O_)=9.55e2  !polar cap value
-             Dperp_I(H_)=5.77e3  !polar cap value
-          endif
+          select case(TypeWPI)
+          case('Barakat')
+             !Uses the coeficients published by Barghouthi 1997 and used in
+             !Barakat and Schunk 2001
+             !from DE data survey. This is only valid for Earth
+             if(IsCuspOrAurora) then
+                Dperp_I(O_)=6.94e5   !auroral/cusp value
+                Dexp_I(O_)=13.3
+                
+                Dperp_I(H_)=4.45e7   !auroral/cusp value
+                Dexp_I(H_)=7.95
 
+                Dperp_I(He_)=0.0  
+                Dexp_I(He_)=7.95
+             else
+                Dperp_I(O_)=9.55e2  !polar cap value
+                Dexp_I(O_)=13.3
+                
+                Dperp_I(H_)=5.77e3  !polar cap value
+                Dexp_I(H_)=7.95
+
+                Dperp_I(He_)=0.0  
+                Dexp_I(He_)=7.95
+             endif
+             rWaveRef= rPlanet_I(Planet_)*cMtoCm
+          case('General')
+             ! uses approach described by Crew et al. [1990], as well as
+             ! Retterer et al [1987],...
+
+             if(IsCuspOrAurora) then
+                SpectralIndex=SpectralIndexAur
+                E2waveRef    = E2waveRefAur
+                fWaveRef     = fWaveRefAur
+                rWaveRef   = rWaveRefAur
+             else
+                SpectralIndex=SpectralIndexCap
+                E2waveRef    = E2waveRefCap
+                fWaveRef     = fWaveRefCap
+                rWaveRef   = rWaveRefCap
+             endif
+             
+             WaveCoef = E2waveRef*fWaveRef**SpectralIndex
+             do iSpecies=1,nSpecies
+                call get_fci(rWaveRef, iSpecies,SmLat, fci)
+                Dperp_I(iSpecies) = &
+                     (FracLeftHand*cElectronCharge**2)&
+                     /(4.0*Mass_I(iSpecies)*cGtoKg) &
+                     * WaveCoef*fci**(-SpectralIndex)*(cMtoCm**2)
+                Dexp_I(iSpecies) = 3.0*SpectralIndex
+             enddo
+             
+          end select
+             
           call timing_start('apply_wave_particle_interaction')
-          call apply_wave_particle_interaction
+          call apply_wave_particle_interaction(rWaveRef)
           call timing_stop('apply_wave_particle_interaction')
        endif
 
@@ -3216,6 +3297,45 @@ contains
     
     
   end subroutine run_particles
+
+  !============================================================================
+  ! calculate the ion cyclotron frequency in hertz
+  subroutine get_fci(AltRef, iIon,SmLat, fci)
+    use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I
+    use ModNumConst,        ONLY: cDegToRad
+    use ModConst,           ONLY: cElectronCharge
+    real, intent(in):: AltRef !incomming reference alt [cm]
+    real, intent(in):: SmLat !Lat in SM at foot of field line [degrees]
+    integer, intent(in):: iIon !index of ion species
+    real, intent(out)   :: fci
+
+    real  :: B0ref
+    
+    real, parameter :: cCmToM=1.0e-2, cGtoKg=1.0e-3
+    real    :: Lshell, rPlanet, dipmom, Lat
+    real    :: rRef ! reference radius
+    !--------------------------------------------------------------------------
+    
+    rPlanet = rPlanet_I(Earth_)                            ! planet's radius (m)
+    dipmom  = abs(DipoleStrengthPlanet_I(Earth_)*rPlanet**3)  ! planet's dipole 
+    
+    !set the reference radius
+    rRef = rPlanet+AltRef*cCmToM
+    ! find corresponding l-shell
+    Lshell = 1.0/(cos(SmLat*cDegToRad))**2.0
+    
+    ! find corresponding latitude for location on l-shell
+    Lat = acos(sqrt(rRef*cCmToM/(Lshell*rPlanet)))
+    
+    ! get the magnetic field of the reference altitude
+    B0ref = &
+         dipmom*sqrt(1+3.0*(sin(Lat))**2.0)/(rRef)**3.0
+
+    !calculate the gyro freq, fci
+    fci = cElectronCharge/(Mass_I(iIon)*cGtoKg)*B0ref
+    
+  end subroutine get_fci
+
   !============================================================================
   ! unit test subroutine for sampling
   subroutine test_sample
@@ -3743,7 +3863,7 @@ contains
     !push the guiding center 100 times and reinitialize ghost cell each time
     do iTime=1,nTime
        call timing_start('apply_wpi')
-       call apply_wave_particle_interaction
+       call apply_wave_particle_interaction(6375.0e5)
        call timing_stop('apply_wpi')
        
        !advance the time
