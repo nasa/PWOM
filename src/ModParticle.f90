@@ -116,8 +116,8 @@ Module ModParticle
   integer :: iSeed = 1
   
   ! use a fixed number of particles per cell
-  integer :: nParticlePerCell_I(2)=(/20000,3000/)
-  !integer :: nParticlePerCell_I(2)=(/3000,3000/)
+  integer, allocatable :: nParticlePerCell_I(:)
+
 
 
   real, parameter :: cBoltzmannCGS = 1.3807E-16
@@ -172,6 +172,13 @@ contains
        NameSpecies_I(O_)='O_'
        NameSpecies_I(H_)='H_'
        NameSpecies_I(He_)='He'
+
+       !init the target particle per cell numbers
+       allocate(nParticlePerCell_I(nSpecies))
+       nParticlePerCell_I(O_)=20000
+       nParticlePerCell_I(H_)=3000
+       nParticlePerCell_I(He_)=1000
+
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
@@ -3077,7 +3084,7 @@ contains
     real, intent(in) :: DtAdvance
     logical, intent(in) :: IsCuspOrAurora
 
-    integer :: iAlt, iSpecies,nTime,iTime,iAltPlot,iCollide
+    integer :: iAlt, iSpecies, jSpecies, nTime,iTime,iAltPlot,iCollide
     integer, parameter :: iAltBC=0
     real :: TimeAdvance
     character(len=100):: TypeGrid
@@ -3143,16 +3150,16 @@ contains
           if (iAlt==nAlt-1) exit
           !write(*,*) 'iAlt',iAlt
           do iCollide=1,nCollide
-             call timing_start('apply_coulomb_collision')
-             !          !self collisions
-             call apply_coulomb_collision(iAlt,1,1)
-             call apply_coulomb_collision(iAlt,2,2)
-             !          !interspecies collisions
-             call apply_coulomb_collision(iAlt,1,2)
-             call timing_stop('apply_coulomb_collision')
+             do iSpecies=1,nSpecies
+                do jSpecies=iSpecies,nSpecies
+                   call timing_start('apply_coulomb_collision')
+                   call apply_coulomb_collision(iAlt,iSpecies,jSpecies)
+                   call timing_stop('apply_coulomb_collision')
+                enddo
+             enddo
           enddo
        enddo
-
+       
        !apply the WPI
        if (UseWPI) then
           !set appropriate WPI coefficients
