@@ -688,6 +688,155 @@ contains
     !deallocate to save memory
     deallocate(NewParticle_I)
   end subroutine sample_maxwellian_cell_boxmuller
+  !=============================================================================
+  ! sample maxwellian in cell
+  subroutine sample_maxwellian_cell_boxmuller_overtail(iCell,iSpecies,Density,uBulk,Temperature)
+    use ModNumConst, ONLY: cPi,cTwoPi
+    ! index of cell to sample
+    integer,intent(in):: iCell
+
+    ! Species to Sample
+    integer,intent(in):: iSpecies
+    
+    ! parameters of maxwellian for sampling
+    real, intent(in) :: density ![cm-3]
+    real, intent(in) :: uBulk ![cm/s]
+    real, intent(in) :: Temperature ![k]
+    
+    real :: RandNum1,RandNum2
+    real :: uTherm,uMax,uMin,uRange, uRand, uMostProb,RandNum, PitchAngle
+    real :: uMagRel, uPar,uPerp
+    real :: fmax, ftemp
+    !variable to hold new particle info before inserting it to particles array
+    type(particle),allocatable :: NewParticle_I(:)
+    integer :: nNew,iParticle, iParticleOld
+    logical :: DoTest=.true.
+
+    !variables for renormalization
+    real :: NumSimParticle, NumTrueParticle
+    
+    real,parameter :: KeepProb=1./8.
+!        real,parameter :: KeepProb=1./1000.
+    !variables for assignment of particles
+    type(particle),allocatable ::ParticlesOld_I(:)
+    integer :: nParticleOld,nAvail,i,j
+    real :: NumPerParticle
+    integer,allocatable :: IndexAvail_I(:)
+    !--------------------------------------------------------------------------
+    nNew=nParticlePerCell_I(iSpecies)
+
+    ! Find number of particles represented by a macro particle by !
+    !taking Ntrue=density*volume and dividing by nParticlesPerCell
+    NumPerParticle=Density * Volume_G(iCell)/real(nNew)
+    !write(*,*) nNew
+
+    uTherm=sqrt(8.0*cBoltzmannCGS*Temperature/Mass_I(iSpecies)/cPi)
+    
+    ! allocate array to hold new particles
+    allocate(NewParticle_I(nNew))
+   
+    !loop until nNew Particles are sampled
+    iParticle=1
+    sample_loop: do while (iParticle<=nNew)
+       
+       ! randomly choose velocity in range
+       RandNum1=random_real(iSeed)
+       RandNum2=random_real(iSeed)
+
+       uPar=uBulk+sqrt(-2.0*(cBoltzmannCGS/Mass_I(iSpecies))*Temperature*log(RandNum1))*cos(cTwoPi*RandNum2)
+       uPerp=sqrt(-2.0*(cBoltzmannCGS/Mass_I(iSpecies))*Temperature*log(RandNum1))*sin(cTwoPi*RandNum2)
+
+       !if particle speed is less than utherm then check if we should keep
+       !so we can oversample tail
+       if ((uPar-uBulk)**2+uPerp**2 < uTherm**2) then
+          RandNum=random_real(iSeed)
+          if (RandNum > KeepProb) then
+             cycle sample_loop
+          endif
+          NewParticle_I(iParticle)%NumPerParticle=NumPerParticle/KeepProb
+       else
+          !part of tail
+          NewParticle_I(iParticle)%NumPerParticle=NumPerParticle!*KeepProb
+       endif
+          
+       NewParticle_I(iParticle)%vpar =uPar
+       NewParticle_I(iParticle)%vperp=abs(uPerp)
+       
+       !randomly place particle in cell
+       RandNum=random_real(iSeed)
+       NewParticle_I(iParticle)%Alt=RandNum*dAlt_G(iCell)+AltBot_F(iCell)
+       
+       !assign remaining particle properties
+       NewParticle_I(iParticle)%iSpecies=iSpecies
+       NewParticle_I(iParticle)%iCell=iCell
+       NewParticle_I(iParticle)%IsOpen=.false.
+       
+       
+
+       !increment particle counter
+       iParticle=iParticle+1
+    end do sample_loop
+
+    !Since we are overweighting the tail of the distribution we must
+    !renormalize the weigths so we have the correct density
+    NumTrueParticle=Density * Volume_G(iCell)
+    NumSimParticle=sum(NewParticle_I(:)%NumPerParticle)
+    NewParticle_I(:)%NumPerParticle= (NumTrueParticle/NumSimParticle)&
+         *NewParticle_I(:)%NumPerParticle
+    
+    
+!    write(*,*) 'nNew',nNew
+!    if(DoTest) then 
+!       call plot_distribution_cell(iSpecies,iCell,nNew,NewParticle_I)
+!       return
+!    endif
+
+    ! Now newly sampled particles need to be put into main particle array
+    !on the first call there is no Particles array allocated so allocate
+    if (.not.allocated(Particles_I))then
+       nParticle=nNew
+       allocate(Particles_I(nParticle))
+       Particles_I=NewParticle_I
+    else
+       ! when Particles_I already allocated (usual case) then calculate the
+       !number of open spots (nAvail) then save Particles_I and allocate a new 
+       !Particles_I array to save the good particles and the newly created ones
+       allocate(IndexAvail_I(nParticle))
+       where(Particles_I%IsOpen)
+          IndexAvail_I=1
+       elsewhere
+          IndexAvail_I=0
+       end where
+       nAvail=sum(IndexAvail_I)
+       deallocate(IndexAvail_I)
+       
+       !save old particle array information
+       nParticleOld=nParticle
+       allocate(ParticlesOld_I(nParticleOld))
+       ParticlesOld_I=Particles_I
+       deallocate(Particles_I)
+       
+       !allocate new Particles_I array
+       nParticle=nParticleOld-nAvail+nNew
+       allocate(Particles_I(nParticle))
+
+       !now fill new Particle_I array with old particles that are not open and 
+       !the newly created particles
+       iParticle=1
+       do iParticleOld=1,nParticleOld
+          if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
+             Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+             iParticle=iParticle+1
+          endif
+       end do
+       Particles_I(nParticleOld-nAvail+1:nParticle)=NewParticle_I
+
+       deallocate(ParticlesOld_I)
+    endif
+
+    !deallocate to save memory
+    deallocate(NewParticle_I)
+  end subroutine sample_maxwellian_cell_boxmuller_overtail
 
   !=============================================================================
   real function maxwellian(mass,vel,Temp)
@@ -3119,7 +3268,10 @@ contains
           call timing_start('sample_maxwellian_cell_boxmuller')
           call sample_maxwellian_cell_boxmuller(iAltBC,iSpecies,&
                DensityBC_I(iSpecies),VelocityBC_I(iSpecies),&
-               TemperatureBC_I(iSpecies))    
+               TemperatureBC_I(iSpecies))
+!          call sample_maxwellian_cell_boxmuller_overtail(iAltBC,iSpecies,&
+!               DensityBC_I(iSpecies),VelocityBC_I(iSpecies),&
+!               TemperatureBC_I(iSpecies))    
           call timing_stop('sample_maxwellian_cell_boxmuller')
        end do
 
@@ -3235,7 +3387,7 @@ contains
     allocate(iLineGlobal_I(nLine))
     iLineGlobal_I(1)=1
     iLineCurrent=1
-    nParticlePerCell_I(1)=5000
+    nParticlePerCell_I(1)=10000
 
     nAltIn=2
     AltMin=1000.0e5
@@ -3273,7 +3425,10 @@ contains
          TempTmp,TparTmp,TperpTmp,Hpar,Hperp)    
     write(*,*) 'moments',densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
          TempTmp,TparTmp,TperpTmp
-
+    write(*,*) 'Percent Error Density = ', (densityTmp-Density)/Density*100.0
+    write(*,*) 'Percent Error uBulk = ', (uBulkParTmp-uBulk)/uBulk*100.0
+    write(*,*) 'Percent Error Temp = ', (TempTmp-Temperature)/Temperature*100.0
+    
     call calc_moments_cell(iSpecies,iCell,&
          densityTmp,uBulkParTmp,uBulkPerpTmp,PressureTmp,&
          TempTmp,TparTmp,TperpTmp,Hpar,Hperp)    
