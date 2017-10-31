@@ -58,23 +58,20 @@ contains
     real A,B,B1,C,C2
 
     if (NamePlanet_I(Planet_).EQ.'JUPITER') then
-       A = 2.     ! use 1.-2.
-       B = 16.    ! use 16.-20.
-       C = 0.01   ! use 0.01-0.002
+       A = 0.1     ! use 1.-2.
+       B = 13.    ! use 16.-20.
+       C = 0.05   ! use 0.01-0.002
        
-       i0 = A/(60./740.)
-       B1 = B/(60./740.)*2.
-       i1=i0+B1*(B-A)/B
-       C2 = 740
+       C2 = 12.333*60.
+       B1 = B*12.333*2.
+       i1=12.333*(B1/B-1.0/8.)
        i2=i1+C2*(60.-B)/60.
        ! nEnergy = i2 + 0.05/C*50  for jupiter EUV
        ! nEnergy = i2 + 0.05/C*110 for jupiter precip
 
        DO iEnergy=1,nEnergy
-          IF (iEnergy .LE. i0) THEN
-             EnergyGrid_I(iEnergy) = A/real(i0) * REAL(iEnergy)
-          ELSE IF (iEnergy .LE. i1) THEN
-             EnergyGrid_I(iEnergy) = B/real(B1) * REAL(iEnergy-i0+A/(B/B1))
+          IF (iEnergy .LE. i1) THEN
+             EnergyGrid_I(iEnergy) = B/real(B1) * REAL(iEnergy+12.333/8.)
           ELSE IF (iEnergy .LE. i2) THEN
              EnergyGrid_I(iEnergy) = 60./real(C2) * REAL(iEnergy-i1+B/(60./C2))
           ELSE
@@ -144,7 +141,6 @@ contains
        do iAlt = 1,nAlt-120
           Alt_C(120+iAlt) = Alt_C(119+iAlt) + dr*cKmToCm
           dr = dr + iAlt/1280.0
-!          write(*,*) iAlt, Alt_C(120+iAlt), dr
        end do
     else
        Alt_C(1:120) = AltKM_C * cKmToCm
@@ -237,7 +233,8 @@ contains
     use ModPlanetConst, ONLY: Planet_, rPlanet_I, NamePlanet_I
     
     if (NamePlanet_I(Planet_).EQ.'JUPITER') then
-       nEnergy = 1463 ! use 1163 w/o precip; 1463 w/ precip
+       !       nEnergy = 1463 ! use 1163 w/o precip; 1463 w/ precip
+       nEnergy = 992 ! use 932 w/o precip; 992 w/ precip
        nAlt    = 385
        nAltExtended = 480
     else

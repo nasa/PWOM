@@ -1044,7 +1044,8 @@ contains
     case('H')
        call read_diff_ionization_crossection(NameNeutralSpecies,SigDiffI)
  !      SigDiffI(:,:) = 0.0
-
+       Ethreshold = 15.43
+!       Ethreshold = 13.6
    case('CH4')
        call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 13.0

@@ -186,7 +186,9 @@ C                                                                      C
       NDensity_CI(1:nDim,H2O_)= XH2O(1:NDIM)
       NDensity_CI(1:nDim,CH4_)= XCH4(1:NDIM)
 
-
+      !set thermal electron floor
+      eThermalDensMin = 1.0e-2
+      
       !get the SE fluxes from SE first (call here to get Ionization rate
       if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
       if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
@@ -237,10 +239,10 @@ C      READ (5,2) ETOP,ELFXIN
 CALEX I don't know how to fix this heat input for Saturn.
 CALEX In Dee's thesis she says you need electon heat flux to be a minimum
 CALEX of 20E-3 ergs cm^2 /s.      
-C      ETOP=1.0E-3
+C      ETOP=1.0E-3   ! low value
 C      ETOP=20.0E-3   ! original value
-C      ETOP=1.0E-3    ! previously used
-      ETOP=0.0        ! set to zero for SE coupling
+      ETOP=2.0E-3               ! previously used
+c      ETOP=0.0        ! set to zero for SE coupling
       ELFXIN=0.
 C
 C      ELFXIN=9.

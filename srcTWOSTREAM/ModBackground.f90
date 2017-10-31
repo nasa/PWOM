@@ -260,7 +260,7 @@ contains
   
   subroutine plot_background(nStep,time)
     use ModPlanetConst, only: Planet_, NamePlanet_I
-    use ModSeGrid,     ONLY: Alt_C,nAlt,rPlanetCM
+    use ModSeGrid,     ONLY: Alt_C,nAlt,rPlanetCM,iLineGlobal
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
@@ -306,8 +306,8 @@ contains
     enddo
     
     ! set name for plotfile
-!    write(NamePlot,"(a,i4.4,a)") 'background_iLine',iLine,'.out'
-    write(NamePlot,"(a,i4.4,a)") 'background.out'
+    write(NamePlot,"(a,i4.4,a)") 'background_iLine',iLineGlobal,'.out'
+!    write(NamePlot,"(a,i4.4,a)") 'background.out'
     
     !Plot grid for given line. Overwrite old results on firstcall
     if(IsFirstCall) then

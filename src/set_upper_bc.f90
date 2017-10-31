@@ -36,18 +36,31 @@ subroutine PW_set_upper_bc
         State_GV(nDim+1:nDim+2,iT_I(iIon)) = State_GV(nDim,iT_I(iIon))
 
         ! cBoltzmann [cgs] = 1.0e7 * cBoltzmann [SI] 
-        ScaleHeight_I(iIon) =&
-             1.0e7*cBoltzmann*(State_GV(nDim,iT_I(iIon))+State_GV(nDim,Te_))&
-             /(abs(Gravty(nDim))*Mass_I(iIon))
+        !ScaleHeight_I(iIon) =&
+        !     1.0e7*cBoltzmann*(State_GV(nDim,iT_I(iIon))+State_GV(nDim,Te_))&
+        !     /(abs(Gravty(nDim))*Mass_I(iIon))
         
-        State_GV(nDim+1:nDim+2,iP_I(iIon)) = &
-             State_GV(nDim,iP_I(iIon))*exp(-DrBnd/ScaleHeight_I(iIon))
+        !State_GV(nDim+1:nDim+2,iP_I(iIon)) = &
+        !     State_GV(nDim,iP_I(iIon))*exp(-DrBnd/ScaleHeight_I(iIon))
+        
+        !State_GV(nDim+1,iRho_I(iIon)) = &
+        !  State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
+        !State_GV(nDim+2,iRho_I(iIon)) = &
+        !     State_GV(nDim+2,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+2,iT_I(iIon))
         
         State_GV(nDim+1,iRho_I(iIon)) = &
-          State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
+             State_GV(nDim,iRho_I(iIon))*(AR12(nDim)+AR23(nDim))/(AR12top(1)+AR23top(1))
 
         State_GV(nDim+2,iRho_I(iIon)) = &
-             State_GV(nDim+2,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+2,iT_I(iIon))
+             State_GV(nDim+1,iRho_I(iIon))*(AR12top(1)+AR23top(1))/(AR12top(2)+AR23top(2))
+
+        if (State_GV(nDim,iU_I(iIon)).LT.0) then
+           State_GV(nDim+1:nDim+2,iRho_I(iIon)) = &
+                State_GV(nDim+1:nDim+2,iRho_I(iIon))/100.0
+        endif
+        
+        State_GV(nDim+1:nDim+2,iP_I(iIon))=State_GV(nDim+1:nDim+2,iRho_I(iIon)) &
+             * RGAS_I(iIon)* State_GV(nDim+1:nDim+2,iT_I(iIon))
      enddo
   endif
   

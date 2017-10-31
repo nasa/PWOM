@@ -246,7 +246,7 @@ contains
             maxval(EfieldPW_C(:)*cSTATVperCMtoVperM)
     endif
     ! plot background after interp
-!    call plot_background(iLine,1,time)
+    call plot_background(iLine,time)
 !    call con_stop('')     
 
     ! get the potential for the mapping above the 2-stream solution
