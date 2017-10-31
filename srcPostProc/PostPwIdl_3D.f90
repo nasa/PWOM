@@ -1,12 +1,10 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
-!  For more information, see http://csem.engin.umich.edu/tools/swmf
-
 program PostPwIdl
   
   ! Read PW lines and create 2D altitude slices
 
   use ModPlotFile, ONLY: save_plot_file, read_plot_file
   use ModNumConst, ONLY: cDegToRad,cPi
+  use ModTriangulateSpherical,ONLY:trmesh, trplot, find_triangle_sph,trprnt
   implicit none
 
   ! This is copied from ModKind, because PostIDL.exe may be compiled with
@@ -16,18 +14,44 @@ program PostPwIdl
   integer, parameter :: nByteReal = 4 + (1.00000000041 - 1.0)*10000000000.0
   
   integer, parameter :: UnitTmp_=99, nDimIn = 1, nDimOut = 2
-  integer, parameter :: z_=1, Lat_=1, Lon_=2
-  character(len=20) ::  TypePlot='ascii'
-!  character(len=20) ::  TypePlot='real8'
+  integer, parameter :: x_=1,y_=2,z_=3, Lat_=1, Lon_=2
+!  character(len=20) ::  TypePlot='ascii'
+  character(len=20) ::  TypePlot='real8'
   real, parameter   :: rEarth=6375.0
   logical, parameter:: UseDipole=.true.
   integer :: nLine, nAltOut, nAlt, nTime, iLine, iTime, nVar, nParam, nStep
   character(len=100), allocatable :: NameFile_I(:)
   character(len=100) :: NameHeader, Type, NameOut, NamePlotVar
   real, allocatable :: PlotState_IV(:,:), PlotState_IIIV(:,:,:,:), &
-                       Coord1_III(:,:,:), Coord2_III(:,:,:), Coord3_III(:,:,:), Coord_I(:),Param_I(:)
+       Coord1_III(:,:,:), Coord2_III(:,:,:), Coord3_III(:,:,:), &
+       Coord_I(:),Param_I(:)
   real :: theta0,theta, phi, Time,L,r
   integer :: iVar,iAlt
+  integer :: iTheta, iPhi, iThetaTmp,iPhiTmp
+  
+  
+  !for triangulation
+  integer, allocatable :: list1_I(:),lptr1_I(:), &
+       lend1_I(:)
+  integer :: iError
+
+  real, allocatable :: CoordXyzPw1_DII(:,:,:)
+  
+  !for interpolation
+  real :: Area1, Area2, Area3, Xyz_D(3)
+  logical :: IsTriangleFound
+  integer ::iNode1, iNode2, iNode3
+  
+  !for output grid
+  real,allocatable :: CoordAltOut_I(:),CoordThetaOut_I(:),CoordPhiOut_I(:)
+  integer,parameter :: nTheta=20, nPhi=180
+  real,allocatable :: PlotStateOut_CV(:,:,:,:),CoordXyzOut_CV(:,:,:,:)
+  real :: dPhi, dTheta
+
+  integer, parameter :: iTimeOut=200
+  
+  !------------------------------------------------------------------------------
+  
   
    ! Read information from STDIN
   read(*,'(a)') TypePlot
@@ -60,7 +84,21 @@ program PostPwIdl
 
   NamePlotVar(1:9) = 'Y X Z Lon'
   
-
+  !set up arrays for triangulation
+  allocate( &
+       CoordXyzPw1_DII(3,nLine,nTime), &
+       list1_I(6*(nLine-2)), &
+       lptr1_I(6*(nLine-2)), &
+       lend1_I(nLine))
+  
+  ! Initialize arrays to zero
+  CoordXyzPw1_DII = 0
+  list1_I = 0
+  lend1_I = 0
+  lptr1_I = 0
+  
+  
+  
   do iLine = 1, nLine
      do iTime=1,nTime 
         write(*,*) NameFile_I(iLine),itime
@@ -91,32 +129,181 @@ program PostPwIdl
            Coord2_III(iTime,iAlt,iLine) =  1.0 * sin(theta0)*cos(phi)
            Coord3_III(iTime,iAlt,iLine) = Coord_I(iAlt)/rEarth
         endif
+
+        !for output time extract triangulation 
+        CoordXyzPw1_DII(x_,iLine,iTime) = sin(theta0)*cos(phi)
+        CoordXyzPw1_DII(y_,iLine,iTime) = sin(theta0)*sin(phi)
+        CoordXyzPw1_DII(z_,iLine,iTime) = cos(theta0)
+        
         !PlotState_IIV(iLine, 1, x_) = 1.0 * sin(theta)*cos(phi)
      enddo
      close(UnitTmp_)
   enddo
+
+  write(*,*) 'Finished data read'
+
+  !fill CoordXyzPw1_DI with field line positions on unit sphere 
   
+  !Construct a triangulation on the unit sphere
+  call trmesh ( nLine, CoordXyzPw1_DII(x_,1:nLine,iTimeOut), &
+         CoordXyzPW1_DII(y_,1:nLine,iTimeOut), CoordXyzPW1_DII(z_,1:nLine,iTimeOut), &
+         list1_I, lptr1_I, lend1_I, iError )
+
+  if ( iError == -2 ) then
+     write(*,*)&
+          ' WARNING: Error in TRMESH, First three nodes are collinear'
+     stop
+  else if ( iError > 0 ) then
+     write(*,*)&
+          ' ERROR: Error in TRMESH, Duplicate nodes encountered'
+     stop
+  end if
+
+!  call trprnt ( nLine, CoordXyzPw1_DII(x_,1:nLine,iTimeOut), &
+!       CoordXyzPW1_DII(y_,1:nLine,iTimeOut), CoordXyzPW1_DII(z_,1:nLine,iTimeOut), 0,&
+!       list1_I, lptr1_I, lend1_I)
+!  
+!  !write out plot of triangulation for test
+!  open ( UnitTmp_, file = 'TestTriangulation.eps' )
+!  call trplot ( UnitTmp_, 7.5, 90.0, 0.0, 30.0, nLine, &
+!       CoordXyzPw1_DII(x_,1:nLine,iTimeOut), &
+!       CoordXyzPw1_DII(y_,1:nLine,iTimeOut), &
+!       CoordXyzPw1_DII(z_,1:nLine,iTimeOut), list1_I, lptr1_I, &
+!       lend1_I, 'test1 triangulation',.true., iError )
+!  close(UnitTmp_)
+  
+  write(*,*) 'Finished triangulation'
+  
+  !setup output grid
+  allocate(CoordAltOut_I(nAlt),CoordThetaOut_I(nTheta),CoordPhiOut_I(nPhi))
+  CoordAltOut_I=Coord_I
+  dTheta = 40.0/nTheta
+  write(*,*)'testa'
+  do iTheta=1,nTheta
+     write(*,*) iTheta
+     CoordThetaOut_I(iTheta) = (dTheta*real(iTheta))*cDegToRad
+  enddo
+  write(*,*)'test1'
+  
+  dPhi = 360.0/nPhi
+  do iPhi=1,nPhi
+     CoordPhiOut_I(iPhi) = dPhi*real(iPhi)*cDegToRad
+  enddo
+
+  allocate(CoordXyzOut_CV(nAlt,nTheta,nPhi,3))
+  !set xyz of output grid
+  do iAlt=1,nAlt
+     do iTheta=1,nTheta
+        do iPhi=1,nPhi
+           r=(rEarth+CoordAltOut_I(iAlt))/rEarth
+           !theta=cPi/2.0 &
+           !     - acos(min(sqrt((r*(sin(CoordThetaOut_I(iTheta)))**2.0)),1.0))
+           theta = CoordThetaOut_I(iTheta)
+           phi=CoordPhiOut_I(iPhi)
+           
+           CoordXyzOut_CV(iAlt,iTheta,iPhi,x_) =  r*sin(theta)*cos(phi)
+           CoordXyzOut_CV(iAlt,iTheta,iPhi,y_) =  r*sin(theta)*sin(phi)
+           CoordXyzOut_CV(iAlt,iTheta,iPhi,z_) =  r*cos(theta)
+        enddo
+     enddo
+  enddo
+  write(*,*) 'Finished Output Grid Creation'
+  
+  !allocate array to hold interpolated output
+  allocate (PlotStateOut_CV(nAlt,nTheta,nPhi,nVar))
+  
+  !loop over output grid and interpolate
+  do iAlt=1,nAlt
+     do iTheta=1,nTheta
+        do iPhi=1,nPhi
+           theta=CoordThetaOut_I(iTheta)
+           phi=CoordPhiOut_I(iPhi)
+           !find xyz on the unit sphere
+           Xyz_D(x_)= sin(theta)*cos(phi)
+           Xyz_D(y_)= sin(theta)*sin(phi)
+           Xyz_D(z_)= cos(theta)
+
+           
+           !Find triangle containing point Xyz_D and get interpolation weights
+           Area1=0
+           Area2=0
+           Area3=0
+           call find_triangle_sph(Xyz_D, nLine, &
+                CoordXyzPw1_DII(:,1:nLine,iTimeOut), &
+                list1_I, lptr1_I, lend1_I, Area1, Area2, Area3, IsTriangleFound,&
+                iNode1,iNode2,iNode3)
+           
+           !interpolation when foundtriangle otherwise set to 0
+           if (IsTriangleFound) then
+              PlotStateOut_CV(iAlt,iTheta,iPhi,:)=&
+                   Area1*PlotState_IIIV(iTimeOut,iNode1, iAlt, :)+ &
+                   Area2*PlotState_IIIV(iTimeOut,iNode2, iAlt, :)+ &
+                   Area3*PlotState_IIIV(iTimeOut,iNode3, iAlt, :)
+           else
+              PlotStateOut_CV(iAlt,iTheta,iPhi,:)=0.0
+           endif
+
+        enddo
+     enddo
+  enddo
+
+    write(*,*) 'Finished interpolation'
   ! write out new plotfile
   
         ! write out coordinates and variables line by line
   
-  do iTime=1,nTime
-     write(NameOut,"(a,i8.8,a)") &
-          'plots/3DPw',iTime,'.dat'
-     open(UnitTmp_, file=NameOut, status='replace')
-     write(UnitTmp_,'(a)') &
-          'VARIABLES = "X", "Y", "Z", "Lat", "Lon", "uO", "uH", "uHe", "ue", "lgnO", "lgnH", '//&
-          '"lgnHe", "lgne", "TO", "TH", "THe", "Te", "MO", "MH", "MHe", "Me", "Ef", "Pe"' 
-     write(UnitTmp_,'(a,i3,a,i3,a,i9,a)') 'Zone I=', 1, ', J=', 1,', K=',nAlt*nLine,', DATAPACKING=POINT'
-     do iLine=1,nLine
-        do iAlt=1,nAlt
-           write(UnitTmp_, "(100es18.10)") &
-              Coord2_III(iTime,iAlt,iLine), Coord1_III(iTime,iAlt,iLine),&
-              Coord3_III(iTime,iAlt,iLine),PlotState_IIIV(iTime,iLine,iAlt,:) 
+  !  do iTime=1,nTime
+  write(NameOut,"(a,i8.8,a)") &
+       'plots/3DPw',iTimeOut,'.dat'
+  open(UnitTmp_, file=NameOut, status='replace')
+  write(UnitTmp_,'(a)') &
+       'VARIABLES = "X [R]", "Y [R]", "Z [R]", "Lat", "Lon", "uO", "uH", "uHe", "ue", "lgnO", "lgnH", '//&
+       '"lgnHe", "lgne", "TO", "TH", "THe", "Te", "MO", "MH", "MHe", "Me", "Ef", "Pe"' 
+  write(UnitTmp_,'(a,i3,a,i3,a,i9,a)') 'Zone I=', nPhi+1, ', J=', nTheta+1,&
+       ', K=',nAlt,', DATAPACKING=POINT'
+  do iAlt=1,nAlt
+     do iTheta=0,nTheta
+        do iPhi=1,nPhi+1
+           if (iPhi==nPhi+1) then
+              if (iTheta==0) then
+                 !write theta and phi ghost cell
+                 iPhiTmp=mod(iPhi+nPhi/2,nPhi)+1
+                 write(UnitTmp_, "(100es18.10)") &
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,x_),&
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,y_),&
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,z_),&
+                      PlotStateOut_CV(iAlt,1,iPhiTmp,:)
+              else
+                 !write only phi ghost cell
+                 write(UnitTmp_, "(100es18.10)") &
+                      CoordXyzOut_CV(iAlt,iTheta,1,x_),&
+                      CoordXyzOut_CV(iAlt,iTheta,1,y_),&
+                      CoordXyzOut_CV(iAlt,iTheta,1,z_),&
+                      PlotStateOut_CV(iAlt,iTheta,1,:)
+              endif
+           else
+              if (iTheta==0) then
+                 !write only theta ghost cell
+                 iPhiTmp=mod(iPhi+nPhi/2,nPhi)+1
+                 write(UnitTmp_, "(100es18.10)") &
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,x_),&
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,y_),&
+                      CoordXyzOut_CV(iAlt,1,iPhiTmp,z_),&
+                      PlotStateOut_CV(iAlt,1,iPhiTmp,:)
+              else
+                 !write regular cells
+                 write(UnitTmp_, "(100es18.10)") &
+                      CoordXyzOut_CV(iAlt,iTheta,iPhi,x_),&
+                      CoordXyzOut_CV(iAlt,iTheta,iPhi,y_),&
+                      CoordXyzOut_CV(iAlt,iTheta,iPhi,z_),&
+                      PlotStateOut_CV(iAlt,iTheta,iPhi,:)
+              endif
+           end if
         end do
      enddo
-     close(UnitTmp_)
   enddo
+  close(UnitTmp_)
+  !enddo
   
  !    case('real8','real4')
  !       write(UnitTmp_)  trim(NameHeader)
