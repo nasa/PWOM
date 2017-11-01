@@ -268,7 +268,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('E2WaveRefCap',  E2WaveRefCap)
         call read_var('fWaveRefCap', fWaveRefCap)
 
-        
+     case('#UPPERBC')
+        call read_var('NameUpperBC',  NameUpperBC)
 
 
      endselect
