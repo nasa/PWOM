@@ -814,7 +814,8 @@ contains
 
  !=============================================================================
   subroutine get_excitation_crossection(NameNeutralSpecies,SigA)
-    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM,IsVerbose
+    use ModSeGrid,only:nEnergy,DeltaE_I,EnergyGrid_I,EnergyMin,BINNUM,IsVerbose,&
+         Emin=>EnergyMin
     
     character(len=*), intent(in) :: NameNeutralSpecies
     real, intent(inout) :: SigA(nEnergy,nEnergy)
@@ -1043,9 +1044,7 @@ contains
        Ebar = 8.3
     case('H')
        call read_diff_ionization_crossection(NameNeutralSpecies,SigDiffI)
- !      SigDiffI(:,:) = 0.0
        Ethreshold = 15.43
-!       Ethreshold = 13.6
    case('CH4')
        call read_total_ionization_crossection(NameNeutralSpecies,SigTotalI)
        Ethreshold = 13.0
@@ -1088,6 +1087,7 @@ contains
        ! ETJ is EnergyGrid_I(iEnergy)
 
        ! Lowest primary energy after collision
+       !write(*,*) iEnergy, EnergyGrid_I(iEnergy), Ethreshold
        NewPrimaryELow = (EnergyGrid_I(iEnergy)-Ethreshold) / 2.
        ! Highest primary energy after collision
        NewPrimaryEHigh = EnergyGrid_I(iEnergy)-Ethreshold
