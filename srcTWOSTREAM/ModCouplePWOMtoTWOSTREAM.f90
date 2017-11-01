@@ -247,7 +247,7 @@ contains
             maxval(EfieldPW_C(:)*cSTATVperCMtoVperM)
     endif
     ! plot background after interp
-    if(NamePlanet_I(Planet_)).EQ.'JUPITER') call plot_background(iLine,time)
+    if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_background(iLine,time)
 !    call con_stop('')     
 
     ! get the potential for the mapping above the 2-stream solution

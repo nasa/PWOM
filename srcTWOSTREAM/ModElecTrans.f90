@@ -214,7 +214,7 @@ contains
     if (.not.allocated(PrecipCombinedPhi_I))&
          allocate(PrecipCombinedPhi_I(NBINS))
     if (UsePrecipitation) then
-       if(NamePlanet_I(Planet_)).EQ.'JUPITER') &
+       if(NamePlanet_I(Planet_).EQ.'JUPITER') &
             write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
        !call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
        call maxt(0.0, PrecipEmean, ENER, DEL,0, PrecipEflux, PrecipEmean, PrecipPhi_I)
@@ -749,7 +749,7 @@ contains
     call calc_integrated_values(AVMU,uFlx,dFlx)
     !call map_flux(AVMU,uFlx)
     call plot_integrated(time)
-    if(NamePlanet_I(Planet_)).EQ.'JUPITER') call plot_integrated_species(time)
+    if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_integrated_species(time)
   END SUBROUTINE ETRANS
   !
   !

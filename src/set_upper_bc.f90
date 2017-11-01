@@ -36,7 +36,7 @@ subroutine PW_set_upper_bc
         State_GV(nDim+1:nDim+2,iT_I(iIon)) = State_GV(nDim,iT_I(iIon))
 
         ! for Earth
-        cBoltzmann [cgs] = 1.0e7 * cBoltzmann [SI] 
+        !cBoltzmann [cgs] = 1.0e7 * cBoltzmann [SI] 
         ScaleHeight_I(iIon) =&
              1.0e7*cBoltzmann*(State_GV(nDim,iT_I(iIon))+State_GV(nDim,Te_))&
              /(abs(Gravty(nDim))*Mass_I(iIon))
