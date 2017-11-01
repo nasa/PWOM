@@ -2929,8 +2929,10 @@ contains
     real, allocatable :: HeatFlux_IC(:,:)
     
     !min values for density and temperature
-    real, parameter :: DensityMin=1e-4 !cm-3
-    real, parameter :: TemperatureMin=100.0 !k
+    !    real, parameter :: DensityMin=1e-4 !cm-3
+    real, parameter :: DensityMin=1e-8 !cm-3
+    !    real, parameter :: TemperatureMin=100.0 !k
+        real, parameter :: TemperatureMin=1.0 !k
 !    logical,parameter :: UseSmooth=.true.
     !---------------------------------------------------------------------------
     
