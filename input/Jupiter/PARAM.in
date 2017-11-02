@@ -1,3 +1,6 @@
+#RESTART
+T		IsRestart
+
 #ROTATION
 F		IsCentrifugal
 
@@ -15,7 +18,7 @@ T		IsPointImplicit
 F		IsPointImplicitAll
 
 #LIMITER
-1.5		LimiterBeta
+1.0		LimiterBeta
 
 #MOTION
 F		IsMoveFluxTube
@@ -24,14 +27,40 @@ F		IsMoveFluxTube
 F		IsUseJr
 
 #VERTICALGRID
+550		nPoints
+0.75e7		DeltaR
+
+VERTICALGRID
 800		nPoints
 0.75e7		DeltaR
 
 #FIELDLINE
-8		nTotalLine
+4		nTotalLine
 
 #STOP
-10.0		Tmax
+2.0		Tmax
 -1		MaxStep
 
+#MSISPARAM
+180.0		F107
+180.0		F107A
+4.0		AP(1)
+4.0		AP(2)
+4.0		AP(3)
+4.0		AP(4)
+4.0		AP(5)
+4.0		AP(6)
+4.0		AP(7)
 
+#SE
+T		DoCoupleSE
+T		UseFeedbackFromSE
+F		IsVerboseSE
+120		DtGetSe
+
+#SETPRECIP
+F		UseFixedPrecip
+0        	PrecipEnergyMin        
+0		PrecipEnergyMax        
+0        	PrecipEnergyMean        
+0        	PrecipEnergyFlux        
