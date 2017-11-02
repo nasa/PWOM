@@ -1122,7 +1122,7 @@ contains
 
   !=============================================================================
   subroutine plot_integrated_species(time)
-    use ModSeGrid,     ONLY: AltExtended_C, nAltExtended, iLineGlobal,DeltaPot_C
+    use ModSeGrid,     ONLY: Alt_C, nAlt, iLineGlobal,DeltaPot_C
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
@@ -1149,15 +1149,15 @@ contains
     logical :: IsFirstCall1=.true.,IsFirstCall2=.true.
     !--------------------------------------------------------------------------
     
-    allocate(Coord_I(nAltExtended),PlotState_IV(nAltExtended,nVar))
+    allocate(Coord_I(nAlt),PlotState_IV(nAlt,nVar))
     
     !    do iLine=1,nLine
     PlotState_IV = 0.0
     Coord_I     = 0.0
     
     !Set values
-    do iAlt=1,nAltExtended
-       Coord_I(iAlt) = AltExtended_C(iAlt)/1e5
+    do iAlt=1,nAlt
+       Coord_I(iAlt) = Alt_C(iAlt)/1e5
        ! set plot state
        PlotState_IV(iAlt,ionrate_)  = TotalIonizationRate_C(iAlt)
        do iSpecies=1,nSpecies
