@@ -64,3 +64,6 @@ F		UseFixedPrecip
 0		PrecipEnergyMax        
 0        	PrecipEnergyMean        
 0        	PrecipEnergyFlux        
+
+#UPPERBC
+FlowVac		NameUpperBC
