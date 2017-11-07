@@ -291,5 +291,7 @@ allclean:
 	@touch ${INSTALLFILES}
 	cd src; make distclean
 	cd srcInterface; make distclean
+	cd srcTWOSTREAM; make distclean
+	cd srcSTET; make distclean
 	cd doc/Tex; make distclean
 	rm -rf Makefile.planet *~ bin
