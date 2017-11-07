@@ -617,7 +617,7 @@ C
 	XE2H=XE2(HEF)
       CALL REGFA1(HEF,HMF2,XE2H,NMF2,0.001,NMF1,XE2,SCHALT,HMF1)
 	IF(.not.SCHALT) GOTO 380
-	  !WRITE(KONSOL,11)
+	  WRITE(KONSOL,11)
 11    FORMAT(1X,'*NE* HMF1 IS NOT EVALUATED BY THE FUNCTION XE2')
 	IREGFA=1
 c
@@ -625,7 +625,7 @@ c change B1 and try again ..........................................
 c
 9244 	IF(B1.GT.4.5) GOTO (7398,8922) IREGFA
 	   	B1=B1+0.5
- 		!WRITE(KONSOL,902) B1-0.5,B1
+ 		WRITE(KONSOL,902) B1-0.5,B1
 902   FORMAT(6X,'CORR.: B1(OLD)=',F4.1,' B1(NEW)=',F4.1)
 		IF(GULB0) then
 			ib1=int(b1*2.-5.)
@@ -635,7 +635,7 @@ c
 c
 c omit F1 feature ....................................................
 c
-7398  if(1<0) WRITE(KONSOL,9269)
+7398  WRITE(KONSOL,9269)
 9269  FORMAT(1X,'CORR.: NO F1 REGION, B1=3, C1=0.0')
       	HMF1=0.
       	NMF1=0.
@@ -678,7 +678,7 @@ C
       CALL REGFA1(h,HF1,XE3H,XF1,0.001,NME,XE3,SCHALT,HST)
 	STR=HST
 	IF(.not.SCHALT) GOTO 360
-3885	if(1<0)WRITE(KONSOL,100)
+3885	WRITE(KONSOL,100)
 100   FORMAT(1X,'*NE* HST IS NOT EVALUATED BY THE FUNCTION XE3')
 	IREGFA=2
 	IF(XXMIN/NME.LT.1.3) GOTO 9244
@@ -691,7 +691,7 @@ c
           RRRR=RRRR+.1
           GOTO 8922
           endif
-        !WRITE(KONSOL,901) HZ,HEF
+        WRITE(KONSOL,901) HZ,HEF
 901   FORMAT(6X,'CORR.: LIN. APP. BETWEEN HZ=',F5.1,
      &          ' AND HEF=',F5.1)
         T=(XNEHZ-NME)/(HZ-HEF)

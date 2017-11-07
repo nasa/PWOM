@@ -1,18 +1,22 @@
-! This command reads the obsolete file format with no coordinate info
-MAGNETOGRAM
-fitsfile.dat		NameFileIn
-T			UseCosTheta
-3500.0			BrMax
-
-! This command reads the new fileformat with coordinates and header
-! Applies optional enhancement of the polar magnetic field with a factor
-!  1 + (PolarFactor-1)*abs(sin(Latitude))^PolarExponent  
+! Provide name of magnetogram file and specify maximum field strength
+! Defaults are "fitsfile.out" and 3500 G
 #MAGNETOGRAMFILE
 dipole11.out		NameFileIn
 3500.0			BrMax
-T			DoChangePolarField
+
+! Apply optional enhancement of the polar magnetic field with a factor
+!  1 + (PolarFactor-1)*abs(sin(Latitude))^PolarExponent  
+#CHANGEPOLARFIELD
 3.0			PolarFactor
 2.0			PolarExponent
+
+! to be implemented !!!
+! The observed magnetic field is increased
+! Br=sign(BrObserved)*min(BrFactor*|BrObserved|, BrMin + |BrObserved|)
+! Default BrFactor = 1.0, BrMin = 0.0 (no change)
+CHANGEWEAKFIELD
+3.75				BrFactor
+5.0				BrMin
 
 ! For a non-default domain size and/or logarithmic radial grid
 #DOMAIN

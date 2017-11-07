@@ -11,16 +11,14 @@ module ModMagHarmonics
   
   ! **********************Choice of this parameter**********************
   ! *Sin(Latitude): WSO : http://wso.stanford.edu                      *
-  ! *   MDI: see http://soi.stanford.edu/magnetic/index6.html          *         
+  ! *   MDI: see http://soi.stanford.edu/magnetic/index6.html          * 
   ! *   SOLIS:http://solis.nso.edu/vsm/map_info.html                   *
-  ! *   GONG: http://gong.nso.edu/data/magmap/index.html               *         
+  ! *   GONG: http://gong.nso.edu/data/magmap/index.html               *
   ! ********************************************************************
-  !
-  !
+
   ! Name of input file
-  character (len=100):: NameFileIn = 'fitsfile.dat'
-  logical:: IsNewMagnetogramStyle = .false.
-  real:: BrMax = 1900.0
+  character (len=100):: NameFileIn = 'fitsfile.out'
+  real:: BrMax = 3500.0
 
   ! Name of output file
   character (len=100):: NameFileOut='harmonics.dat'
@@ -39,8 +37,9 @@ module ModMagHarmonics
   ! * Field in Gauss: MDI,GONG,SOLIS                                   *
   ! * Field in microTesla(0.01Gs): WSO, MWO                            *
   ! ********************************************************************
-  real, allocatable, dimension(:,:) :: g_nm,h_nm, Br_II
-  real:: dR=1.0,dPhi=1.0,dTheta,dSinTheta=1.0
+
+  real, allocatable, dimension(:,:):: g_nm, h_nm, Br_II
+  real:: dR=1.0, dPhi=1.0, dTheta, dSinTheta=1.0
   integer:: nPhi=72, nTheta=29
 
   integer, parameter:: MaxHarmonics = 180
@@ -67,10 +66,16 @@ module ModMagHarmonics
   real:: Sqrt_I(MaxInt)
 
   real, allocatable, dimension(:) :: ChebyshevWeightE_I, ChebyshevWeightW_I
-  !\
-  ! Parameters used to apply the scaling factor to the raw magnetogram
-  !/
-  real:: Scaling4SmallB0 = 1.0, B0Min = 0.0
+
+  ! Parameters used to apply modified scaling to the raw magnetogram
+  real:: BrFactor = 1.0, BrMin = 0.0
+
+  ! Optional enhancement of the polar magnetic field with a factor
+  !  1 + (PolarFactor-1)*abs(sin(Latitude))^PolarExponent
+  logical           :: DoChangePolarField = .false.
+  real              :: PolarFactor = 1.0
+  real              :: PolarExponent = 2.0
+
 contains
   subroutine read_harmonics_param
 
@@ -91,16 +96,19 @@ contains
        case("#HARMONICS")
           call read_var('nHarmonics', nHarmonicsIn)
        case("#MAGNETOGRAMFILE")
-          IsNewMagnetogramStyle = .true.
           call read_var('NameFileIn', NameFileIn)
           call read_var('BrMax',      BrMax)
+       case("#CHANGEPOLARFIELD")
+          DoChangePolarField = .true.
+          call read_var('PolarFactor',   PolarFactor)
+          call read_var('PolarExponent', PolarExponent)
        case("#OUTPUT")
           call read_var('NameFileOut', NameFileOut)
        case("#CHEBYSHEV")
           call read_var('UseChebyshevNode', UseChebyshevNode)
-       case("#SCALINGB0")
-          call read_var('Scaling4SmallB0', Scaling4SmallB0)
-          call read_var('B0Min', B0Min)
+       case("#CHANGEWEAKFIELD")
+          call read_var('BrFactor', BrFactor)
+          call read_var('BrMin', BrMin)
        case default
           call CON_stop(NameSub//': unknown command='//trim(NameCommand))
        end select
@@ -135,87 +143,61 @@ contains
     use ModPlotFile,ONLY: read_plot_file
 
     ! Read the raw magnetogram file into a 2d array
-    
-    integer :: iPhi, iTheta, iUnit, iError
-    character (len=100) :: line
+
+    integer :: iTheta, iError
     real, allocatable:: Phi_I(:), Latitude_I(:)
     real:: Param_I(1)
 
     character(len=*), parameter:: NameSub = 'read_raw_magnetogram'
     !--------------------------------------------------------------------------
-    if(IsNewMagnetogramStyle)then
-       call read_plot_file(NameFileIn, n1Out = nPhi, n2Out = nTheta, &
-            ParamOut_I=Param_I, iErrorOut=iError)
-        
-       if(iError /= 0) call CON_stop(NameSub// &
-            ': could not read header from file'//trim(NameFileIn))
+    call read_plot_file(NameFileIn, n1Out = nPhi, n2Out = nTheta, &
+         ParamOut_I=Param_I, iErrorOut=iError)
 
-       write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, Param_I
+    if(iError /= 0) call CON_stop(NameSub// &
+         ': could not read header from file'//trim(NameFileIn))
 
-       allocate(Phi_I(nPhi), Latitude_I(nTheta), Br_II(0:nPhi-1,0:nTheta-1))
-       
-       call read_plot_file(NameFileIn, &
-            Coord1Out_I=Phi_I, Coord2Out_I=Latitude_I, VarOut_II = Br_II, &
-            iErrorOut=iError)
+    write(*,*)'nTheta, nPhi, LongitudeShift: ', nTheta, nPhi, Param_I
 
-       if(iError /= 0) call CON_stop(NameSub// &
-            ': could not read date from file'//trim(NameFileIn))
+    allocate(Phi_I(nPhi), Latitude_I(nTheta), Br_II(0:nPhi-1,0:nTheta-1))
 
-       ! Check if the theta coordinate is uniform or not
-       UseSinLatitudeGrid = &
-            abs(Latitude_I(3) - 2*Latitude_I(2) + Latitude_I(1)) > 1e-6
+    call read_plot_file(NameFileIn, &
+         Coord1Out_I=Phi_I, Coord2Out_I=Latitude_I, VarOut_II = Br_II, &
+         iErrorOut=iError)
 
-       ! There is no point using Chebyshev transform if the original grid
-       ! is already uniform in theta
-       if(.not.UseSinLatitudeGrid) UseChebyshevNode = .false.
+    if(iError /= 0) call CON_stop(NameSub// &
+         ': could not read date from file'//trim(NameFileIn))
 
-       deallocate(Latitude_I)
-    else
-       iUnit = 9
-       open(iUnit, file=NameFileIn, status='old', iostat=iError)
-    
-       do 
-          read(iUnit,'(a)', iostat = iError ) line
-          if(index(line,'#CR')>0)then
-             read(iUnit,*) CarringtonRotation
-          endif
-          if(index(line,'#nMax')>0)then
-             read(iUnit,*) nHarmonicsIn
-          endif
-          if(index(line,'#ARRAYSIZE')>0)then
-             read(iUnit,*) nPhi
-             read(iUnit,*) nTheta
-          endif
-          if(index(line,'#START')>0) EXIT
+    ! Check if the theta coordinate is uniform or not
+    UseSinLatitudeGrid = &
+         abs(Latitude_I(3) - 2*Latitude_I(2) + Latitude_I(1)) > 1e-6
+
+    ! There is no point using Chebyshev transform if the original grid
+    ! is already uniform in theta
+    if(.not.UseSinLatitudeGrid) UseChebyshevNode = .false.
+
+    ! Apply polar field change if option
+    if(DoChangePolarField)then
+       do iTheta = 0, nTheta-1
+          Br_II(:,iTheta) = Br_II(:,iTheta) &
+               *(1 + (PolarFactor-1) &
+               * abs(sin(cDegToRad*Latitude_I(iTheta+1)))**PolarExponent)
        end do
-
-       write(*,*)'Magnetogram size - Theta,Phi: ',nTheta,nPhi
-
-       ! Allocate the magnetic field array
-       allocate(Br_II(0:nPhi-1,0:nTheta-1))
-    
-       do iTheta = nTheta - 1, 0, -1
-          do iPhi = 0, nPhi - 1
-             read(iUnit,*) Br_II(iPhi,iTheta)
-          end do
-       end do
-       close(iUnit)
     end if
+    deallocate(Latitude_I)
 
-    !\
     ! Apply a scaling factor to small magnetic fields, to compensate
     ! the measurement error for the coronal hole (=very low) field.
-    !/
-    Br_II = sign(min(abs(Br_II) + B0Min, Scaling4SmallB0*abs(Br_II)), Br_II)
-    !\
-    ! For scaling factor = 3.75 and B0Min = 5 [Gs] the observed field of
-    ! 1    Gs, 2 Gs, 20 Gs  will be converted to 
-    ! 3.75 Gs, 7 Gs, 25 Gs  accordingly.
-    !/  
+    !
+    ! For examples for scaling factor = 3.75 and BrMin = 5 G 
+    ! the observed field of
+    ! 1    G, 2 G, 20 G  will be converted to 
+    ! 3.75 G, 7 G, 25 G  accordingly.
+    if(BrMin > 0.0 .or. BrFactor > 1.0) &
+         Br_II = sign(min(abs(Br_II) + BrMin, BrFactor*abs(Br_II)), Br_II)
 
     ! Fix too large values of Br
     where (abs(Br_II) > BrMax) Br_II = sign(BrMax, Br_II)
- 
+
     ! Setting the order on harmonics to be equal to the 
     ! latitudinal resolution.
     if(nHarmonicsIn > 0 .and. nHarmonicsIn < MaxHarmonics)then
@@ -224,11 +206,11 @@ contains
        nHarmonics = min(nTheta, MaxHarmonics)
     endif
     write(*,*)'Order of harmonics: ',nHarmonics
-    
+
     dPhi      = cTwoPi/nPhi
     dTheta    = cPi/nTheta
     dSinTheta = 2.0/nTheta
-    
+
     ! Allocate the harmonic coefficients arrays
     allocate( &
          p_nm(nHarmonics+1,nHarmonics+1), &
@@ -467,7 +449,6 @@ contains
           mArray(iNM+mm)=mm
        enddo
     end do
-
 
     ! Each processor gets part of the array 
     do iNM = 0,SizeOfnm-1

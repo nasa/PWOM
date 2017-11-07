@@ -74,7 +74,7 @@ program post_idl
 
   logical :: IsStructured, DoReadBinary=.false.
   character (len=100) :: NameFile, NameFileHead, NameCoord
-  character (len=500) :: NameVar, NameUnit
+  character (len=lStringLine) :: NameVar, NameUnit
   integer :: l, iProc
 
   ! Variables for the 2D lookup table
@@ -110,6 +110,15 @@ program post_idl
 
   ! Control verbose output
   logical:: IsVerbose = .false.
+
+  ! Tecplot related variables for reading tecplot .dat to save as idl file
+  logical :: DoReadTecplot = .false.
+  integer :: nHeaderTec=0, nNodeTec=0, nCellTec=0
+  integer :: iHeaderTec, iNodeTec, iCellTec, iNeiTec
+  character(len=500) :: StringTecHeader
+  real :: xMinTec, xMaxTec
+  real, allocatable :: XyzTec_DI(:,:), PlotVarTec_VI(:,:)
+  integer, allocatable:: iNodeTec_II(:,:)
   
   character (len=lStringLine) :: NameCommand, StringLine
   !---------------------------------------------------------------------------
@@ -176,6 +185,7 @@ program post_idl
         enddo
 
      case('#PLOTRESOLUTION')
+        CellSizePlot_D = 1
         do i = 1, nDimSim
            call read_var('CellSizePlot', CellSizePlot_D(i))
         enddo
@@ -230,8 +240,14 @@ program post_idl
      case('#ROOTBLOCK', '#GRIDBLOCKSIZE')
         ! Ignore these commands
         
+     case('#TECPLOTCONVERT')
+        call read_var('DoReadTecplot', DoReadTecplot)
+        call read_var('nHeaderTec', nHeaderTec)
+        call read_var('nNodeTec',  nNodeTec)
+        call read_var('nCellTec',  nCellTec)
+
      case default
-        write(*,*) 'WARNING: unknow command ', NameCommand
+        write(*,*) 'WARNING: unknown command ', NameCommand
      end select
 
   enddo READPARAM
@@ -400,36 +416,90 @@ program post_idl
      end if
   end if
 
+  ! Logic for Tecplot conversion
+  if(DoReadTecplot)then
+     l=len_trim(NameFileHead)
+     write(NameFile,'(a)')NameFileHead(1:l-2)//".dat"
+     write(*,*)'reading file=',trim(NameFile),' ...'
+
+     allocate( &
+          XyzTec_DI(3,nNodeTec), &
+          PlotVarTec_VI(nPlotVar,nNodeTec), &
+          iNodeTec_II(8,nCellTec), &
+          STAT=iError)
+     if(iError /= 0) stop 'PostIDL.exe ERROR: could not allocate arrays'
+
+     open(UnitTmp_, file=NameFile, status='old', iostat=iError)
+
+     ! Read Tecplot file header
+     do iHeaderTec = 1, nHeaderTec
+        read(UnitTmp_,*) StringTecHeader
+     end do
+     ! Read the coordinates and variables at the nodes
+     do iNodeTec = 1, nNodeTec
+        read(UnitTmp_,*) XyzTec_DI(:,iNodeTec), PlotVarTec_VI(:,iNodeTec)
+     end do
+     ! Read the node indexes of the nodes surrounding each cell center
+     do iCellTec = 1, nCellTec
+        read(UnitTmp_,*) iNodeTec_II(:,iCellTec)
+     end do
+
+     close(UnitTmp_)
+  end if
+
   ! Collect info from all files and put it into PlotVar_VC and Coord_DC
   VolumeCheck = 0.0
   iCell = 0
   nCellCheck = 0
   l=len_trim(NameFileHead)
   do iProc = 0, nProc-1
-     if(    nProc > 100000)then
-        write(NameFile,'(a,i6.6,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
-     elseif(nProc > 10000)then
-        write(NameFile,'(a,i5.5,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
-     else
-        write(NameFile,'(a,i4.4,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
+     if(.not.DoReadTecplot)then
+        if(    nProc > 100000)then
+           write(NameFile,'(a,i6.6,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
+        elseif(nProc > 10000)then
+           write(NameFile,'(a,i5.5,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
+        else
+           write(NameFile,'(a,i4.4,a)')NameFileHead(1:l-2)//"_pe",iProc,'.idl'
+        end if
+
+        if(iProc==0)write(*,*)'reading files=',trim(NameFile),&
+             '...',nProc-1,'.idl'
+
+        if(DoReadBinary)then
+           open(UnitTmp_, file=NameFile, status='old', form='unformatted', &
+                iostat=iError)
+        else
+           open(UnitTmp_, file=NameFile, status='old', iostat=iError)
+        end if
+
+        ! Assume that missing files were empty. 
+        if(iError /=0) CYCLE
      end if
-
-     if(iProc==0)write(*,*)'reading files=',trim(NameFile),&
-          '...',nProc-1,'.idl'
-
-     if(DoReadBinary)then
-        open(UnitTmp_, file=NameFile, status='old', form='unformatted', &
-             iostat=iError)
-     else
-        open(UnitTmp_, file=NameFile, status='old', iostat=iError)
-     end if
-
-     ! Assume that missing files were empty. 
-     if(iError /=0) CYCLE
 
      ! Read file
      do
-        if(DoReadBinary)then
+        if(DoReadTecplot)then
+           ! Collect information from the Tecplot arrays already read above
+           iCellTec = nCellCheck + 1
+           if(iCellTec > nCellTec) EXIT
+           xMinTec   =  1e30
+           xMaxTec   = -1e30
+           Xyz_D     = 0.
+           PlotVar_V = 0.
+           ! Loop over nodes surrounding the cell center,
+           ! average out the coordinates and the plot variables
+           ! and calculate the cell size (only works for Cartesian)
+           do iNeiTec = 1, 8
+              iNodeTec  = iNodeTec_II(iNeiTec,iCellTec)
+              xMinTec   = min(xMinTec, XyzTec_DI(1,iNodeTec))
+              xMaxTec   = max(xMaxTec, XyzTec_DI(1,iNodeTec))
+              Xyz_D     = Xyz_D + XyzTec_DI(:,iNodeTec)
+              PlotVar_V = PlotVar_V + PlotVarTec_VI(:,iNodeTec)
+           end do
+           CellSize1 = xMaxTec - xMinTec
+           Xyz_D     = Xyz_D/8.
+           PlotVar_V = PlotVar_V/8.
+        else if(DoReadBinary)then
            if(nByteRealRead == 4)then
               read(UnitTmp_,ERR=999,END=999) DxCell4, Xyz4_D, PlotVar4_V
               CellSize1 = DxCell4; Xyz_D = Xyz4_D; PlotVar_V = PlotVar4_V
@@ -518,7 +588,7 @@ program post_idl
 
 999  continue
 
-     close(UnitTmp_)
+     if(.not.DoReadTecplot) close(UnitTmp_)
   end do ! iProc
 
   if(IsVerbose)write(*,*)'nCellCheck=', nCellCheck, &                  

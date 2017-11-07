@@ -5,8 +5,6 @@ include ../../../Makefile.def
 
 include ../../../Makefile.conf
 
-MPIRUN = mpirun -np 2
-
 help:
 	@echo "You can test the following modules in ../src:"
 	@echo
@@ -39,9 +37,9 @@ help:
 	@echo
 	@echo "The parallel tests can be executed like this"
 	@echo
-	@echo "   make MPIRUN='mpirun -np 4' test_line_extract"
+	@echo "   make NP=4 test_line_extract"
 	@echo
-	@echo "The default value for MPIRUN is mpirun -np 2."
+	@echo "The default value for NP is ${NP}."
 
 test:
 	-@make test_axes
@@ -342,7 +340,7 @@ test_ray_trace:
 	@echo test_ray_trace starting		>  test_ray_trace.diff
 	@make test_ray_trace_exe		>> test_ray_trace.diff
 	@echo ./test_ray_trace.exe		>> test_ray_trace.diff
-	-@(./test_ray_trace.exe > test_ray_trace.tmp)
+	-@(${SERIAL} ./test_ray_trace.exe > test_ray_trace.tmp)
 	-@(${SCRIPTDIR}/DiffNum.pl -t test_ray_trace.tmp test_ray_trace.log \
 						>  test_ray_trace.diff)
 	@ls -l test_ray_trace.diff
