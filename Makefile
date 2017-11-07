@@ -115,7 +115,7 @@ test:
 	-@(make test_earth_twostream)
 	-@(make test_jupiter_twostream)
 	-@(make clean)
-	-@(make test_earth_stet)
+
 
 
 
