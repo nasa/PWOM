@@ -42,6 +42,8 @@ module ModPlotFile
   use ModIoUnit,    ONLY: UnitTmp_
   use ModKind,      ONLY: Real4_
   use ModHdf5Utils, ONLY: save_hdf5_file
+  use ModUtilities, ONLY: CON_stop
+
   implicit none
 
   private ! except
@@ -414,13 +416,19 @@ contains
        deallocate(MinimumBlockIjk)
     case('tec')
        call open_file(FILE=NameFile, POSITION=TypePosition, STATUS=TypeStatus)
-       write(UnitTmp_, "(a)", ADVANCE="NO") 'VARIABLES='
-       if(n3 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"K", '
-       if(n2 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"J", '
-       if(n1 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"I", '
        if(StringHeader(1:11)=="VARIABLES =")then
+          write(UnitTmp_, "(a)", ADVANCE="NO") 'VARIABLES='
+          if(n3 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"K", '
+          if(n2 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"J", '
+          if(n1 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"I", '
           write(UnitTmp_, "(a)") StringHeader(12:len_trim(StringHeader))
        else
+          if(present(StringHeaderIn))&
+               write(UnitTmp_, "(a)")'TITLE="'//trim(StringHeader)//'"'
+          write(UnitTmp_, "(a)", ADVANCE="NO") 'VARIABLES='
+          if(n3 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"K", '
+          if(n2 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"J", '
+          if(n1 > 1) write(UnitTmp_, "(a)", ADVANCE="NO") '"I", '
           call join_string(NameVar_I(1:nDim+nVar), NameVar, '", "')
           write(UnitTmp_, "(a)") '"'//trim(NameVar)//'"'
        end if
@@ -679,7 +687,14 @@ contains
                Coord3Out_I(k) = Coord
        end do; end do; end do
     end do
-
+    !Reduce nVar, if some variables are not needed
+    
+    if(present(VarOut_VI))   nVar = min(nVar,size(VarOut_VI  ,1))
+    if(present(VarOut_VII))  nVar = min(nVar,size(VarOut_VII ,1))
+    if(present(VarOut_VIII)) nVar = min(nVar,size(VarOut_VIII,1))
+    if(present(VarOut_IV))   nVar = min(nVar,size(VarOut_IV  ,2))
+    if(present(VarOut_IIV))  nVar = min(nVar,size(VarOut_IIV ,3))
+    if(present(VarOut_IIIV)) nVar = min(nVar,size(VarOut_IIIV,4))
     ! Fill in output variable arrays
     do iVar = 1, nVar
        n = 0

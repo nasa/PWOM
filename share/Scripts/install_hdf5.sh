@@ -206,7 +206,7 @@ export DO_FORTRAN="yes"
 export ON_FORTRAN="on"
 verify="no"
 ON_verify="off"
-export DO_STATIC_BUILD="no"
+export DO_STATIC_BUILD="yes"
 export USE_VISIBILITY_HIDDEN="no"
 export VISIT_INSTALL_PREFIX=""
 export VISIT_BUILD_MODE="Release"
@@ -378,10 +378,10 @@ function download_file
 }
 function bv_szip_info
 {
-export SZIP_FILE=${SZIP_FILE:-"szip-2.1.tar.gz"}
-export SZIP_VERSION=${SZIP_VERSION:-"2.1"}
+export SZIP_FILE=${SZIP_FILE:-"szip-2.1.1.tar.gz"}
+export SZIP_VERSION=${SZIP_VERSION:-"2.1.1"}
 export SZIP_COMPATIBILITY_VERSION=${SZIP_COMPATIBILITY_VERSION:-"2.0"}
-export SZIP_BUILD_DIR=${SZIP_BUILD_DIR:-"szip-2.1"}
+export SZIP_BUILD_DIR=${SZIP_BUILD_DIR:-"szip-2.1.1"}
 export SZIP_URL=${SZIP_URL:-"http://www.hdfgroup.org/ftp/lib-external/szip/${SZIP_VERSION}/src"}
 export SZIP_MD5_CHECKSUM="9cc9125a58b905a4148e4e2fda3fabc6"
 export SZIP_SHA256_CHECKSUM=""
@@ -525,7 +525,7 @@ fi
 
 function bv_hdf5_info
 {
-export HDF5_VERSION=${HDF5_VERSION:-"1.8.17"}
+export HDF5_VERSION=${HDF5_VERSION:-"1.8.13"}
 export HDF5_FILE=${HDF5_FILE:-"hdf5-${HDF5_VERSION}.tar.gz"}
 export HDF5_COMPATIBILITY_VERSION=${HDF5_COMPATIBILITY_VERSION:-"1.8"}
 export HDF5_BUILD_DIR=${HDF5_BUILD_DIR:-"hdf5-${HDF5_VERSION}"}
@@ -580,6 +580,9 @@ function build_hdf5
     perl -pi -e 's/,\s*\&/\n  INTEGER(HID_T)  \&/ if /H5T_STD_U32LE/ and $.==109' \
 	fortran/src/H5f90global.f90
 
+    # Fix the configure script
+#    perl -pi -e '$_="#!#$_" if /\-commons|OLD_HEADER_FILENAME|H5_NO_STD/' configure;
+
     cf_darwin=""
     if [[ "$OPSYS" == "Darwin" ]]; then
         export DYLD_LIBRARY_PATH=${SZIPINSTALLDIR}/lib:$DYLD_LIBRARY_PATH
@@ -601,8 +604,8 @@ function build_hdf5
     # configure, we wrap the invokation in 'sh -c "..."' syntax
     echo "Invoking command to configure HDF5"
     # HDF5 is not supported on OSX but it works that is the reason for the --enable-unsupported flag 
-    echo "./configure CC=${C_COMPILER} FC=${COMPILEF90} --enable-parallel --enable-fortran --enable-unsupported CXX=${CXX_COMPILER} --enable-cxx --prefix=${HDF5INSTALLDIR} ${cf_szip}"
-    ./configure CC=${C_COMPILER} FC=${COMPILEF90} --enable-parallel --enable-fortran --enable-unsupported CXX=${CXX_COMPILER} --enable-cxx --prefix=${HDF5INSTALLDIR} ${cf_szip}
+    echo "./configure CC=${C_COMPILER} FC=${COMPILEF90} --enable-parallel --enable-fortran --enable-unsupported CXX=${CXX_COMPILER} --enable-cxx --prefix=${HDF5INSTALLDIR} --disable-shared ${cf_szip}"
+    ./configure CC=${C_COMPILER} FC=${COMPILEF90} --enable-parallel --enable-fortran --enable-unsupported CXX=${CXX_COMPILER} --enable-cxx --prefix=${HDF5INSTALLDIR} --disable-shared ${cf_szip}
     if [[ $? != 0 ]] ; then
        echo "HDF5 configure failed.  Giving up"
        return 1
@@ -629,7 +632,7 @@ function build_hdf5
     fi
 
     # comment out arbitrary Fortran compiler flags
-    perl -pi -e 's/^H5BLD_FFLAGS/#H5BLD_FFLAGS/' bin/h5pfc
+#    perl -pi -e 's/^H5BLD_FFLAGS/#H5BLD_FFLAGS/' bin/h5pfc
 
     cd "$START_DIR"
 
