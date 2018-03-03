@@ -32,10 +32,10 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    TotalPositiveFlux=0.
    for j in np.arange(yPositive-iBoxSize//2,yPositive+iBoxSize//2+1):
       for i in np.arange(xPositive-iBoxSize//2,xPositive+iBoxSize//2+1):
-         if (Br_C[j,i] > 0.0):
-            xPositiveWeight=xPositiveWeight+Br_C[j,i]*i
-            yPositiveWeight=yPositiveWeight+Br_C[j,i]*j
-            TotalPositiveFlux=TotalPositiveFlux+Br_C[j,i]
+         if (Br_C[round_my(j),round_my(i)] > 0.0):
+            xPositiveWeight=xPositiveWeight+Br_C[round_my(j),round_my(i)]*i
+            yPositiveWeight=yPositiveWeight+Br_C[round_my(j),round_my(i)]*j
+            TotalPositiveFlux=TotalPositiveFlux+Br_C[round_my(j),round_my(i)]
    xPositive=xPositiveWeight/TotalPositiveFlux
    yPositive=yPositiveWeight/TotalPositiveFlux
 
@@ -44,10 +44,10 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    TotalNegativeFlux=0.
    for j in np.arange(yNegative-iBoxSize//2,yNegative+iBoxSize//2+1):
       for i in np.arange(xNegative-iBoxSize//2,xNegative+iBoxSize//2+1):
-         if (Br_C[j,i] < 0.0):
-            xNegativeWeight=xNegativeWeight+Br_C[j,i]*i
-            yNegativeWeight=yNegativeWeight+Br_C[j,i]*j
-            TotalNegativeFlux=TotalNegativeFlux+Br_C[j,i]
+         if (Br_C[round_my(j),round_my(i)] < 0.0):
+            xNegativeWeight=xNegativeWeight+Br_C[round_my(j),round_my(i)]*i
+            yNegativeWeight=yNegativeWeight+Br_C[round_my(j),round_my(i)]*j
+            TotalNegativeFlux=TotalNegativeFlux+Br_C[round_my(j),round_my(i)]
             
    xNegative=xNegativeWeight/TotalNegativeFlux
    yNegative=yNegativeWeight/TotalNegativeFlux
@@ -82,7 +82,7 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    if Long0>0:
       GL_Longitude +=Long0
       if GL_Longitude>=360:
-         lLongitude-=360
+         GL_Longitude-=360
    print "GL_Longitude: {0:4.1f} GL_Latitude:{1:4.1f}".format(
       GL_Longitude, GL_Latitude)
 
@@ -162,8 +162,8 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
       #(make it perpendicular to PIL).
        PILMap_C = np.where(DisCenter_C<=DisThresholdS, PILBitMap_C, 0.)
        
-       iYPILPoints_I,iXPILPoints_I =np.where(PILMap_C > 0)
-       MM = len(iYPILPoints_I)
+       iYPIL_I,iXPIL_I =np.where(PILMap_C > 0)
+       MM = len(iYPIL_I)
    
        #    PIL_xx=PIL_x[sort(PIL_x)]
        #    PIL_yy=PIL_y[sort(PIL_x)]
@@ -233,10 +233,10 @@ def Alg(nLong,nLat,nParam, Param_I,Long_I,Lat_I,Br_C,
    if ARMag == 1:
       RegionSize_ARMag=round_my((4.0*nLong)/360)
       br_ar=np.mean(
-         abs(Br_C[XyARCenter_D[1]-RegionSize_ARMag//2:
-                  XyARCenter_D[1]+RegionSize_ARMag//2+1,
-                  XyARCenter_D[0]-RegionSize_ARMag//2:
-                  XyARCenter_D[0]+RegionSize_ARMag//2+1]))
+         abs(Br_C[round_my(XyARCenter_D[1]-RegionSize_ARMag//2):
+                  round_my(XyARCenter_D[1]+RegionSize_ARMag//2)+1,
+                  round_my(XyARCenter_D[0]-RegionSize_ARMag//2):
+                  round_my(XyARCenter_D[0]+RegionSize_ARMag//2)+1]))
       GL_poloidal=(CMESpeed*br_ar**0.43989278-3043.9307)/565.05018
    else:
       #Calculate the AR magnetic field strength in order to determine the

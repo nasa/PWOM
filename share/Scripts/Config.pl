@@ -28,6 +28,7 @@ my %Compiler = (
                 "kraken-gsi"          => "ifortftn",
                 "yslogin"             => "ifortmpif90,iccmpicxx",
                 "h2ologin"            => "ifortftn,intelcc",
+                "slogin"              => "ifortftn,intelcc",
                 "cetuslac"            => "mpixlf2008,mpixlc",
                 "miralac"             => "mpixlf2008,mpixlc",
 		);
@@ -122,12 +123,14 @@ my $NewPrecision;
 my $NewOptimize;
 my $NewDebug;
 my $NewMpi;
+my $NewOpenMp;
 my $NewHdf5;
 my $NewHypre;
 my $NewFishpak;
 my $NewSpice;
 my $IsCompilerSet;
 my $Debug;
+my $OpenMp;
 my $Mpi;
 my $Fcompiler;
 my $Ccompiler;
@@ -160,6 +163,8 @@ foreach (@Arguments){
     if(/^-compiler$/i)        {$ShowCompiler=1;                 next};
     if(/^-mpi$/i)             {$NewMpi="yes";                   next};
     if(/^-nompi$/i)           {$NewMpi="no";                    next};
+    if(/^-openmp$/i)          {$NewOpenMp="yes";                next};
+    if(/^-noopenmp$/i)        {$NewOpenMp="no";                 next};
     if(/^-debug$/i)           {$NewDebug="yes";                 next};
     if(/^-nodebug$/i)         {$NewDebug="no";                  next};
     if(/^-hdf5$/i)            {$NewHdf5="yes";                  next};
@@ -269,6 +274,9 @@ if($NewPrecision and $NewPrecision ne $Precision){
 # Link with MPI vs. NOMPI library if required
 &set_mpi_ if $NewMpi and $NewMpi ne $Mpi;
 
+# Switch on or off the OPENMPFLAG
+&set_openmp_ if $NewOpenMp and $NewOpenMp ne $OpenMp;
+
 # Link with HDF5 library is required
 &set_hdf5_ 
     if ($Install and not $IsComponent) or ($NewHdf5 and $NewHdf5 ne $Hdf5);
@@ -325,6 +333,7 @@ sub get_settings_{
     }
 
     $Debug     = "no";
+    $OpenMp    = "no";
     $Mpi       = "yes";
     $Hdf5      = "no";
     $Hypre     = "no";
@@ -352,6 +361,7 @@ sub get_settings_{
 
 	  $Precision = lc($1) if /^\s*PRECISION\s*=.*(SINGLE|DOUBLE)PREC/;
           $Debug = "yes" if /^\s*DEBUG\s*=\s*\$\{DEBUGFLAG\}/;
+	  $OpenMp = "yes" if /^OPENMPFLAG/;
 	  $Mpi   = "no"  if /^\s*MPILIB\s*=.*\-lNOMPI/;
 	  $Hdf5  = "yes" if /^\# HDF5=YES/;
 	  $Hypre = "yes" if /^\s*HYPRELIB/;
@@ -403,6 +413,7 @@ The selected C   compiler is $Ccompiler.
 The default precision for reals is $Precision precision.
 The maximum optimization level is $Optimize
 Debugging flags:   $Debug
+OpenMP flags:      $OpenMp
 Linked with MPI:   $Mpi
 Linked with HDF5:  $Hdf5
 Linked with HYPRE: $Hypre
@@ -433,10 +444,23 @@ sub install_code_{
 	    $MakefileDefOrig;
 	die "$ERROR_ $MakefileDefOrig is missing\n" unless
 	    -f $MakefileDefOrig;
-	&shell_command("echo OS=$OS > $MakefileDef");
-	&shell_command("echo MYDIR=$DIR >> $MakefileDef");
-	&shell_command("echo ${Component}DIR=$DIR >> $MakefileDef");
-	&shell_command("echo COMPILER=$Compiler >> $MakefileDef");
+	my $header = "${Component}DIR    = $DIR
+MYDIR    = $DIR
+OS       = $OS
+COMPILER = $Compiler
+SERIAL   =
+PARALLEL = mpiexec
+NPFLAG   = -n
+NP       = 2
+MPIRUN   = \${PARALLEL} \${NPFLAG} \${NP}
+";
+	if($DryRun){
+	    print "write into $MakefileDef:\n$header";
+	}else{
+	    open(MAKEFILE, ">$MakefileDef");
+	    print MAKEFILE $header;
+	    close(MAKEFILE);
+	}
 	&shell_command("cat $MakefileDefOrig >> $MakefileDef");
 
 	my $Makefile = "$MakefileConfOrig.$OS.$Compiler";
@@ -467,14 +491,14 @@ sub install_code_{
 	    die "$ERROR_ could not find $Makefile\n";
 	}
 
-	# Remove -lmpicxx from CPPLIB definition in Makefile.conf if not needed
-	my $remove_mpicxx = (`mpicxx -show` !~ /\-lmpi_cxx/);
-	if($remove_mpicxx){
-	    @ARGV = ($MakefileConf);
-	    while(<>){
-		s/ -lmpi_cxx// if /^CPPLIB/;
-		print;
+	# Remove -lmpicxx or -lmpi++ from CPPLIB definition in Makefile.conf if not needed
+	@ARGV = ($MakefileConf);
+	while(<>){
+	    if(/^CPPLIB/){
+		s/ -lmpi_cxx// if (`mpicxx -show` !~ /\-lmpi_cxx/);
+		s/ -lmpi\+\+// if (`mpicxx -show` !~ /\-lmpi\+\+/);;
 	    }
+	    print;
 	}
     }
 
@@ -544,6 +568,25 @@ sub set_debug_{
     }
 }
 
+##############################################################################
+
+sub set_openmp_{
+
+    # Set the OpenMP compilation flags in $MakefileConf
+
+    # OpenMp will be NewOpenMp after changes
+    $OpenMp = $NewOpenMp;
+
+    print "Setting OpenMP flags to '$OpenMp' in $MakefileConf\n";
+    if(not $DryRun){
+	@ARGV = ($MakefileConf);
+	while(<>){
+	    s/^#(OPENMPFLAG)/$1/ if $OpenMp eq "yes";
+	    s/^(OPENMPFLAG)/#$1/ if $OpenMp eq "no";
+	    print;
+	}
+    }
+}
 ##############################################################################
 
 sub set_mpi_{
@@ -1044,6 +1087,8 @@ Compilation:
 -double         set precision to double in Makefile.conf and make clean
 -debug          select debug options for the compiler in Makefile.conf
 -nodebug        do not use debug options for the compiler in Makefile.conf
+-openmp         compile and link with OpenMP flag
+-noopenmp       compile and link without the OpenMP flag
 -mpi            compile and link with the MPI library for parallel execution
 -nompi          compile and link with the NOMPI library for serial execution
 -hdf5           compile and link with HDF5 library for HDF5 plot output
@@ -1081,13 +1126,13 @@ Install code with the gfortran compiler and no MPI library on the machine
 
     Config.pl -install -compiler=gfortran -nompi
 
-Use the HDF5 plotting library, the HYPRE linear solver library, and SPICE:
+Use the HDF5, HYPRE linear solver library, SPICE and compile with OpenMP flag:
 
     Config.pl -hdf5 -hypre -spice=/usr/local/lib/spicelib.a
 
-Do not link with the HDF5, HYPRE and SPICE libraries:
+Do not link with the HDF5, HYPRE and SPICE libraries, and switch off OpenMP flag:
 
-    Config.pl -nohdf5 -nohypre -nospice
+    Config.pl -nohdf5 -nohypre -nospice -noopenmp
 
 Set optimization level to -O0, switch on debugging flags and link with NOMPI:
 

@@ -1,6 +1,6 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan, 
+!  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-! ^CFG COPYRIGHT UM
 ! ======================================================
 module ModProcessVarName
 
@@ -13,7 +13,7 @@ module ModProcessVarName
   interface process_var_name
      module procedure process_var_list, process_var_string
   end interface
-  
+
 
   integer, parameter:: nVarMax = 100   ! maximum number of state variables
   integer, parameter:: nSubstance = 34 ! number of distinct fluids/species
@@ -25,10 +25,10 @@ module ModProcessVarName
   integer, parameter:: nSynonym = 3
 
   ! State variables not associated with a specific fluid/ specie
-  integer,parameter  :: nVarExtra = 14
+  integer, parameter:: nVarExtra = 15
 
   ! Named indices for all substances (species or fluids)
-  integer, parameter :: &
+  integer, parameter:: &
        H_    = 1,  &
        Hp_   = 2,  &
        HpSw_ = 3,  &
@@ -100,7 +100,7 @@ module ModProcessVarName
        'Pui4',  &
        'El  ',  &
        '    '  /) ! main component, MHD / HD 
-          
+
   ! named indices for basic state variables associated with a substance
   integer,parameter :: &
        Rho_   = 1, &
@@ -135,10 +135,11 @@ module ModProcessVarName
        'eint ', &
        'ehot ', &
        'hyp  ', &
+       'hype ', &
        'sign ', &
        'lperp' /)
 
- character(len=5) :: NameVarExtraStandardized_I(nVarExtra) = (/ &
+  character(len=5) :: NameVarExtraStandardized_I(nVarExtra) = (/ &
        'Bx   ', &
        'By   ', &
        'Bz   ', &
@@ -151,6 +152,7 @@ module ModProcessVarName
        'Eint ', &
        'Ehot ', &
        'Hyp  ', &
+       'HypE ', &
        'Sign ', &
        'Lperp' /)
 
@@ -247,7 +249,7 @@ contains
        NameVarIn = NameVar_V(iName)
        call lower_case(NameVarIn)
 
-       ! Don't look up in dictionary for: bx, by, bz, EInt, ew, pe, hyp
+       ! Don't look up in dictionary for: bx, by, bz, EInt, ew, pe, hyp, hype
        do iVar = 1, nVarExtra
           if(NameVarIn == NameVarExtra_I(iVar)) then
              NameVar_V(iName) = NameVarExtraStandardized_I(iVar)
@@ -339,16 +341,16 @@ contains
 
     integer   :: iVar, iSubstance
     ! ---------------------------------------------------------------------
- 
+
     ! loop over all possible species/fluids to fill in Name arrays
     do iSubstance = 1, nSubstance
        do iVar = 1, nVarPerSubstance
           SubstanceStandardName_II(iSubstance,iVar) = &
-              ''//trim(NameSubstance_I(iSubstance))//NameSubstanceVar_I(iVar)
-       
+               ''//trim(NameSubstance_I(iSubstance))//NameSubstanceVar_I(iVar)
+
        end do
     end do
-    
+
   end subroutine create_standard_name
   ! =========================================================================
   subroutine create_dictionary
@@ -380,7 +382,7 @@ contains
     Dictionary_III(Main_, RhoUx_,    2) = 'rhoux'
     Dictionary_III(Main_, RhoUy_,    2) = 'rhouy'
     Dictionary_III(Main_, RhoUz_,    2) = 'rhouz'
-    
+
     ! H atoms
     Dictionary_III(H_, Rho_,   2) = 'rhoh'
 
@@ -405,16 +407,16 @@ contains
 
     ! O2+ ions
     Dictionary_III(O2p_, Rho_,   2) = 'o2p'
-   
+
     ! CO+ ions
     Dictionary_III(COp_, Rho_,   2) = 'cop'
-   
+
     ! CO2+ ions
     Dictionary_III(CO2p_, Rho_,   2) = 'co2p'
 
     ! H2O molecules
     Dictionary_III(H2O_, Rho_,    2) = 'rhoh2o'
-    
+
     ! H2O+ ions
     Dictionary_III(H2Op_, Rho_,   2) = 'h2op'
     Dictionary_III(H2Op_, Rho_,   3) = 'rhoh2op'
@@ -424,7 +426,7 @@ contains
 
     ! OH+ ions
     Dictionary_III(OHp_, Rho_,   2) = 'ohp'
-   
+
     ! Saturn fluids
     Dictionary_III(N_,    Rho_,   2) = 'rhon'
 
@@ -488,7 +490,7 @@ contains
     Dictionary_III(Neu4_, RhoUz_, 2) = 'ne4mz'
     Dictionary_III(Neu4_, p_,     2) = 'ne4p'
     Dictionary_III(Neu4_, Energy_,2) = 'ne4e'
-    
+
     ! Outer Heliosphere Pop1 / arbitrary pick up ion
     Dictionary_III(Pui1_, Rho_,   2) = 'pu1rho'
     Dictionary_III(Pui1_, RhoUx_, 2) = 'pu1mx'
@@ -496,7 +498,7 @@ contains
     Dictionary_III(Pui1_, RhoUz_, 2) = 'pu1mz'
     Dictionary_III(Pui1_, p_,     2) = 'pu1p'
     Dictionary_III(Pui1_, Energy_,2) = 'pu1e'
-   
+
     ! Outer Heliosphere Pop2 / arbitrary pick up ion
     Dictionary_III(Pui2_, Rho_,   2) = 'pu2rho'
     Dictionary_III(Pui2_, RhoUx_, 2) = 'pu2mx'
@@ -520,9 +522,9 @@ contains
     Dictionary_III(Pui4_, RhoUz_, 2) = 'pu4mz'
     Dictionary_III(Pui4_, p_,     2) = 'pu4p'
     Dictionary_III(Pui4_, Energy_,2) = 'pu4e'
-    
+
   end subroutine create_dictionary
-  
+
   ! =========================================================================
- 
+
 end module ModProcessVarName

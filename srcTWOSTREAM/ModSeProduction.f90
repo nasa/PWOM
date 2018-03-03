@@ -52,6 +52,9 @@ Module ModSeProduction
   real,public,allocatable :: TPOT(:,:)
 
   ! named constants for ion indicies in photoionrate array
+  !Earth 
+  integer, parameter :: Oplus_=1,O2plus_=2,Nplus_=3,N2plus_=4
+
   !Jupiter
   integer, parameter :: H2plus_=1,Heplus_=2,Hplus_=3,CH4plus_=4,&
                         CH3plus_=5,CH2plus_=6,CHplus_=7
@@ -670,7 +673,8 @@ contains
                 ENDIF
                 DO  J=1,nAlt
                    PESPEC(N,J) = PESPEC(N,J) + DSPECT(J) * FAC
-                   PeSpectrumSpecies_IIIC(K,I,N,J)=PeSpectrumSpecies_IIIC(K,I,N,J) + &
+                   PeSpectrumSpecies_IIIC(K,I,N,J)=&
+                        PeSpectrumSpecies_IIIC(K,I,N,J) + &
                         DSPECT(J) * FAC
                 enddo
              enddo
@@ -699,6 +703,40 @@ contains
     case('EARTH')
        !for now just set rate for Earth to zero
        PhotoIonRate_IC(1,:) = 0.0
+       
+       do iAlt=1,nAlt
+          !
+          !integrate to get production rate for each species as a function of 
+          ! altitude
+          !O+
+          PhotoIonRate_IC(Oplus_,iAlt) = & 
+               sum(PeSpectrumSpecies_IIIC(1,O_,:,iAlt))   &
+               + sum(PeSpectrumSpecies_IIIC(2,O_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(3,O_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(4,O_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(5,O_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(4,O2_,:,iAlt)) 
+
+          !O2+
+          PhotoIonRate_IC(O2plus_,iAlt) = & 
+               sum(PeSpectrumSpecies_IIIC(1,O2_,:,iAlt))   &
+               + sum(PeSpectrumSpecies_IIIC(2,O2_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(3,O2_,:,iAlt))
+
+          !N2+
+          PhotoIonRate_IC(N2plus_,iAlt) = & 
+               sum(PeSpectrumSpecies_IIIC(1,N2_,:,iAlt))   &
+               + sum(PeSpectrumSpecies_IIIC(2,N2_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(3,N2_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(4,N2_,:,iAlt)) &
+               + sum(PeSpectrumSpecies_IIIC(5,N2_,:,iAlt)) 
+
+          !N+
+          PhotoIonRate_IC(Nplus_,iAlt) = & 
+               sum(PeSpectrumSpecies_IIIC(6,N2_,:,iAlt))
+
+          
+       enddo
     case('JUPITER')
        !uncomment for debugging
 !       CALL plot_pespecspecies(PeSpectrumSpecies_IIIC)

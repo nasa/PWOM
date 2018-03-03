@@ -62,6 +62,9 @@
 # To run on the 28-core Broadwell nodes (128GB/node or 4.5GB/core)
 ### PBS -l select=16:ncpus=28:model=bro
 
+# To run on the 28-core Electra Broadwell nodes (128GB/node or 4.5GB/core)
+### PBS -l select=16:ncpus=28:model=bro_ele
+
 # The default is the "normal" queue with an 8 hour walltime limit.
 
 # To run in the long queue uncomment the following line,
@@ -98,11 +101,16 @@ mpiexec ./SWMF.exe > runlog_`date +%y%m%d%H%M`
 exit
 
 # To use automated resubmission remove the 'exit' command above
+# and adapt the script below!
+#
 # Use the #CPUTIMEMAX and #CHECKSTOP commands in PARAM.in
 # so the code stops before the wall clock time is exceeded.
 
 # Do not continue unless the job finished successfully
 if(! -f SWMF.SUCCESS) exit
+
+# Do not continue if the whole run is done
+if(-f SWMF.DONE) exit
 
 # Link latest restart files
 ./Restart.pl
@@ -111,5 +119,5 @@ if(! -f SWMF.SUCCESS) exit
 # if(! -f PARAM.in.start) cp PARAM.in PARAM.in.start
 # if(-f PARAM.in.restart) cp PARAM.in.restart PARAM.in
 
-# Check final time/iteration and resubmit if not done (modify as needed!)
-if(! -d RESTART_t008.00h) qsub job.pfe
+# Resubmit job
+qsub job.pfe

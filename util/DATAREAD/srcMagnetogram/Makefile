@@ -56,13 +56,6 @@ ${HARMONICSEXE}: ${OBJECTS_HARMONICS}
 	${LINK.f90} -o ${HARMONICSEXE} ${OBJECTS_HARMONICS} \
 		-L${LIBDIR} -lSHARE ${Lflag1}
 
-DIPOLE:
-	make DIPOLE.exe
-
-DIPOLE.exe: dipole.o
-	${LINK.f90} -o DIPOLE.exe dipole.o \
-		-L${LIBDIR} -lSHARE ${Lflag1}
-
 DIPOLE11:
 	make DIPOLE11.exe
 
@@ -103,8 +96,9 @@ test_harmonics:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_harmonics_run..." >> test_harmonics.diff
-	perl -pe 's/#SCALINGB0/SCALINGB0/' HARMONICS.in.orig > HARMONICS.in
-	./HARMONICS.exe > harmonics.log
+	perl -pe 's/#CHANGEWEAKFIELD/CHANGEWEAKFIELD/' HARMONICS.in.orig \
+		> HARMONICS.in
+	${SERIAL} ./HARMONICS.exe > harmonics.log
 	@echo "test_harmonics_check..." >> test_harmonics.diff
 	make test_harmonics_check
 
@@ -122,7 +116,7 @@ test_potential:
 	make DIPOLE11
 	./DIPOLE11.exe
 	@echo "test_potential_run..." >> test_potential.diff
-	./POTENTIAL.exe > potential.log
+	${SERIAL} ./POTENTIAL.exe > potential.log
 	@echo "test_potential_check..." >> test_potential.diff
 	make test_potential_check
 
@@ -142,7 +136,7 @@ test_fdips:
 	cp -f FDIPS.in.orig FDIPS.in
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	@echo "test_fdips_run..." >> test_fdips.diff
-	mpirun -np 4 ./FDIPS.exe > fdips.log
+	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips.log
 	./redistribute.pl fdips_field_np010202.out fdips.out
 	./redistribute.pl fdips_bxyz_np010202.out fdips_bxyz.out
 	@echo "test_fdips_check..." >> test_fdips.diff
@@ -173,7 +167,7 @@ test_fdips_hypre:
 	perl -i -pe 's/real8/ascii/' FDIPS.in
 	perl -i -pe 's/^BiCGSTAB/GMRES/i;s/^ILU/AMG/' FDIPS.in
 	@echo "test_fdips_hypre_run..." >> test_fdips_hypre.diff
-	mpirun -np 4 ./FDIPS.exe > fdips_hypre.log
+	${PARALLEL} ${NPFLAG} 4 ./FDIPS.exe > fdips_hypre.log
 	./redistribute.pl fdips_field_np010202.out fdips.out
 	@echo "test_fdips_hypre_check..." >> test_fdips_hypre.diff
 	make test_fdips_hypre_check

@@ -67,10 +67,11 @@ TWOSTREAM:
 	cd ${DATAREADINDICESDIR}; make LIB
 	cd srcTWOSTREAM;          make TWOSTREAM
 
-nompirun: PWOM
-	cd ${RUNDIR}; ./PWOM.exe
+serialrun: PWOM
+	cd ${RUNDIR}; ${SERIAL} ./PWOM.exe
 
 LIB:
+	cd srcTWOSTREAM; make LIB
 	cd src; make LIB
 	cd srcInterface; make LIB
 	cd srcSTET; make LIB
@@ -80,7 +81,6 @@ LIB:
 PARAMIN = PARAM.in
 TESTDIR = run_test
 CODE    = PWOM
-MPIRUN  = mpirun -np 2
 
 rundir:
 	mkdir -p ${RUNDIR}/PW
@@ -102,10 +102,18 @@ rundir:
 			ln -s ${BINDIR}/PWOM.exe .; \
 			cp ${MYDIR}/input/${PLANET}/${PARAMIN} PARAM.in; \
 			touch core ; chmod 444 core ; \
+			ln -s PW/* .; \
 	fi)
 
 
 test:
+	-@(make test_saturn)
+	-@(make test_restart)
+	rm -f src/neutral_atmosphere_planet.f90
+	-@(make test_earth)
+	-@(make test_restart)
+
+test_orig:
 	-@(make test_jupiter)
 	-@(make test_saturn)
 	-@(make test_restart)
@@ -116,9 +124,6 @@ test:
 	-@(make test_jupiter_twostream)
 	-@(make clean)
 	-@(make test_earth_stet)
-
-
-
 
 
 test_earth:	
@@ -231,7 +236,7 @@ test_check:
 		${TESTDIR}/PW/restartOUT/restart_iline0008.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0008.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-8 \
+	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-7 \
 		${TESTDIR}/PW/plots/north_plots_iline0001.out \
 		data/output/${PLANET}/${SEDIR}/north_plots_iline0001.out \
 		> test_${PLANET}${MYTEST}_plots.diff)
@@ -291,5 +296,7 @@ allclean:
 	@touch ${INSTALLFILES}
 	cd src; make distclean
 	cd srcInterface; make distclean
+	cd srcTWOSTREAM; make distclean
+	cd srcSTET; make distclean
 	cd doc/Tex; make distclean
-	rm -rf Makefile.planet *~ bin
+	rm -rf Makefile.planet *~ bin ${INSTALLFILES}

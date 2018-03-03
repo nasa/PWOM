@@ -147,7 +147,7 @@ module ModReadParam
   private ! except
 
   !PUBLIC DATA MEMBERS:
-  integer, parameter, public :: lStringLine=200 ! Max length of input lines
+  integer, parameter, public :: lStringLine=400 ! Max length of input lines
 
   !PUBLIC MEMBER FUNCTIONS:
   public :: read_file         ! Read text string from parameter file and bcast
@@ -213,6 +213,8 @@ contains
   !INTERFACE:
   subroutine read_file(NameFile, iCommIn, NameRestartFile)
 
+    use ModUtilities, ONLY: open_file, close_file
+
     !INPUT ARGUMENTS:
     ! Name of the base param file
     character (len=*), optional, intent(in):: NameFile 
@@ -237,11 +239,8 @@ contains
     ! If true, then read for stdin.
     logical:: DoReadStdin
     
-    logical :: Done=.false., DoInclude
+    logical :: DoInclude
     !-----------------------------------------------------------------------
-    if(Done)call CON_stop(NameSub//&
-         ' ERROR: the parameter file should be read only once!')
-
     if(present(iCommIn))then
        iComm = iCommIn
     else
@@ -262,6 +261,7 @@ contains
 
     ! Read all input file(s) into memory and broadcast
     if(iProc == 0)then
+       DoEcho = .true.
        iFile = 1
        nLine = 0
        if(DoReadStdin) then
@@ -271,10 +271,10 @@ contains
           if(.not.IsFound)call CON_stop(NameSub//' SWMF_ERROR: '//&
                trim(NameFile)//" cannot be found")
           iUnit_I(iFile)=io_unit_new()
-          open(iUnit_I(iFile),file=NameFile,status="old")
+          call open_file(iUnit_I(iFile), FILE=NameFile, STATUS="old")
        endif
        do
-          read(iUnit_I(iFile),'(a)',ERR=100,END=100) StringLine
+          read(iUnit_I(iFile),'(a)', ERR=100, END=100) StringLine
           NameCommand=StringLine
           i=index(NameCommand,' '); 
           if(i>0)NameCommand(i:len(NameCommand))=' '
@@ -320,7 +320,7 @@ contains
                   " SWMF_ERROR: include file cannot be found, name="//&
                   trim(StringLine))
              iUnit_I(iFile) = io_unit_new()
-             open(iUnit_I(iFile),FILE=StringLine,STATUS="old")
+             call open_file(iUnit_I(iFile), FILE=StringLine, STATUS="old")
              CYCLE
           else if(NameCommand/='#END')then
              ! Store line into buffer
@@ -332,7 +332,7 @@ contains
           end if
 
 100       continue
-          close (iUnit_I(iFile))
+          call close_file(iUnit_I(iFile))
           if(iFile > 1)then
              ! Continue reading the calling file
              iFile = iFile - 1
@@ -362,8 +362,6 @@ contains
 
     if(iProc==0)write(*,'(a,i4,a)') NameSub// &
          ': read and broadcast nLine=',nLine,' lines of text'
-
-    Done = .true.
 
   end subroutine read_file
 
@@ -400,7 +398,11 @@ contains
     else
        NameComp = ''
     end if
+
+    ! Set iLine to 0 for session 1 only (multi-session uses previous value)
+    if(iSession == 1) iLine = 0
     if(present(iLineIn)) iLine = iLineIn
+
     if(present(nLineIn))then
        nLine     = nLineIn
     else
