@@ -36,7 +36,7 @@
 
 # Planet files
 *_planet.f
-*_planet.f90
+
 
 
 # Makefile rules and Depend files and conf and def
