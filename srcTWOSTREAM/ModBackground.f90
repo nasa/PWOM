@@ -245,6 +245,8 @@ contains
          nAlt,0,SZA*cRadToDeg,Alt_C(1:nAlt)*cCmToKm,&
          nIons,PhotoIonRate_IC(:,:))
 
+
+    
     ! set the cross sections (perhaps this should only be called once?)
     select case(NamePlanet_I(Planet_))
     case('EARTH')
@@ -414,10 +416,10 @@ contains
          CH3plus_=5,CH2plus_=6,CHplus_=7
     
     !Earth
-    integer, parameter :: Oplus_=1
+    integer, parameter :: Oplus_=1,O2plus_=2,Nplus_=3,N2plus_=4
     
     character(len=100),parameter :: NamePlotVarEarth=&
-         'Alt[km] O+[cm-3s-1] g r'
+         'Alt[km] O+[cm-3s-1] O2+[cm-3s-1] N+[cm-3s-1] N2+[cm-3s-1] g r'
     character(len=120),parameter :: NamePlotVarJupiter=&
          'Alt[km] H2+[cm-3s-1] He+[cm-3s-1] H+[cm-3s-1] CH4+[cm-3s-1] CH3+[cm-3s-1] CH2+[cm-3s-1] CH+[cm-3s-1] g r'
 
@@ -450,6 +452,12 @@ contains
        case('EARTH')
           PlotState_IV(iAlt,Oplus_)  = &
                PhotoIonRate_IC(Oplus_,iAlt)
+          PlotState_IV(iAlt,O2plus_)  = &
+               PhotoIonRate_IC(O2plus_,iAlt)
+          PlotState_IV(iAlt,Nplus_)  = &
+               PhotoIonRate_IC(Nplus_,iAlt)
+          PlotState_IV(iAlt,N2plus_)  = &
+               PhotoIonRate_IC(N2plus_,iAlt)
        case('JUPITER')
           PlotState_IV(iAlt,H2plus_)  = &
                PhotoIonRate_IC(H2plus_,iAlt)
@@ -505,7 +513,7 @@ contains
     select case(NamePlanet_I(Planet_))
     case('EARTH')
        nNeutralSpecies=3
-       nIons=1
+       nIons=4
     case('JUPITER')
        nNeutralSpecies=4
        nIons=7
