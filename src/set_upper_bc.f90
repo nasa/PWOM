@@ -4,38 +4,36 @@
 subroutine PW_set_upper_bc
   use ModCommonVariables
   use ModGmPressure
-  use ModPWOM, ONLY: iLine
+  use ModPWOM, ONLY: iLine, NameUpperBC
   use ModConst,ONLY: cBoltzmann
   use ModPwPlots, ONLY: PW_print_plot
   real :: ScaleHeight_I(nIon-1)
   !----------------------------------------------------------------------------
 
-  if (TypeSolver == 'Godunov') then
-     
+  select case(NameUpperBC)
+  case('PressureDrop')
+     !this used to be the default with the Godunov Scheme
      do iIon = 1,nIon-1
         State_GV(nDim+1:nDim+2,iU_I(iIon)) = State_GV(nDim,iU_I(iIon))
         State_GV(nDim+1:nDim+2,iT_I(iIon)) = State_GV(nDim,iT_I(iIon))
         State_GV(nDim+1:nDim+2,iP_I(iIon)) = &
-          (State_GV(nDim-1,iP_I(iIon))+State_GV(nDim,iP_I(iIon))&
-           -State_GV(nDim-2,iP_I(iIon)))*0.8
+             (State_GV(nDim-1,iP_I(iIon))+State_GV(nDim,iP_I(iIon))&
+             -State_GV(nDim-2,iP_I(iIon)))*0.8
         State_GV(nDim+1:nDim+2,iRho_I(iIon)) = &
-          State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
+             State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
 
 !        State_GV(-1:0,iU_I(iIon))=&
 !             State_GV(1,iU_I(iIon))*State_GV(1,iRho_I(iIon))/State_GV(-1:0,iRho_I(iIon))
      enddo
-     
-  ENDIF
-  
-  if (TypeSolver == 'Rusanov') then
 
-
-
+  case('ScaleHeight')
+     !this used to be the default with the Rusanov Scheme
      do iIon = 1,nIon-1
         State_GV(nDim+1:nDim+2,iU_I(iIon)) = State_GV(nDim,iU_I(iIon))
         State_GV(nDim+1:nDim+2,iT_I(iIon)) = State_GV(nDim,iT_I(iIon))
-
-        ! cBoltzmann [cgs] = 1.0e7 * cBoltzmann [SI] 
+        
+        ! for Earth
+        !cBoltzmann [cgs] = 1.0e7 * cBoltzmann [SI] 
         ScaleHeight_I(iIon) =&
              1.0e7*cBoltzmann*(State_GV(nDim,iT_I(iIon))+State_GV(nDim,Te_))&
              /(abs(Gravty(nDim))*Mass_I(iIon))
@@ -44,15 +42,34 @@ subroutine PW_set_upper_bc
              State_GV(nDim,iP_I(iIon))*exp(-DrBnd/ScaleHeight_I(iIon))
         
         State_GV(nDim+1,iRho_I(iIon)) = &
-          State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
-
+             State_GV(nDim+1,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+1,iT_I(iIon))
         State_GV(nDim+2,iRho_I(iIon)) = &
-             State_GV(nDim+2,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+2,iT_I(iIon))
+             State_GV(nDim+2,iP_I(iIon)) / RGAS_I(iIon) / State_GV(nDim+2,iT_I(iIon))        
      enddo
-  endif
-  
-  
-      
+  case('FlowVac')
+     !option to use boundary condition that allows plasma to flow out but not in
+     ! when inward flow is detected the density and pressure drop to create vac
+     ! condition
+     do iIon = 1,nIon-1
+        State_GV(nDim+1:nDim+2,iU_I(iIon)) = State_GV(nDim,iU_I(iIon))
+        State_GV(nDim+1:nDim+2,iT_I(iIon)) = State_GV(nDim,iT_I(iIon))
+        
+        State_GV(nDim+1,iRho_I(iIon)) = &
+             State_GV(nDim,iRho_I(iIon))*(AR12(nDim)+AR23(nDim))/(AR12top(1)+AR23top(1))
+        
+        State_GV(nDim+2,iRho_I(iIon)) = &
+             State_GV(nDim+1,iRho_I(iIon))*(AR12top(1)+AR23top(1))/(AR12top(2)+AR23top(2))
+        
+        if (State_GV(nDim,iU_I(iIon)) < 0.0) then
+           State_GV(nDim+1:nDim+2,iRho_I(iIon)) = &
+                State_GV(nDim+1:nDim+2,iRho_I(iIon))/100.0
+        endif
+        
+        State_GV(nDim+1:nDim+2,iP_I(iIon))=State_GV(nDim+1:nDim+2,iRho_I(iIon)) &
+             * RGAS_I(iIon)* State_GV(nDim+1:nDim+2,iT_I(iIon))
+     end do
+  end select
+
   
   XHTM=1.+ELFXIN*EXP(-(TIME-300.)**2/2./150./150.)
   

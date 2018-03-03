@@ -99,19 +99,26 @@ Module ModParticle
   
   !particle variables
   real,allocatable :: Mass_I(:)
-  integer, parameter :: O_=1, H_=2, He_=3
+  integer :: O_, H_, He_,H3_,H2_
   real,allocatable::ReducedMass_II(:,:)
 
   !variable for WPI
   real,allocatable :: Dperp_I(:),Dexp_I(:)
   logical,public :: UseWPI=.false.
+  character(len=100),public :: TypeWPI='Barakat'
+  real,public :: FracLeftHand=0.125
+  
+  real,public :: SpectralIndexAur=1.7
+  real,public :: rWaveRefAur=7375e5
+  real,public :: E2waveRefAur=1.2e-6 !V^2 m^-2 Hz^-1
+  real,public :: fWaveRefAur=5.6    !Hz
 
-  !plot variables for profile (depends on planet)
-  character(len=150):: NameProfilePlotVar
-  integer, allocatable :: iDen_I(:),iVel_I(:),&
-            iPres_I(:), iTemp_I(:),iTpar_I(:),iTperp_I(:),iHpar_I(:),iHperp_I(:)
-  integer :: nVarProfile
+  real,public :: SpectralIndexCap=1.7
+  real,public :: rWaveRefCap=7375e5
+  real,public :: E2waveRefCap=1.2e-6 !V^2 m^-2 Hz^-1
+  real,public :: fWaveRefCap=5.6    !Hz
 
+  
   !should the output associated with particles be verbose
   logical,public :: IsVerboseParticle = .false.
 
@@ -122,8 +129,8 @@ Module ModParticle
   integer :: iSeed = 1
   
   ! use a fixed number of particles per cell
-  integer :: nParticlePerCell_I(2)=(/20000,3000/)
-  !integer :: nParticlePerCell_I(2)=(/3000,3000/)
+  integer, allocatable :: nParticlePerCell_I(:)
+
 
 
   real, parameter :: cBoltzmannCGS = 1.3807E-16
@@ -163,54 +170,61 @@ contains
     !set number of species and mass
     select case(NamePlanet_I(Planet_))
     case('EARTH')
-       nSpecies=2
+       nSpecies=3
+       O_=1
+       H_=2
+       He_=3
+
        allocate(Mass_I(nSpecies))
-       Mass_I(O_) = cGramsPerAMU*16.0
-       Mass_I(H_) = cGramsPerAMU
+       Mass_I(O_) = cGramsPerAMU*15.994
+       Mass_I(H_) = cGramsPerAMU*1.00797
+       Mass_I(He_) = cGramsPerAMU*4.0026
               
        !Mass_I(He_) = cGramsPerAMU*4.0
        allocate(NameSpecies_I(nSpecies))
        NameSpecies_I(O_)='O_'
        NameSpecies_I(H_)='H_'
+       NameSpecies_I(He_)='He'
+
+       !init the target particle per cell numbers
+       allocate(nParticlePerCell_I(nSpecies))
+       nParticlePerCell_I(O_)=20000
+       nParticlePerCell_I(H_)=3000
+       nParticlePerCell_I(He_)=1000
+
+       
+       !set WPI variables
+       allocate(Dperp_I(nSpecies))
+       allocate(Dexp_I(nSpecies))
+    case('JUPITER')
+       nSpecies=3
+       H3_=1
+       H_=2
+       H2_=3
+
+       allocate(Mass_I(nSpecies))
+       Mass_I(H3_) = cGramsPerAMU*3.0237
+       Mass_I(H_) = cGramsPerAMU*1.00797
+       Mass_I(H2_) = cGramsPerAMU*2.0159
+              
+       !Mass_I(He_) = cGramsPerAMU*4.0
+       allocate(NameSpecies_I(nSpecies))
+       NameSpecies_I(H3_)='H3'
+       NameSpecies_I(H_)='H_'
+       NameSpecies_I(H2_)='H2'
+
+       !init the target particle per cell numbers
+       allocate(nParticlePerCell_I(nSpecies))
+       nParticlePerCell_I(H3_)=5000
+       nParticlePerCell_I(H_)=5000
+       nParticlePerCell_I(H2_)=5000
+
        
        !set WPI variables
        allocate(Dperp_I(nSpecies))
        allocate(Dexp_I(nSpecies))
        
-       Dperp_I(O_)=9.55e2  !polar cap value
-!       Dperp_I(O_)=6.94e5   !auroral/cusp value
-       Dexp_I(O_)=13.3
-       
-       Dperp_I(H_)=5.77e3  !polar cap value
-!       Dperp_I(H_)=4.45e7   !auroral/cusp value
-       Dexp_I(H_)=7.95
-       
-       !set plotting variables
-       NameProfilePlotVar='Alt[km] nO[cm-3] uO[km/s] pO TO[k] TOpar[k] '&
-            //'TOperp[k] HOpar HOperp '&
-            //'nH[cm-3] uH[km/s] pH TH[k] THpar[k] THperp[k] HHpar HHperp g r'
-       !index arrays for location in plotting routine
-       allocate(iDen_I(nSpecies),iVel_I(nSpecies),&
-            iPres_I(nSpecies), iTemp_I(nSpecies),iTpar_I(nSpecies),&
-            iTperp_I(nSpecies), iHpar_I(nSpecies), iHperp_I(nSpecies))
-       iDen_I(O_) =1
-       iVel_I(O_) =2
-       iPres_I(O_)=3
-       iTemp_I(O_)=4
-       iTpar_I(O_)=5
-       iTperp_I(O_)=6
-       iHpar_I(O_)=7
-       iHperp_I(O_)=8
-       
-       iDen_I(H_) =9
-       iVel_I(H_) =10
-       iPres_I(H_)=11
-       iTemp_I(H_)=12
-       iTpar_I(H_)=13
-       iTperp_I(H_)=14
-       iHpar_I(H_)=15
-       iHperp_I(H_)=16
-       nVarProfile=16
+
     case DEFAULT
        call con_stop('particles not for planet')
     end select
@@ -850,11 +864,13 @@ contains
          *exp(-mass*vel**2/(2.0*cBoltzmannCGS*Temp))
   end function maxwellian
   !=============================================================================
-  ! plot a altitude profile of the integrated moments
-  subroutine plot_profile
+  ! plot a altitude profile of the integrated moments for a given species
+  subroutine plot_profile(iSpecies)
     use ModNumConst, ONLY: cPi,cTwoPi
     use ModPlotFile,   ONLY: save_plot_file
-    integer :: iSpecies,iCell
+    integer, intent(in) :: iSpecies
+    
+    integer :: iCell
     integer :: nParticleInCell
     
     real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
@@ -865,7 +881,7 @@ contains
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
     !grid parameters
     integer, parameter :: nDim =1
-    integer :: nVar=1
+
     !plot variables
     character(len=100) :: NamePlot
 
@@ -874,6 +890,16 @@ contains
     character(len=5) :: TypePlot='ascii'
     logical, save :: IsFirstCall=.true.
     logical,allocatable,save :: IsFirstCall_I(:)
+
+    !indices for plots
+    integer, parameter :: iDen_=1,iVel_=2,iPres_=3, iTemp_=4,iTpar_=5,iTperp_=6,&
+         iHpar_=7,iHperp_=8
+    integer, parameter :: nVar = 8
+
+    !name for plot output
+    character(len=150)::NameProfilePlotVar=&
+         'Alt[km] n[cm-3] u[km/s] p T[k] Tpar[k] '&
+         //'Tperp[k] Hpar Hperp g r'
     !---------------------------------------------------------------------------
     if (IsFirstCall) then
        allocate(IsFirstCall_I(nLine))
@@ -881,42 +907,38 @@ contains
        IsFirstCall = .false.
     endif
     
-    nVar=nVarProfile
-    
     allocate(Coord_I(0:nAlt),PlotState_IV(0:nAlt,nVar))    
     do iCell=0,nAlt
        Coord_I(iCell)=Alt_G(iCell)*1e-5
-       do iSpecies=1,nSpecies
-          nParticleInCell=nSortedParticle_II(iSpecies,iCell)
-          if(nParticleInCell==0) then
-             PlotState_IV(iCell,iDen_I(iSpecies))  = 0.0
-             PlotState_IV(iCell,iVel_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iPres_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTemp_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTpar_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iTperp_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iHpar_I(iSpecies)) = 0.0
-             PlotState_IV(iCell,iHperp_I(iSpecies)) = 0.0
+       nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+       if(nParticleInCell==0) then
+          PlotState_IV(iCell,iDen_)  = 0.0
+          PlotState_IV(iCell,iVel_) = 0.0
+          PlotState_IV(iCell,iPres_) = 0.0
+          PlotState_IV(iCell,iTemp_) = 0.0
+          PlotState_IV(iCell,iTpar_) = 0.0
+          PlotState_IV(iCell,iTperp_) = 0.0
+          PlotState_IV(iCell,iHpar_) = 0.0
+          PlotState_IV(iCell,iHperp_) = 0.0
+       else
+          ! get moments in cell. note weighted calculation falls apart 
+          ! next to ghost cell so revert to basic calcuation
+          if (iCell<=1 .or. iCell==nAlt) then
+             call calc_moments_cell(iSpecies,iCell,&
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
           else
-             ! get moments in cell. note weighted calculation falls apart 
-             ! next to ghost cell so revert to basic calcuation
-             if (iCell<=1 .or. iCell==nAlt) then
-                call calc_moments_cell(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
-             else
-                call calc_moments_cell_weighted(iSpecies,iCell,&
-                     density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
-             endif
-             PlotState_IV(iCell,iDen_I(iSpecies))  = density
-             PlotState_IV(iCell,iVel_I(iSpecies)) = uBulkPar*cCmToKm
-             PlotState_IV(iCell,iPres_I(iSpecies)) = Pressure
-             PlotState_IV(iCell,iTemp_I(iSpecies)) = Temp
-             PlotState_IV(iCell,iTpar_I(iSpecies)) = Tpar
-             PlotState_IV(iCell,iTperp_I(iSpecies)) = Tperp
-             PlotState_IV(iCell,iHpar_I(iSpecies)) = Hpar
-             PlotState_IV(iCell,iHperp_I(iSpecies)) = Hperp
-          end if
-       enddo
+             call calc_moments_cell_weighted(iSpecies,iCell,&
+                  density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
+          endif
+          PlotState_IV(iCell,iDen_)  = density
+          PlotState_IV(iCell,iVel_) = uBulkPar*cCmToKm
+          PlotState_IV(iCell,iPres_) = Pressure
+          PlotState_IV(iCell,iTemp_) = Temp
+          PlotState_IV(iCell,iTpar_) = Tpar
+          PlotState_IV(iCell,iTperp_) = Tperp
+          PlotState_IV(iCell,iHpar_) = Hpar
+          PlotState_IV(iCell,iHperp_) = Hperp
+       end if
     end do
     !Plot 
     !write(NamePlot,"(a)") 'Profile.out'
@@ -2124,9 +2146,10 @@ contains
   
   !=============================================================================
   ! 
-  subroutine apply_wave_particle_interaction
+  subroutine apply_wave_particle_interaction(rWaveRef)
     use ModPlanetConst, ONLY: Planet_,rPlanet_I
     use ModNumConst, ONLY: cTwoPi
+    real, intent(in):: rWaveRef
     real :: rPlanetCM, rCoord, Dperp,variance
     integer :: iSpecies, iParticle
     real :: vpar, vperp,vmag,dVx,dVy,theta,phi,Velx,Vely
@@ -2160,7 +2183,7 @@ contains
        vmag =sqrt(vpar**2+vperp**2)
 
        rCoord=rPlanetCM+Particles_I(iParticle)%Alt
-       Dperp=Dperp_I(iSpecies)*(rCoord/rPlanetCM)**Dexp_I(iSpecies)
+       Dperp=Dperp_I(iSpecies)*(rCoord/rWaveRef)**Dexp_I(iSpecies)
        variance=2*Dperp*DtMove
        dVx=sqrt(-2.0*variance*log(RandNum1_I(iParticle)))&
             *cos(cTwoPi*RandNum2_I(iParticle))
@@ -3055,8 +3078,10 @@ contains
     real, allocatable :: HeatFlux_IC(:,:)
     
     !min values for density and temperature
-    real, parameter :: DensityMin=1e-4 !cm-3
-    real, parameter :: TemperatureMin=100.0 !k
+    !    real, parameter :: DensityMin=1e-4 !cm-3
+    real, parameter :: DensityMin=1e-8 !cm-3
+    !    real, parameter :: TemperatureMin=100.0 !k
+        real, parameter :: TemperatureMin=1.0 !k
 !    logical,parameter :: UseSmooth=.true.
     !---------------------------------------------------------------------------
     
@@ -3109,7 +3134,7 @@ contains
              DensityOut_IC(iSpecies,iAlt) = DensityMin
              VelocityOut_IC(iSpecies,iAlt)    = 0.0
              TemperatureOut_IC(iSpecies,iAlt) = TemperatureMin
-             HeatFlux_IC(iSpecies,iAlt) = 0.0
+             HeatFluxOut_IC(iSpecies,iAlt) = 0.0
           else
              !interpolate
              DensityOut_IC(iSpecies,iAlt)  = &
@@ -3237,14 +3262,19 @@ contains
   end subroutine put_to_particles
   !============================================================================
   ! advance the particle solution for some DtAdvance
-  subroutine run_particles(DtAdvance,IsCuspOrAurora)
-    real, intent(in) :: DtAdvance
+  subroutine run_particles(DtAdvance,IsCuspOrAurora,SmLat)
+    use ModConst,           ONLY: cElectronCharge
+    use ModPlanetConst,     ONLY: Planet_, NamePlanet_I, rPlanet_I  
+    real, intent(in) :: DtAdvance,SmLat
     logical, intent(in) :: IsCuspOrAurora
 
-    integer :: iAlt, iSpecies,nTime,iTime,iAltPlot,iCollide
+    integer :: iAlt, iSpecies, jSpecies, nTime,iTime,iAltPlot,iCollide
     integer, parameter :: iAltBC=0
     real :: TimeAdvance
+    real :: WaveCoef, fci, SpectralIndex, E2waveRef,fWaveRef, rWaveRef
     character(len=100):: TypeGrid
+
+    real,parameter :: cGtoKg = 1.0e-3, cMtoCm=1e2
     !---------------------------------------------------------------------------
     
     TimeAdvance=0.0
@@ -3310,29 +3340,74 @@ contains
           if (iAlt==nAlt-1) exit
           !write(*,*) 'iAlt',iAlt
           do iCollide=1,nCollide
-             call timing_start('apply_coulomb_collision')
-             !          !self collisions
-             call apply_coulomb_collision(iAlt,1,1)
-             call apply_coulomb_collision(iAlt,2,2)
-             !          !interspecies collisions
-             call apply_coulomb_collision(iAlt,1,2)
-             call timing_stop('apply_coulomb_collision')
+             do iSpecies=1,nSpecies
+                do jSpecies=iSpecies,nSpecies
+                   call timing_start('apply_coulomb_collision')
+                   call apply_coulomb_collision(iAlt,iSpecies,jSpecies)
+                   call timing_stop('apply_coulomb_collision')
+                enddo
+             enddo
           enddo
        enddo
-
+       
        !apply the WPI
        if (UseWPI) then
           !set appropriate WPI coefficients
-          if(IsCuspOrAurora) then
-             Dperp_I(O_)=6.94e5   !auroral/cusp value
-             Dperp_I(H_)=4.45e7   !auroral/cusp value
-          else
-             Dperp_I(O_)=9.55e2  !polar cap value
-             Dperp_I(H_)=5.77e3  !polar cap value
-          endif
+          select case(TypeWPI)
+          case('Barakat')
+             !Uses the coeficients published by Barghouthi 1997 and used in
+             !Barakat and Schunk 2001
+             !from DE data survey. This is only valid for Earth
+             if(IsCuspOrAurora) then
+                Dperp_I(O_)=6.94e5   !auroral/cusp value
+                Dexp_I(O_)=13.3
+                
+                Dperp_I(H_)=4.45e7   !auroral/cusp value
+                Dexp_I(H_)=7.95
 
+                Dperp_I(He_)=0.0  
+                Dexp_I(He_)=7.95
+             else
+                Dperp_I(O_)=9.55e2  !polar cap value
+                Dexp_I(O_)=13.3
+                
+                Dperp_I(H_)=5.77e3  !polar cap value
+                Dexp_I(H_)=7.95
+
+                Dperp_I(He_)=0.0  
+                Dexp_I(He_)=7.95
+             endif
+             rWaveRef= rPlanet_I(Planet_)*cMtoCm
+          case('General')
+             ! uses approach described by Crew et al. [1990], as well as
+             ! Retterer et al [1987],...
+
+             if(IsCuspOrAurora) then
+                SpectralIndex=SpectralIndexAur
+                E2waveRef    = E2waveRefAur
+                fWaveRef     = fWaveRefAur
+                rWaveRef   = rWaveRefAur
+             else
+                SpectralIndex=SpectralIndexCap
+                E2waveRef    = E2waveRefCap
+                fWaveRef     = fWaveRefCap
+                rWaveRef   = rWaveRefCap
+             endif
+             
+             WaveCoef = E2waveRef*fWaveRef**SpectralIndex
+             do iSpecies=1,nSpecies
+                call get_fci(rWaveRef, iSpecies,SmLat, fci)
+                Dperp_I(iSpecies) = &
+                     (FracLeftHand*cElectronCharge**2)&
+                     /(4.0*Mass_I(iSpecies)*cGtoKg) &
+                     * WaveCoef*fci**(-SpectralIndex)*(cMtoCm**2)
+                Dexp_I(iSpecies) = 3.0*SpectralIndex
+             enddo
+             
+          end select
+             
           call timing_start('apply_wave_particle_interaction')
-          call apply_wave_particle_interaction
+          call apply_wave_particle_interaction(rWaveRef)
           call timing_stop('apply_wave_particle_interaction')
        endif
 
@@ -3357,7 +3432,9 @@ contains
        !plot profile of moments
        if (floor((Time+1.0e-5)/DtSaveProfile) &
             /=floor((Time+1.0e-5-DtMove)/DtSaveProfile) )then 
-          call plot_profile
+          do iSpecies=1,nSpecies
+             call plot_profile(iSpecies)
+          enddo
        endif
 
        !plot DF                                                                 
@@ -3374,6 +3451,45 @@ contains
     
     
   end subroutine run_particles
+
+  !============================================================================
+  ! calculate the ion cyclotron frequency in hertz
+  subroutine get_fci(AltRef, iIon,SmLat, fci)
+    use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I
+    use ModNumConst,        ONLY: cDegToRad
+    use ModConst,           ONLY: cElectronCharge
+    real, intent(in):: AltRef !incomming reference alt [cm]
+    real, intent(in):: SmLat !Lat in SM at foot of field line [degrees]
+    integer, intent(in):: iIon !index of ion species
+    real, intent(out)   :: fci
+
+    real  :: B0ref
+    
+    real, parameter :: cCmToM=1.0e-2, cGtoKg=1.0e-3
+    real    :: Lshell, rPlanet, dipmom, Lat
+    real    :: rRef ! reference radius
+    !--------------------------------------------------------------------------
+    
+    rPlanet = rPlanet_I(Earth_)                            ! planet's radius (m)
+    dipmom  = abs(DipoleStrengthPlanet_I(Earth_)*rPlanet**3)  ! planet's dipole 
+    
+    !set the reference radius
+    rRef = rPlanet+AltRef*cCmToM
+    ! find corresponding l-shell
+    Lshell = 1.0/(cos(SmLat*cDegToRad))**2.0
+    
+    ! find corresponding latitude for location on l-shell
+    Lat = acos(sqrt(rRef*cCmToM/(Lshell*rPlanet)))
+    
+    ! get the magnetic field of the reference altitude
+    B0ref = &
+         dipmom*sqrt(1+3.0*(sin(Lat))**2.0)/(rRef)**3.0
+
+    !calculate the gyro freq, fci
+    fci = cElectronCharge/(Mass_I(iIon)*cGtoKg)*B0ref
+    
+  end subroutine get_fci
+
   !============================================================================
   ! unit test subroutine for sampling
   subroutine test_sample
@@ -3436,7 +3552,7 @@ contains
          TempTmp,TparTmp,TperpTmp
 
 
-    call plot_profile
+    call plot_profile(iSpecies)
   end subroutine test_sample
 
   !============================================================================
@@ -3536,7 +3652,7 @@ contains
     enddo
     
 
-!    call plot_profile
+!    call plot_profile(iSpecies)
   end subroutine test_split_join
 
 
@@ -3637,7 +3753,7 @@ contains
        !plot profile of moments
        if (floor((Time+1.0e-5)/DtSavePlot) &
             /=floor((Time+1.0e-5-DtMove)/DtSavePlot) )then 
-          call plot_profile
+          call plot_profile(iSpecies)
        endif
        
        write(*,*) 'nParticle=',nParticle
@@ -3904,7 +4020,7 @@ contains
     !push the guiding center 100 times and reinitialize ghost cell each time
     do iTime=1,nTime
        call timing_start('apply_wpi')
-       call apply_wave_particle_interaction
+       call apply_wave_particle_interaction(6375.0e5)
        call timing_stop('apply_wpi')
        
        !advance the time

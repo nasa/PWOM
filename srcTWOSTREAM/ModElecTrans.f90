@@ -214,7 +214,8 @@ contains
     if (.not.allocated(PrecipCombinedPhi_I))&
          allocate(PrecipCombinedPhi_I(NBINS))
     if (UsePrecipitation) then
-       !write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
+       if(NamePlanet_I(Planet_).EQ.'JUPITER') &
+            write(*,*) 'PrecipEflux, PrecipEmean',PrecipEflux, PrecipEmean
        !call maxt(PrecipEflux, PrecipEmean, ENER, DEL,0, 0.0, 0.0, PrecipPhi_I)
        call maxt(0.0, PrecipEmean, ENER, DEL,0, PrecipEflux, PrecipEmean, PrecipPhi_I)
     else
@@ -748,6 +749,7 @@ contains
     call calc_integrated_values(AVMU,uFlx,dFlx)
     !call map_flux(AVMU,uFlx)
     call plot_integrated(time)
+    if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_integrated_species(time)
   END SUBROUTINE ETRANS
   !
   !
@@ -959,20 +961,20 @@ contains
        write(NamePlot,"(a,i4.4,a)") 'OmniIono_',iLineGlobal,'.out'
   
        !Plot grid for given line
-       if(IsFirstCall1) then
-          call save_plot_file(NamePlot, TypePositionIn='rewind', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
-               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-          IsFirstCall1 = .false.
-       else
-          call save_plot_file(NamePlot, TypePositionIn='append', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
-               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-       endif
+!       if(IsFirstCall1) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+!       IsFirstCall1 = .false.
+!       else
+!          call save_plot_file(NamePlot, TypePositionIn='append', &
+!               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+!               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+!               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+!               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+!       endif
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_omni_iono
@@ -1030,20 +1032,20 @@ contains
        write(NamePlot,"(a,i4.4,a)") 'IonRate_',iLineGlobal,'.out'
   
        !Plot grid for given line
-       if(IsFirstCall1) then
-          call save_plot_file(NamePlot, TypePositionIn='rewind', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
-               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-          IsFirstCall1 = .false.
-       else
-          call save_plot_file(NamePlot, TypePositionIn='append', &
-               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
-               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
-               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
-               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
-       endif
+!       if(IsFirstCall1) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+            VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+!       IsFirstCall1 = .false.
+!       else
+!          call save_plot_file(NamePlot, TypePositionIn='append', &
+!               TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+!               NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+!               nDimIn=nDim,CoordIn_DII=Coord_DII,                &
+!               VarIn_IIV = PlotState_IIV, ParamIn_I = (/1.6, 1.0/))
+!       endif
     
     deallocate(Coord_DII, PlotState_IIV)
   end subroutine plot_ionization
@@ -1055,6 +1057,7 @@ contains
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModSeBackground, ONLY: PhotoIonRate_IC
     
     real,    intent(in) :: time
     
@@ -1093,7 +1096,6 @@ contains
        PlotState_IV(iAlt,Pot_)  = DeltaPot_C(iAlt)
        PlotState_IV(iAlt,ionrate_)  = TotalIonizationRate_C(iAlt)
        PlotState_IV(iAlt,sec_)  = sum(SecondaryIonRate_IC(:,iAlt))
-       
     enddo
     
     ! set name for plotfile
@@ -1117,6 +1119,76 @@ contains
     
     deallocate(Coord_I, PlotState_IV)
   end subroutine plot_integrated
+
+  !=============================================================================
+  subroutine plot_integrated_species(time)
+    use ModSeGrid,     ONLY: Alt_C, nAlt, iLineGlobal,DeltaPot_C
+    use ModIoUnit,     ONLY: UnitTmp_
+    use ModPlotFile,   ONLY: save_plot_file
+    use ModNumConst,   ONLY: cRadToDeg,cPi
+    use ModSeBackground, ONLY: PhotoIonRate_IC,nSpecies=>nNeutralSpecies
+    
+    real,    intent(in) :: time
+    
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+
+    !grid parameters
+    integer, parameter :: nDim =1, nVar=9, S_=1
+    !variable parameters
+    integer, parameter :: ionrate_=1, sec_=2, photo_=6
+    
+    character(len=200),parameter :: NamePlotVar=&
+         'Alt[km] IonRate[cm-3s-1] SecRateH2 SecRateHe SecRateH SecRateCH4'&
+         //' PhotoRateH2 PhotoRateHe PhotoRateH PhotoRateCH4 g r'
+    character(len=100) :: NamePlot='integrated_species.out'
+    
+    character(len=*),parameter :: NameHeader='SE output iono'
+    character(len=5) :: TypePlot='ascii'
+    integer :: iAlt,iEnergy,iSpecies
+
+    logical :: IsFirstCall1=.true.,IsFirstCall2=.true.
+    !--------------------------------------------------------------------------
+    
+    allocate(Coord_I(nAlt),PlotState_IV(nAlt,nVar))
+    
+    !    do iLine=1,nLine
+    PlotState_IV = 0.0
+    Coord_I     = 0.0
+    
+    !Set values
+    do iAlt=1,nAlt
+       Coord_I(iAlt) = Alt_C(iAlt)/1e5
+       ! set plot state
+       PlotState_IV(iAlt,ionrate_)  = TotalIonizationRate_C(iAlt)
+       do iSpecies=1,nSpecies
+          PlotState_IV(iAlt,sec_+iSpecies-1) = &
+               SecondaryIonRate_IC(iSpecies,iAlt)
+          PlotState_IV(iAlt,photo_+iSpecies-1) = &
+               PhotoIonRate_IC(iSpecies,iAlt)
+       enddo
+    enddo
+    
+    ! set name for plotfile
+    write(NamePlot,"(a,i4.4,a)") 'se_integrated_species',iLineGlobal,'.out'
+  
+    !Plot grid for given line
+    if(IsFirstCall1) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+       IsFirstCall1 = .false.
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6, 1.0/))
+    endif
+    
+    deallocate(Coord_I, PlotState_IV)
+  end subroutine plot_integrated_species
 
   !=============================================================================
   
@@ -1325,13 +1397,15 @@ contains
             1.7E-8*sum(NumDensIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
        NumberFlux_C(iAlt)=&
             sum(NumFluxIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
-
+!       write(*,*) 'ND,NF: ',NumberDens_C(iAlt),NumberFlux_C(iAlt)
+       
        if(.not.DoPrecipCurrent) then
           !get contribution from losscone filling aurora
           call map_precip(AVMU,PrecipCombinedPhi_I,PrecNumberDens_C,&
                PrecNumberFlux_C)
           NumberDens_C(iAlt)=NumberDens_C(iAlt)+PrecNumberDens_C(iAlt)
           NumberFlux_C(iAlt)=NumberFlux_C(iAlt)+PrecNumberFlux_C(iAlt)
+!          write(*,*) 'not do precip current'
        endif
        
     enddo ALT_LOOP

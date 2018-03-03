@@ -29,12 +29,15 @@ subroutine polar_wind
   logical,save  :: IsFirstCall=.true.
   real    :: Jr, DtVariable
   real    :: NewState_GV(-1:maxGrid,nVar)
-  
+
+  ! AMU in grams
+  real, parameter :: AMUinGrams=1.6606655E-24
+    
   !for particle coupling
   real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
   real,allocatable :: HeatFlux_IC(:,:)
-  integer :: iSpecies
-  integer, parameter :: nParticleSpecies=2
+  integer :: iSpecies, iIon
+
   real :: ScaleHeight
   logical :: IsCuspOrAurora
   real, parameter :: CuspAuroraPrecipThreshold=0.5
@@ -130,17 +133,16 @@ subroutine polar_wind
 
      if (UseParticles .and. (floor((Time+1.0e-5)/DtCoupleParticles) &
           /=floor((Time+1.0e-5-DT)/DtCoupleParticles)) )then 
-        allocate(Density_IC(2,nDim),Velocity_IC(2,nDim),&
-             Temperature_IC(2,nDim),HeatFlux_IC(2,nDim))
-        Density_IC(1,:)=State_GV(1:nDim,iRho_I(1))/Mass_I(1)
-        Density_IC(2,:)=State_GV(1:nDim,iRho_I(2))/Mass_I(2)
-        Velocity_IC(1,:)=State_GV(1:nDim,iU_I(1))
-        Velocity_IC(2,:)=State_GV(1:nDim,iU_I(2))
-        Temperature_IC(1,:)=State_GV(1:nDim,iT_I(1))
-        Temperature_IC(2,:)=State_GV(1:nDim,iT_I(2))        
+        allocate(Density_IC(nIon-1,nDim),Velocity_IC(nIon-1,nDim),&
+             Temperature_IC(nIon-1,nDim),HeatFlux_IC(nIon-1,nDim))
+        do iIon=1,nIon-1
+           Density_IC(iIon,:)=State_GV(1:nDim,iRho_I(iIon))/Mass_I(iIon)
+           Velocity_IC(iIon,:)=State_GV(1:nDim,iU_I(iIon))
+           Temperature_IC(iIon,:)=State_GV(1:nDim,iT_I(iIon))
+        enddo
         
         if(IsVerboseParticle) write(*,*) 'calling put_to_particles'
-        call put_to_particles(nDim,2,1.0e5*ALTD(1:nDim),&
+        call put_to_particles(nDim,nIon-1,1.0e5*ALTD(1:nDim),&
              .false.,Density_IC,Velocity_IC,Temperature_IC,&
              EfieldIn_C=EFIELD(1:nDim))
         if(IsVerboseParticle) &
@@ -153,19 +155,19 @@ subroutine polar_wind
 
         !advance the particle solution to the next coupling time
         if(IsVerboseParticle) write(*,*) 'calling run_particles'
-        call run_particles(DtCoupleParticles,IsCuspOrAurora)
+        call run_particles(DtCoupleParticles,IsCuspOrAurora,SmLat)
         if(IsVerboseParticle) write(*,*) 'done run_particles'
 
         
         if (UseParticleFeedback) then
            !get the particle solution back
-           call get_from_particles(nDim,2,1.0e5*ALTD(1:nDim),&
+           call get_from_particles(nDim,nIon-1,1.0e5*ALTD(1:nDim),&
                 Density_IC,Velocity_IC,Temperature_IC,HeatFlux_IC)
 
            ! fill the particle solution back to fluid array above the boundary. 
            !take the density and  velocity. Set T conserving heatflux. Then 
            !cacluate the pressure
-           do iSpecies=1,nParticleSpecies
+           do iSpecies=1,nIon-1
               State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies))=&
                    Density_IC(iSpecies,iAltParticle+1)*Mass_I(iSpecies)
               State_GV(iAltParticle+1:iAltParticle+2,iU_I(iSpecies))=&
@@ -181,23 +183,24 @@ subroutine polar_wind
               ! matches the heatflux of the particles. 
               !-kappa (T(i+1)-T(i))/dr = Qpart
               ! T(i+1)=T(i) - dr*Qpart/kappa
+              ! note that kappa is set from eq. 5.168 or Schunk and Nagy
+              ! ignoring the collisional term
               State_GV(iAltParticle+1,iT_I(iSpecies))=&
                    State_GV(iAltParticle,iT_I(iSpecies))&
                    -DrBnd*HeatFlux_IC(iSpecies,iAltParticle+1)&
-                   /HeatCon_GI(iAltParticle+1,iSpecies)
+                   /4.96e-8*State_GV(iAltParticle,iT_I(iSpecies))**(-2.5)&
+                   *sqrt(Mass_I(iSpecies)/AMUinGrams)
 
               State_GV(iAltParticle+2,iT_I(iSpecies))=&
                    State_GV(iAltParticle+1,iT_I(iSpecies))&
                    -DrBnd*HeatFlux_IC(iSpecies,iAltParticle+2)&
-                   /HeatCon_GI(iAltParticle+2,iSpecies)
-
+                   /4.96e-8*State_GV(iAltParticle+1,iT_I(iSpecies))**(-2.5)&
+                   *sqrt(Mass_I(iSpecies)/AMUinGrams)
 
               State_GV(iAltParticle+1:iAltParticle+2,iP_I(iSpecies))=&
                    State_GV(iAltParticle+1:iAltParticle+2,iT_I(iSpecies))&
                    *(Rgas_I(iSpecies)&
                    *State_GV(iAltParticle+1:iAltParticle+2,iRho_I(iSpecies)))
-                            
-              
 
               State_GV(iAltParticle+3:nDim,iRho_I(iSpecies))=&
                    Density_IC(iSpecies,iAltParticle+3:nDim)*Mass_I(iSpecies)

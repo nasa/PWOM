@@ -34,34 +34,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C                                                                      C
 
 CALEX not I use O for H3 and he for H2
-C Gas constant = k_Boltzmann/AMU
-      RGAS=8.314E7
-C Adiabatic index
-      GAMMA=5./3.
-C AMU in gramms
-      XAMU=1.6606655E-24
-C Mass of atomic H3 in gramms
-      Mass_I(Ion1_)=3.0237*XAMU
-C Mass of atomic H in gramms
-      Mass_I(Ion2_)=1.00797*XAMU
-C Mass of H2 in gramms
-      Mass_I(Ion3_)=2.0159*XAMU
-C Mass of electron in gramms
-      Mass_I(nIon)=9.109534E-28
-C Relative mass of H3 to electron
-      MassElecIon_I(Ion1_)=Mass_I(nIon)/Mass_I(Ion1_)
-C Relative mass of atomic H to electron
-      MassElecIon_I(Ion2_)=Mass_I(nIon)/Mass_I(Ion2_)
-C Relative mass of H2 to electron
-      MassElecIon_I(Ion3_)=Mass_I(nIon)/Mass_I(Ion3_)
-C kB/m_H3
-      RGAS_I(Ion1_)=RGAS*XAMU/Mass_I(Ion1_)
-C kB/m_H
-      RGAS_I(Ion2_)=RGAS*XAMU/Mass_I(Ion2_)
-C kB/m_H2
-      RGAS_I(Ion3_)=RGAS*XAMU/Mass_I(Ion3_)
-C kB/m_e
-      RGAS_I(nIon)=RGAS*XAMU/Mass_I(nIon)
+
+
       GMIN1=GAMMA-1.
       GMIN2=GMIN1/2.
       GPL1=GAMMA+1.
@@ -186,7 +160,9 @@ C                                                                      C
       NDensity_CI(1:nDim,H2O_)= XH2O(1:NDIM)
       NDensity_CI(1:nDim,CH4_)= XCH4(1:NDIM)
 
-
+      !set thermal electron floor
+      eThermalDensMin = 1.0e-2
+      
       !get the SE fluxes from SE first (call here to get Ionization rate
       if (.not.allocated(SeDens_C)) allocate(SeDens_C(nDim))
       if (.not.allocated(SeFlux_C)) allocate(SeFlux_C(nDim))
@@ -237,10 +213,10 @@ C      READ (5,2) ETOP,ELFXIN
 CALEX I don't know how to fix this heat input for Saturn.
 CALEX In Dee's thesis she says you need electon heat flux to be a minimum
 CALEX of 20E-3 ergs cm^2 /s.      
-C      ETOP=1.0E-3
+C      ETOP=1.0E-3   ! low value
 C      ETOP=20.0E-3   ! original value
-C      ETOP=1.0E-3    ! previously used
-      ETOP=0.0        ! set to zero for SE coupling
+      ETOP=2.0E-3               ! previously used
+c      ETOP=0.0        ! set to zero for SE coupling
       ELFXIN=0.
 C
 C      ELFXIN=9.

@@ -61,7 +61,7 @@ contains
              H2A = 0.0
              H2A = linear(ReadArray_II(1,:),1,33, &
                   Coords(1),ReadArray_II(2,:)*1.e5,.false.)
-             write(*,*) H2A*1.e6, param, Coords(1)
+             if(IsVerbose) write(*,*) H2A*1.e6, param, Coords(1)
 ! *** Use Atreya neutrals ***
 !             if (H2A*1.e6.GT.param.AND. &
 !                  Coords(1).LT.maxval(ReadArray_II(2,:)*1.e5)) then
@@ -101,7 +101,6 @@ contains
     filenames(6) = 'PW/3D_JGITM_Temperature.txt'
 
     do iNeutralVar = 1,nNeutralVar
-       write(*,*) iNeutralVar
        open(UnitTmp_,FILE=filenames(iNeutralVar),STATUS='OLD')
        do line = 1,6
           read(UnitTmp_,'(a)') tmpline

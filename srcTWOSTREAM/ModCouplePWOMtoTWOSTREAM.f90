@@ -141,7 +141,8 @@ contains
          plot_background,plot_ephoto_prod,get_neutrals_and_pe_spectrum
     use ModElecTrans,only: Time, EMeanDiff,EFluxDiff,EMeanWave,&
          EFluxWave,EMeanMono,EFluxMono,etrans,EMeanIe,EFluxIe,UseIePrecip
-
+    use ModPlanetConst, only: Planet_, NamePlanet_I
+    
     implicit none
     ! Incomming time from PWOM
     real, intent(in) :: TimePw
@@ -246,7 +247,7 @@ contains
             maxval(EfieldPW_C(:)*cSTATVperCMtoVperM)
     endif
     ! plot background after interp
-!    call plot_background(iLine,1,time)
+    if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_background(iLine,time)
 !    call con_stop('')     
 
     ! get the potential for the mapping above the 2-stream solution
