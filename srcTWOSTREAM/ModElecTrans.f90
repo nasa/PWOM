@@ -229,7 +229,7 @@ contains
        PolarRainPhi_I(:)=0.0
     endif
 
-    if (UseIePrecip) then
+    if (UseIePrecip .and. EmeanIe>0.01) then
        call maxt(EfluxIe, EmeanIe, ENER, DEL,0, 0.0, 0.0, &
             IePhi_I)
     else
@@ -743,12 +743,12 @@ contains
     end do !end while
 
     !call plot_omni_iono(time,uFlux_IC,dFlux_IC)
-    call plot_omni_iono(time,uFlx,dFlx)
-    call plot_ionization(time,PESPEC,SecRate_IC)
+    !call plot_omni_iono(time,uFlx,dFlx)
+    !call plot_ionization(time,PESPEC,SecRate_IC)
     
     call calc_integrated_values(AVMU,uFlx,dFlx)
     !call map_flux(AVMU,uFlx)
-    call plot_integrated(time)
+    !call plot_integrated(time)
     if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_integrated_species(time)
   END SUBROUTINE ETRANS
   !
