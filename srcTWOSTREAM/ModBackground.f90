@@ -136,10 +136,17 @@ contains
     IF (STL1.LT.0.) STL1=STL1+24.
     IF (STL1.GT.24.) STL1=STL1-24.
     if(IsVerbose) write(*,*) 'calling iri'
-    CALL IRI90(JF,JMAG,gLat,gLon,RZ12,MMDD,STL1, &
+!    CALL IRI90(JF,JMAG,gLat,gLon,RZ12,MMDD,STL1, &
+!         Alt_C(1:nAlt)/1e5,nAlt, &
+!         'PW/IRI_DATA/ccir.cofcnts', &
+!         'PW/IRI_DATA/ursi.cofcnts', IriOutput_VC,OARR, 0)
+    !kludge IRI seems to have some issue with the southern hemisphere...
+    !for now just use north
+    CALL IRI90(JF,JMAG,abs(gLat),gLon,RZ12,MMDD,STL1, &
          Alt_C(1:nAlt)/1e5,nAlt, &
          'PW/IRI_DATA/ccir.cofcnts', &
          'PW/IRI_DATA/ursi.cofcnts', IriOutput_VC,OARR, 0)
+
     !save dip inclination angle in radians from IRI output
     dip=OARR(25)*cDegToRad
     if(IsVerbose) write(*,*) 'finish iri'
