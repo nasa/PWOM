@@ -74,7 +74,7 @@ LIB:
 	cd srcTWOSTREAM; make LIB
 	cd src; make LIB
 	cd srcInterface; make LIB
-	cd srcSTET; make LIB
+
 
 
 # Default PARAM.in file name (can be overwritten)
