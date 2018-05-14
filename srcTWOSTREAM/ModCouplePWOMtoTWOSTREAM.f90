@@ -254,7 +254,7 @@ contains
     call calc_potential
     
     ! Get a new steady state solution 
-    call etrans
+    call etrans(iLineGlobal_I(iLine))
     
     ! Interpolate the output back to PWOM grid
     if (present(IonRatePW_C) .and. present(PhotoIonRatePW_IC)) then

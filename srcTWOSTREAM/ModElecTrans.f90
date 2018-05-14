@@ -3,6 +3,7 @@ Module ModElecTrans
 
   PRIVATE
 
+
   real,allocatable :: ALPHA(:), BETA(:), GAMA(:), PSI(:), &
        DELZ(:), DEL2(:), DELA(:), DELP(:), &
        DELM(:), DELS(:), DEN(:)
@@ -37,6 +38,12 @@ Module ModElecTrans
   !Variables regarding whether we assume preciptation is paired with current
   logical :: DoPrecipCurrent = .true.
   integer :: MaxEnergyInt
+
+  ! minimum energy channel to use in calculating integral parameters. For some
+  ! reason there seems to be an issue in the lowest energy channel for glow that
+  ! randomly appears during low solar input conditions. So for now just skip
+  ! lowest energy channel
+  integer,parameter:: MinEnergyInt=3 
 
   !time, used for output only
   real,public ::Time=0.0
@@ -110,7 +117,7 @@ contains
   ! NF      number of available types of auroral fluxes
   !
   !
-  SUBROUTINE ETRANS
+  SUBROUTINE ETRANS(iLineGlobal)
     use ModPlanetConst, only: Planet_, NamePlanet_I
     use ModSeGrid, only: NBINS=>nEnergy, AltMax=>nAlt,Alt_C,&
          ENER=>EnergyGrid_I, DEL=>DeltaE_I,nAltExtended,DeltaPot_C,IsVerbose
@@ -135,6 +142,7 @@ contains
     !    INCLUDE 'cglow.h'
     
 !    logical,external :: isfinite
+    integer, intent(in) :: iLineGlobal
     logical :: IsLocal = .false.
     integer  IERR
     
@@ -176,6 +184,8 @@ contains
     !DeltaPot_C(:)=0.0
     DiffMax=1.0
 
+    PhiUp=0.0
+    PhiDwn=0.0
     LastPhiUp = 0.0
     LastPhiDwn = 0.0
 
@@ -523,6 +533,11 @@ contains
              CALL IMPIT(FLUXJ) !computes DEN via module
              DO I = 1, AltMax
                 PHIDWN(I) = DEN(I)
+                !kludge
+                PHIDWN(I) = max(DEN(I),0.0)
+                !if (J==1.and.I==69)then
+                !   write(*,*) 'PHIDWN(I),Proddwn',PHIDWN(I),PRODWN(I-1:I+1,J+1)
+                !endif
                 if(IsDebug .and. phidwn(i).gt.1e30) then
                    write(*,*) 'GAMA(i), beta(i)',gama(i),beta(i)
                    call con_stop('etrans: very large PHIDWN (jlocal != 1)')
@@ -542,11 +557,17 @@ contains
                 EXPT2(I) = EXP(-TAUE(I))
              enddo
              DO I=2,AltMax
+                !write(*,*) R1(I), EXPT2(I),T2(I),ze(I),zte(i)
+                !write(*,*) Alt_C(I),R1(I), PROD(I), PRODUP(I,J),T2(I),PHIUP(I-1),PHIDWN(I)
+                !write(*,*) Alt_C(I),T2(I),TSIGNE(I),ZE(I),ZTE(I),EXPT2(I)
+                !if (J==1.and.I==69)then
+                !   write(*,*) 'PHIDWN(I),T1(I)',PHIDWN(I),T1(I)
+                !endif
                 PHIUP(I) = R1(I) + (PHIUP(I-1)-R1(I)) * EXPT2(I)
                 !             if (IsDebug .and. .not.isfinite(phiup(i))) &
                 !      call con_stop('etrans: nonfinite PHIUP  (.not.IsLocal)')
              End DO
-
+             
              
           else
              !local calculation
@@ -616,10 +637,12 @@ contains
           ! Electron heating rate:
           !
           DAG = DEL(J)
-          DO I = 1, AltMax
-             EHEAT(I) = EHEAT(I) + TSIGNE(I) * (PHIUP(I)+PHIDWN(I)) * DAG**2
-          End Do
-
+          !exclude heating outside of integration range
+          if (J>=MinEnergyInt) then
+             DO I = 1, AltMax
+                EHEAT(I) = EHEAT(I) + TSIGNE(I) * (PHIUP(I)+PHIDWN(I)) * DAG**2
+             End Do
+          endif
           !
           ! Electron impact excitation rates:
           !
@@ -743,13 +766,18 @@ contains
     end do !end while
 
     !call plot_omni_iono(time,uFlux_IC,dFlux_IC)
-    !call plot_omni_iono(time,uFlx,dFlx)
+
     !call plot_ionization(time,PESPEC,SecRate_IC)
     
     call calc_integrated_values(AVMU,uFlx,dFlx)
     !call map_flux(AVMU,uFlx)
     !call plot_integrated(time)
     if(NamePlanet_I(Planet_).EQ.'JUPITER') call plot_integrated_species(time)
+
+    !if (iLineGlobal==164) then
+    !   call plot_omni_iono(time,uFlx,dFlx)
+    !   call plot_integrated(time)
+    !endif
   END SUBROUTINE ETRANS
   !
   !
@@ -1201,7 +1229,6 @@ contains
     real,allocatable :: NumDensIntegrand_I(:) !integrand of number density
     integer :: iEnergy,iAlt
 
-
     !--------------------------------------------------------------------------
     !\
     ! calculate number density
@@ -1209,31 +1236,36 @@ contains
     if (.not.allocated(NumDensIntegrand_I))allocate(NumDensIntegrand_I(nEnergy))
     if (.not.allocated(NumberDens_C)) allocate(NumberDens_C(nAltExtended))
     if (.not.allocated(NumberFlux_C))allocate(NumberFlux_C(nAltExtended))
-    
+
     ALT: do iAlt=1,nAlt
        ENERGY: do iEnergy=1,nEnergy
           NumDensIntegrand_I(iEnergy) = &
-               (uFlux_IC(iEnergy,iAlt)/AVMU+dFlux_IC(iEnergy,iAlt)/AVMU)&
+               ((uFlux_IC(iEnergy,iAlt))/AVMU+(dFlux_IC(iEnergy,iAlt))/AVMU)&
                /sqrt(EnergyGrid_I(iEnergy))
        enddo ENERGY
 !       CALL midpnt_int(NumberDens_C(iAlt),NumDensIntegrand_I,&
 !            EnergyGrid_I,1,nEnergy,nEnergy,1)
        NumberDens_C(iAlt)=&
-            sum(NumDensIntegrand_I(1:MaxEnergyInt)*DeltaE_I(1:MaxEnergyInt))
+            sum(NumDensIntegrand_I(MinEnergyInt:MaxEnergyInt)&
+            *DeltaE_I(MinEnergyInt:MaxEnergyInt))
 !       NumberDens_C(iAlt)=4.*cPi*1.7E-8*NumberDens_C(iAlt)
        NumberDens_C(iAlt)=1.7E-8*NumberDens_C(iAlt)
-       
+       if (NumberDens_C(iAlt)<0.0) then
+          write(*,*) NumberDens_C(iAlt), minval(uFlux_IC),minloc(uFlux_IC)
+          stop
+       endif
        ! calculate the number flux
 !       CALL midpnt_int(NumberFlux_C(iAlt),&
 !            uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt),&
 !            DeltaE_I,1,nEnergy,nEnergy,2)
 !       NumberFlux_C(iAlt)=2.0*cPi*sum((uFlux_IC(:,iAlt)-dFlux_IC(:,iAlt))*DeltaE_I(:))
 
-       NumberFlux_C(iAlt)=sum((uFlux_IC(1:MaxEnergyInt,iAlt)&
-            -dFlux_IC(1:MaxEnergyInt,iAlt))*DeltaE_I(1:MaxEnergyInt))
+       NumberFlux_C(iAlt)=sum((uFlux_IC(MinEnergyInt:MaxEnergyInt,iAlt)&
+            -dFlux_IC(MinEnergyInt:MaxEnergyInt,iAlt))&
+            *DeltaE_I(MinEnergyInt:MaxEnergyInt))
        
     enddo ALT
-
+    
     ! Map flux above calculation using Liouville's theorem
 !    call map_flux(AVMU,uFlux_IC-dFlux_IC)
     call map_flux(AVMU,uFlux_IC)
@@ -1394,9 +1426,11 @@ contains
 !       NumberFlux_C(iAlt)=2.0*cPi*sum(NumFluxIntegrand_I*dKE_I)
 
        NumberDens_C(iAlt)=&
-            1.7E-8*sum(NumDensIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
+            1.7E-8*sum(NumDensIntegrand_I(MinEnergyInt:MaxEnergyInt)&
+            *dKE_I(MinEnergyInt:MaxEnergyInt))
        NumberFlux_C(iAlt)=&
-            sum(NumFluxIntegrand_I(1:MaxEnergyInt)*dKE_I(1:MaxEnergyInt))
+            sum(NumFluxIntegrand_I(MinEnergyInt:MaxEnergyInt)&
+            *dKE_I(MinEnergyInt:MaxEnergyInt))
 !       write(*,*) 'ND,NF: ',NumberDens_C(iAlt),NumberFlux_C(iAlt)
        
        if(.not.DoPrecipCurrent) then
