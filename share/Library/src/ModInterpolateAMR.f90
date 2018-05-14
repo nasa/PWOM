@@ -2761,7 +2761,7 @@ contains
     !\
     ! To find the sort of corner stencil
     !/
-    integer:: iCase, iDir, iGrid
+    integer:: iCase, iDir, iGrid, iDim
 
     !\
     ! Error message
@@ -2972,12 +2972,21 @@ contains
           if(iLevel_I(iOrder_I(iGrid))==Fine_)then
              nFine   = nFine   + 1
              iOrder_I(    (/nFine,iGrid/)) = iOrder_I(    (/iGrid,nFine/))
-             XyzGrid_DI(:,(/nFine,iGrid/)) = XyzGrid_DI(:,(/iGrid,nFine/)) 
+             !\
+             ! Original version:
+             !XyzGrid_DI(:,(/nFine,iGrid/)) = &
+             !     XyzGrid_DI(:,(/iGrid,nFine/))
+             !XyzGrid_DI(:,(/nFine + 4,iGrid + 4 /)) =  &
+             !     XyzGrid_DI(:,(/iGrid + 4, nFine + 4/))
+             do iDim=1,nDim
+                XyzGrid_DI(iDim,(/nFine,iGrid/)) = &
+                     XyzGrid_DI(iDim,(/iGrid,nFine/))
+                XyzGrid_DI(iDim,(/nFine + 4,iGrid + 4 /)) =  &
+                     XyzGrid_DI(iDim,(/iGrid + 4, nFine + 4/))
+             end do
              Weight_I(    (/nFine,iGrid/)) = Weight_I(    (/iGrid,nFine/))
              iOrder_I(     (/nFine + 4,iGrid + 4/)) = &
                   iOrder_I(     (/iGrid + 4,nFine + 4/))
-             XyzGrid_DI(:,(/nFine + 4,iGrid + 4 /)) =  &
-                  XyzGrid_DI(:,(/iGrid + 4, nFine + 4/)) 
           end if
        end do
        nCoarse = nGridOut2 - nFine
@@ -3762,6 +3771,10 @@ contains
          iCellOut_II(:, nCellOut) = iCellOut_II(:,iGrid)
          Weight_I(nCellOut) = Weight_I(iGrid)
       end do
+      if(nCellOut == 0)&
+           call CON_stop(&
+           "ModInterpolateAMR:interpolate_amr_gc: "//&
+           "All points in interpolation stencil have been sorted out!")
     end subroutine sort_out
   end subroutine interpolate_amr_gc
   !============================================================================
@@ -4791,10 +4804,6 @@ contains
     integer:: nGrid, iGrid
     !/
     !\
-    ! To improve the algorithm stability against roundoff errors
-    !/
-    real           :: cTol2
-    !\
     ! !Number of integers in the cell index. Normally this is nDim
     ! however, a flexibility to allow any other value is useful.
     integer:: nCellId 
@@ -5119,6 +5128,10 @@ contains
          iOrder_I(nGridOut) = iOrder_I(iGrid)
          Weight_I(nGridOut) = Weight_I(iGrid)
       end do ALL
+      if(nGridOut == 0)&
+           call CON_stop(&
+           "ModInterpolateAMR:interpolate_extended_stencil: "//&
+           "All points in interpolation stencil have been sorted out!")
     end subroutine sort_out
   end subroutine interpolate_extended_stencil
 end module ModInterpolateAMR
