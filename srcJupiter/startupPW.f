@@ -520,9 +520,9 @@ C
 CALEX SOURCE COEF?
 C jp = photochemical reaction rate
 C kc = collisional reaction rate      
-         FFHpp1(I)=jp1*XH2(I)
-         FFHpp3(I)=jp3*XH(I)
-         FFHpp4(I)=jp4*XH2O(I)
+         !FFHpp1(I)=jp1*XH2(I)
+         !FFHpp3(I)=jp3*XH(I)
+         !FFHpp4(I)=jp4*XH2O(I)
          FFHpc2(I)=-kc2*XH2(I)*XH2(I)
          FFHpc3(I)=-kc3*XCH4(I)
          FFHpc8(I)=-kc8*XH2O(I)
@@ -542,7 +542,7 @@ CALEX         write(26,*) FFHpp1(I),FFHpp3(I),FFHpp4(I),FFHpc2(I),FFHpc3(I),FFHp
 CALEX write out source coeff
 CALEX         write(27,*) FFH3pc1(I),FFH3pc2(I),FFH3pc6(I),FFH3pc7(I),FFH3pr2(I)
 
-         FFH2pp2(I)=jp2*XH2(I)
+         !FFH2pp2(I)=jp2*XH2(I)
          FFH2pc9(I)=kc9(I)*XH2(I)
          FFH2pc1(I)=-kc1*XH2(I)
 
