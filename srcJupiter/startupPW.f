@@ -150,9 +150,9 @@ C                                                                      C
       gmLat=SmLat
       gmLon=SmLon
       gLat=SmLat
-      gLon=SmLon
+      gLong=SmLon
       gLat2=-SmLat
-      gLon2=SmLon
+      gLong2=SmLon
       UTsec=0.0
       CALL JupiterAtmos(gmLat,gmLon,XH2,XH,XH2O,XCH4,XTN)
       NDensity_CI(1:nDim,H2_) = XH2(1:NDIM)
@@ -177,7 +177,7 @@ C                                                                      C
       if ((floor((Time+1.0e-5)/DtGetSe)/=floor((Time+1.0e-5-DT)/DtGetSe))
      &     .and.DoCoupleSE) then 
          call get_se_for_pwom(Time,UTsec,iLine,(/GmLat,GmLon/),
-     &        (/GLAT,GLON/),(/GLAT2,GLON2/),
+     &        (/GLAT,GLONG/),(/GLAT2,GLON2/),
      &        State_GV(1:nDim,RhoE_)/Mass_I(nIon),State_GV(1:nDim,Te_),
      &        Efield(1:nDim),Ap,F107,F107A,IYD,SeDens_C, SeFlux_C, SeHeat_C,
      &        PhotoIonRatePW_IC=PhotoIonRate_IC,
