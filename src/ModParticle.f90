@@ -1833,7 +1833,13 @@ contains
             Density1,uBulkPar,uBulkPerp,Pressure,Temp1,&
             Tpar,Tperp,Hpar,Hperp)
        Density2=Density1
-       Temp2=Density1
+       Temp2=Temp1
+
+       if(Temp1<1e-10.or.Temp2<1e-10 &
+            .or. Density1<1e-10 .or. Density2<1e-10) then
+          !In case of zero temperature or density return with no collisions
+          return
+       endif
        
        DensityMin = Density1
        
@@ -1851,6 +1857,13 @@ contains
        call calc_moments_cell(jSpeciesIn,iCell,&
             Density2,uBulkPar,uBulkPerp,Pressure,Temp2,&
             Tpar,Tperp,Hpar,Hperp)
+
+       if(Temp1<1e-10.or.Temp2<1e-10 &
+            .or. Density1<1e-10 .or. Density2<1e-10) then
+          !In case of zero temperature or density return with no collisions
+          return
+       endif
+
        
        DensityMin = min(Density1,Density2)
        
@@ -1862,11 +1875,6 @@ contains
             +cCm3ToM3*Density2/Temp2))
     end if
 
-    if(Temp1<1e-10.or.Temp2<1e-10 &
-         .or. Density1<1e-10 .or. Density2<1e-10) then
-       !In case of zero temperature or density return with no collisions
-       return
-    endif
  
     ! Adjust timestep for use in variance calculation. In Nanbu and Yonemura 1998 
     ! this is explained by the use of average time step per real particle.
@@ -3079,7 +3087,7 @@ contains
     
     !min values for density and temperature
     !    real, parameter :: DensityMin=1e-4 !cm-3
-    real, parameter :: DensityMin=1e-8 !cm-3
+    real, parameter :: DensityMin=1e-10 !cm-3
     !    real, parameter :: TemperatureMin=100.0 !k
         real, parameter :: TemperatureMin=1.0 !k
 !    logical,parameter :: UseSmooth=.true.
@@ -3399,7 +3407,7 @@ contains
                 call get_fci(rWaveRef, iSpecies,SmLat, fci)
                 Dperp_I(iSpecies) = &
                      (FracLeftHand*cElectronCharge**2)&
-                     /(4.0*Mass_I(iSpecies)*cGtoKg) &
+                     /(4.0*(Mass_I(iSpecies)*cGtoKg)**2) &
                      * WaveCoef*fci**(-SpectralIndex)*(cMtoCm**2)
                 Dexp_I(iSpecies) = 3.0*SpectralIndex
              enddo
