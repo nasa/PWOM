@@ -256,7 +256,8 @@ contains
     use ModSeProduction,only: RCOLUM,RCOLUM_ABOVE,ESPEC,SOLZEN,SSFLUX,&
                               init_production
     use ModSeCross,     only: cross,cross_jupiter
-    use EUA_ModMsis90,  only: GTD6,TSELEC
+    !use EUA_ModMsis90,  only: GTD6,TSELEC
+    use EUA_ModMsis90,  only: GTD7,TSELEC
     use ModNumConst,    only: cDegToRad,cRadToDeg
     use ModPlanetConst, only: Planet_, NamePlanet_I
 
@@ -274,7 +275,7 @@ contains
 
     !MSIS variables
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
-    real :: SW(25),DN(8),TN(2)
+    real :: SW(25),DN(9),TN(2)!,DN(8)
     DATA sw/8*1.,-1.,16*1./
     
     character(len=100) :: NeutralFile
@@ -307,7 +308,9 @@ contains
        CALL TSELEC(SW)
        
        do  iIono=1,nIono
-          CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+          !CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+          !     gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
+          CALL GTD7(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
                gLat1_I(iLine),gLon1_I(iLine),STL1,F107A,F107,AP,48,DN,TN)
           NeutralDens1_IIC(iLine,O_ ,iIono)=DN(msisO_)
           NeutralDens1_IIC(iLine,O2_,iIono)=DN(msisO2_)
@@ -365,7 +368,9 @@ contains
        !  Call MSIS to get the neutral densities and temperature
        CALL TSELEC(SW)
        do  iIono=1,nIono
-          CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+          !CALL GTD6(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
+          !     gLat2_I(iLine),gLon2_I(iLine),STL2,F107A,F107,AP,48,DN,TN)
+          CALL GTD7(Idate,UT,FieldLineGrid_IC(iLine,iIono)/1e5, &
                gLat2_I(iLine),gLon2_I(iLine),STL2,F107A,F107,AP,48,DN,TN)
           NeutralDens2_IIC(iLine,O_ ,iIono)=DN(msisO_)
           NeutralDens2_IIC(iLine,O2_,iIono)=DN(msisO2_)
