@@ -166,7 +166,8 @@ contains
                               init_production
     use ModSeCross,     only: EXSECT,cross_jupiter
 !    use ModSeCross,     only: CROSS,cross_jupiter
-    use EUA_ModMsis90,  only: GTD6,TSELEC
+    !use EUA_ModMsis90,  only: GTD6,TSELEC
+    use EUA_ModMsis00,  only: GTD7,TSELEC
     use ModNumConst,    only: cDegToRad,cRadToDeg
     use ModPlanetConst, only: Planet_, NamePlanet_I
     use Mod3DAtmos,     only: get_jupiter_atmos
@@ -184,7 +185,7 @@ contains
 
     !MSIS variables
     integer,parameter :: msisO_=2, msisO2_=4, msisN2_=3 
-    real :: SW(25),DN(8),TN(2)
+    real :: SW(25),DN(9),TN(2)!,DN(8)
     DATA sw/8*1.,-1.,16*1./
     
     character(len=100) :: NeutralFile
@@ -215,7 +216,9 @@ contains
        CALL TSELEC(SW)
        
        do  iAlt=1,nAlt
-          CALL GTD6(Idate,UT,Alt_C(iAlt)/1e5, &
+          !CALL GTD6(Idate,UT,Alt_C(iAlt)/1e5, &
+          !     gLat,gLon,STL,F107A,F107,AP,48,DN,TN)
+          CALL GTD7(Idate,UT,Alt_C(iAlt)/1e5, &
                gLat,gLon,STL,F107A,F107,AP,48,DN,TN)
           NeutralDens_IC(O_ ,iAlt)=DN(msisO_)
           NeutralDens_IC(O2_,iAlt)=DN(msisO2_)

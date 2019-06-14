@@ -24,6 +24,8 @@ bin:
 INSTALLFILES =  src/Makefile.DEPEND \
 		src/Makefile.RULES \
 		srcInterface/Makefile.DEPEND\
+		srcGITMREADER/Makefile.DEPEND\
+		srcGITMREADER/Makefile.RULES\
 		srcSTET/Makefile.DEPEND\
 		srcSTET/Makefile.RULES\
 		srcTWOSTREAM/Makefile.DEPEND\
@@ -39,6 +41,7 @@ PWOM:
 	cd ${EMPIRICALIEDIR};     make LIB
 	cd ${EMPIRICALUADIR};     make  LIB
 	cd ${DATAREADINDICESDIR}; make LIB
+	cd srcGITMREADER;	  make LIB
 	cd srcTWOSTREAM;	  make LIB
 	cd src;                   make PWOM
 
@@ -67,10 +70,15 @@ TWOSTREAM:
 	cd ${DATAREADINDICESDIR}; make LIB
 	cd srcTWOSTREAM;          make TWOSTREAM
 
+GITMREADER:
+	cd ${SHAREDIR};           make LIB
+	cd srcGITMREADER;         make GITMREADER
+
 serialrun: PWOM
 	cd ${RUNDIR}; ${SERIAL} ./PWOM.exe
 
 LIB:
+	cd srcGITMREADER; make LIB
 	cd srcTWOSTREAM; make LIB
 	cd src; make LIB
 	cd srcInterface; make LIB
@@ -104,6 +112,14 @@ rundir:
 			touch core ; chmod 444 core ; \
 	fi)
 
+rundir_gitmreader:
+	rm -rf ${TESTDIR}
+	mkdir -p ${TESTDIR}/PW/UAfiles
+	cd ${TESTDIR}; \
+		ln -s ${BINDIR}/gitm_reader.exe;\
+		cp ${MYDIR}/srcGITMREADER/gitm_20110614_040000_PWOM.dat.tgz PW/UAfiles/ ;\
+		cd PW/UAfiles;\
+		tar xvfz gitm_20110614_040000_PWOM.dat.tgz
 
 test:
 	-@(make test_saturn)

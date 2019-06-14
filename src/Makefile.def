@@ -4,7 +4,7 @@ localdefault: help # default target
 
 DIR       = ${PWDIR}
 SCRIPTDIR = ${PWDIR}/share/Scripts
-LIBDIR    = ${PWDIR}/src
+LIBDIR    = ${PWDIR}/share/lib
 RUNDIR    = ${PWDIR}/run
 BINDIR    = ${PWDIR}/bin
 INCLDIR   = ${DIR}/share/include

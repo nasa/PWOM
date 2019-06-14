@@ -67,6 +67,7 @@ DEPEND:
 
 MY_LIB = libPWOM.a
 LIBSE  = ${LIBDIR}/libSE.a
+LIBSE  = ${LIBDIR}/libGITMREADER.a
 
 LIB:	DEPEND
 	make ${MY_LIB}
@@ -94,13 +95,14 @@ ${EXE}:	${EXEOBJECTS}
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a; \
 		ar -x ${LIBDIR}/libTIMING.a; \
-		ar -x ${LIBDIR}/libSE.a
+		ar -x ${LIBDIR}/libGITMREADER.a;\
+		ar -x ${LIBDIR}/libSE.a 
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
 
 PWOM_from_lib:	${EXEOBJECTS}
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES  \
-		-lTIMING  -lSE -lSHARE\
+		-lTIMING  -lGITMREADER -lSE -lSHARE\
 		${Lflag1}
 
 
