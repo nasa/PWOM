@@ -3464,7 +3464,7 @@ contains
   ! calculate the ion cyclotron frequency in hertz
   subroutine get_fci(AltRef, iIon,SmLat, fci)
     use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I
-    use ModNumConst,        ONLY: cDegToRad
+    use ModNumConst,        ONLY: cDegToRad,cTwoPi
     use ModConst,           ONLY: cElectronCharge
     real, intent(in):: AltRef !incomming reference alt [cm]
     real, intent(in):: SmLat !Lat in SM at foot of field line [degrees]
@@ -3494,7 +3494,7 @@ contains
          dipmom*sqrt(1+3.0*(sin(Lat))**2.0)/(rRef)**3.0
 
     !calculate the gyro freq, fci
-    fci = cElectronCharge/(Mass_I(iIon)*cGtoKg)*B0ref
+    fci = cElectronCharge/(Mass_I(iIon)*cGtoKg)*B0ref/cTwoPi
     
   end subroutine get_fci
 
