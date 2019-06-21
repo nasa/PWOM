@@ -2034,7 +2034,7 @@ contains
        if (variance<1.0) then
           !Delta = sqrt(-2.0*variance*log(RandNum4_I(iCollision)))&
           !     *cos(cTwoPi*RandNum5_I(iCollision))
-          Delta=sqrt(abs(variance*log(1.0-RandNum4_I(iCollision))))&
+          Delta=sqrt(abs(variance*log(max(1e-31,1.0-RandNum4_I(iCollision)))))&
                *cos(cTwoPi*RandNum5_I(iCollision))
           !Theta=2.0*atan(sqrt(-2.0*variance*log(RandNum4_I(iCollision)))&
           !     *cos(cTwoPi*RandNum5_I(iCollision)))
