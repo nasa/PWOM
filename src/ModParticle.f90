@@ -611,6 +611,7 @@ contains
     integer :: nParticleOld,nAvail,i,j
     real :: NumPerParticle
     integer,allocatable :: IndexAvail_I(:)
+    integer :: ip
     !--------------------------------------------------------------------------
     nNew=nParticlePerCell_I(iSpecies)
 
@@ -666,14 +667,20 @@ contains
        ! when Particles_I already allocated (usual case) then calculate the
        !number of open spots (nAvail) then save Particles_I and allocate a new 
        !Particles_I array to save the good particles and the newly created ones
-       allocate(IndexAvail_I(nParticle))
-       where(Particles_I%IsOpen)
-          IndexAvail_I=1
-       elsewhere
-          IndexAvail_I=0
-       end where
-       nAvail=sum(IndexAvail_I)
-       deallocate(IndexAvail_I)
+
+       nAvail = 0
+       do ip=1,nParticle
+          if(Particles_I(ip)%IsOpen) nAvail = nAvail +1
+       end do
+
+       !allocate(IndexAvail_I(nParticle))
+       !where(Particles_I(:)%IsOpen)
+       !   IndexAvail_I=1
+       !elsewhere
+       !   IndexAvail_I=0
+       !end where
+       !nAvail=sum(IndexAvail_I)
+       !deallocate(IndexAvail_I)
        
        !save old particle array information
        nParticleOld=nParticle
@@ -2230,6 +2237,7 @@ contains
     type(particle),allocatable :: NewParticlesTmp_I(:)
     logical :: IsJoinSuccess
     integer :: nJoinRevise
+    integer :: ip
 
     !variables for assignment of particles
     type(particle),allocatable ::ParticlesOld_I(:)
@@ -2333,14 +2341,18 @@ contains
        !Calculate the
        !number of open spots (nAvail) then save Particles_I and allocate a new 
        !Particles_I array to save the good particles and the newly created ones
-       allocate(IndexAvail_I(nParticle))
-       where(Particles_I%IsOpen)
-          IndexAvail_I=1
-       elsewhere
-          IndexAvail_I=0
-       end where
-       nAvail=sum(IndexAvail_I)
-       deallocate(IndexAvail_I)
+       nAvail = 0
+       do ip=1,nParticle
+          if(Particles_I(ip)%IsOpen) nAvail = nAvail +1
+       end do
+       !allocate(IndexAvail_I(nParticle))
+       !where(Particles_I%IsOpen)
+       !   IndexAvail_I=1
+       !elsewhere
+       !   IndexAvail_I=0
+       !end where
+       !nAvail=sum(IndexAvail_I)
+       !deallocate(IndexAvail_I)
        
        !save old particle array information
        nParticleOld=nParticle
