@@ -95,6 +95,7 @@ contains
     use ModIoUnit, ONLY: UnitTmp_
     use ModPWOM,   ONLY: iLine,iLineGlobal
     use ModPlotFile,ONLY: save_plot_file
+    use ModConst ,  ONLY: cBoltzmann
     !use ModGlow,   ONLY: SZApe
     
     real MO,MH,MHe,Me
@@ -110,7 +111,7 @@ contains
     !\
     ! Fill PlotState_IV array 
     !/
-
+    cBoltzmannCGS = 1.0e7*cBoltzmann
     ! Set Lat Lon
     PlotState_IV (1:nDim, 1) = SmLat
     PlotState_IV (1:nDim, 2) = SmLon
@@ -126,6 +127,11 @@ contains
     do iNeutral=1,nNeutral
        PlotState_IV (1:nDim, 2+iNeutral)  = NDensity_CI(1:nDim,iNeutral)
     enddo
+    
+    do iAlt=1,nDim
+       PlotState_IV (iAlt, 2+nNeutral+1)  = NeutralPressure_C(iAlt)/(sum(NDensity_CI(iAlt,:))*cBoltzmannCGS)
+    enddo
+
     ! Set altitude for output
     Coord_I (1:nDim) = AltD(1:nDim)
 

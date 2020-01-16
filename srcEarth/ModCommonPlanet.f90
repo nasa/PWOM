@@ -79,9 +79,9 @@ Module ModCommonPlanet
   integer, parameter :: nPlotVar = 20
   character(len=79), parameter :: NamePlotVar= &
  'r Lat Lon uO uH uHe ue lgnO lgnH lgnHe lgne TO TH THe Te MO MH MHe Me Ef Pe g'
-  integer, parameter :: nPlotVarNeutral = 7
+  integer, parameter :: nPlotVarNeutral = 8
   character(len=79), parameter :: NamePlotVarNeutral= &
- 'r Lat Lon [O] [O2] [N2] [H] [He] g'
+ 'r Lat Lon [O] [O2] [N2] [H] [He] Tn g'
 
 
 end Module ModCommonPlanet
