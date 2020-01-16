@@ -1891,7 +1891,9 @@ contains
           write(*,*)weight1,iCell,iSpecies1,iCollider1
           write(*,*)weight2,iCell,iSpecies2,iCollider2
        endif
-       Density12=Density12 + (weight1*weight2)/max(weight1,weight2)
+       if (weight1 /=0.0 .or. weight2 /= 0.0 ) then
+          Density12=Density12 + (weight1*weight2)/max(weight1,weight2)
+       endif
     enddo
     if (iSpecies1==iSpecies2) Density12=2.0*Density12
     factor=(max(Density1,Density2)*Volume_G(iCell))/Density12
@@ -1939,6 +1941,12 @@ contains
        weight2=&
             SortParticles_III(iCollider2,iSpecies2,iCell)%Particle%NumPerParticle
 
+       !if particle weight is excessively small skip the collision as it would
+       !not do anything
+       if (weight1 == 0.0 .or. weight2 == 0.0 .or. &
+            abs(weight2-weight1) == weight2 .or. &
+            abs(weight2-weight1) == weight1) cycle
+       
        !use a rejection scheme when weights are unequal to reject some collisions
        If(weight2>weight1) then
           P1=1.0
@@ -3463,7 +3471,7 @@ contains
   !============================================================================
   ! calculate the ion cyclotron frequency in hertz
   subroutine get_fci(AltRef, iIon,SmLat, fci)
-    use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I
+    use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I,Planet_
     use ModNumConst,        ONLY: cDegToRad,cTwoPi
     use ModConst,           ONLY: cElectronCharge
     real, intent(in):: AltRef !incomming reference alt [cm]
@@ -3477,9 +3485,8 @@ contains
     real    :: Lshell, rPlanet, dipmom, Lat
     real    :: rRef ! reference radius
     !--------------------------------------------------------------------------
-    
-    rPlanet = rPlanet_I(Earth_)                            ! planet's radius (m)
-    dipmom  = abs(DipoleStrengthPlanet_I(Earth_)*rPlanet**3)  ! planet's dipole 
+    rPlanet = rPlanet_I(Planet_)                            ! planet's radius (m)
+    dipmom  = abs(DipoleStrengthPlanet_I(Planet_)*rPlanet**3)  ! planet's dipole 
     
     !set the reference radius
     rRef = rPlanet+AltRef*cCmToM
