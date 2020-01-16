@@ -103,6 +103,7 @@ contains
     real, allocatable :: Coord_I(:)
     integer :: iAlt, iNeutral
     character(len=100) :: NameNeutral
+    real :: cBoltzmannCGS
     !---------------------------------------------------------------------------
     ! Allocate PlotState and Coord arrays
     if (.not.allocated(PlotState_IV)) allocate(PlotState_IV(1:nDim,nPlotVarNeutral))
