@@ -432,10 +432,14 @@ contains
     real, intent(in) :: SZA, AltKm_C(nAlt)
     real :: FluxRes
     !Set named constants for particular wavelength bins
-    integer,parameter :: LyAlpha_= 12, LyBeta_=18 , HeI_=62, HeII_=90
+    !integer,parameter :: LyAlpha_= 12, LyBeta_=18 , HeI_=62, HeII_=90
+    integer,parameter :: LyAlpha_= 112, LyBeta_=106 , HeI_=62, HeII_=34
+
     !for starlight bin1 is 1000-1050A, bin2 is 950-1000A and bin3 is 900-950A
-    integer,parameter :: Starlight1a_= 16,Starlight1b_= 20,&
-         Starlight2a_= 21,Starlight2b_= 25,Starlight3a_=26,Starlight3b_=30
+    !integer,parameter :: Starlight1a_= 16,Starlight1b_= 20,&
+    !     Starlight2a_= 21,Starlight2b_= 25,Starlight3a_=26,Starlight3b_=30
+    integer,parameter :: Starlight1a_= 110,Starlight1b_= 110,&
+         Starlight2a_= 99,Starlight2b_= 103,Starlight3a_=94,Starlight3b_=98
     
     !incident starlight intensity for starlight bins (Thitheridge 2000)
     real, parameter :: StarLightIntensity = 5.0e6 !photons/cm2/s
