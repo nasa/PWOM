@@ -257,7 +257,7 @@ contains
                               init_production
     use ModSeCross,     only: cross,cross_jupiter
     !use EUA_ModMsis90,  only: GTD6,TSELEC
-    use EUA_ModMsis90,  only: GTD7,TSELEC
+    use EUA_ModMsis00,  only: GTD7,TSELEC
     use ModNumConst,    only: cDegToRad,cRadToDeg
     use ModPlanetConst, only: Planet_, NamePlanet_I
 
