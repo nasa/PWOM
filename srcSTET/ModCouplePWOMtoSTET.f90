@@ -141,7 +141,7 @@ contains
        eDensPW_C,eTempPW_C,EfieldPW_C,Ap_I,F107,F107A,IYD,&
        SeDensPW_C, SeFluxPW_C, SeHeatPW_C, IonRatePW_C, PhotoIonRatePW_IC, &
        SecIonRatePW_IC,EMeanDiffPW,EFluxDiffPW,EMeanWavePW,&
-       EFluxWavePW,EMeanMonoPW,EFluxMonoPW)
+       EFluxWavePW,EMeanMonoPW,EFluxMonoPW,EMeanIePW,EFluxIePW)
     use ModSeGrid, only: Lshell_I,update_grid,Efield_IC,iLineGlobal_I,IsVerbose
     use ModSeBackground,only: mLat_I,mLon_I, gLat1_I,gLat2_I,gLon1_I,gLon2_I,&
          Idate, UT,set_footpoint_locations,fill_thermal_plasma_empirical,&
@@ -175,7 +175,10 @@ contains
     !OVATION precipitation parameters
     real,optional,  intent(in) :: EmeanDiffPW,EFluxDiffPW,EMeanWavePW,&
          EFluxWavePW, EMeanMonoPW,EFluxMonoPW
-    
+
+    !IE precipitation parameters
+    real,optional,  intent(in) :: EmeanIePW,EFluxIePW
+
     ! named parameters for coordinates
     integer,parameter :: Lat_=1 ,Lon_=2 !named parameters for Coord_ID
     ! Is line open, for now always assume yes, but this could be passed
@@ -377,7 +380,7 @@ contains
   ! STET grids. Above PWOM boundary assume density falls with B^2. For now 
   ! use IRI in second hemisphere
   subroutine interpolate_pwom_to_stet(iLine,eDensPW_C,eTempPW_C,EfieldPW_C)
-    use ModSeGrid,      only: FieldLineGrid_IC,Efield_IC,nIono,nPoint,nTop
+    use ModSeGrid,      only: FieldLineGrid_IC,Efield_IC,nIono,nPoint,nTop, Bfield_IC
     use ModSeBackground,only:eThermalDensity_IC,eThermalTemp_IC
     use ModInterpolate, only: linear
     implicit none
@@ -417,6 +420,10 @@ contains
        else
           !once we are above the PW grid stop the do loop
           exit ALONG_LINE
+          !kludge
+          !eThermalDensity_IC(iLine,iPoint)= eThermalDensity_IC(iLine,iPoint-1)&
+          !     *(Bfield_IC(iLine,iPoint)/Bfield_IC(iLine,iPoint-1))**2.0
+          !eThermalTemp_IC(iLine,iPoint)=eThermalTemp_IC(iLine,iPoint-1)
        endif
     enddo ALONG_LINE
 
