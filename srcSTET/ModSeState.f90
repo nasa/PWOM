@@ -20,7 +20,10 @@ Module ModSeState
   
   !Omnidirectional flux for upward/downward-directed hemisphere
   real, public,allocatable :: specup(:,:,:),specdn(:,:,:)
-  
+
+  !portion of flux for loss cone
+  real, public,allocatable :: specupLC(:,:,:),specdnLC(:,:,:)
+
   real, public :: delt,epsilon
   
   ! Ring current parameters for coulomb collisions (note that ring.dat would 
@@ -47,6 +50,7 @@ Module ModSeState
   
   !Arrays for integrated output variables
   real,public,allocatable :: HeatingRate_IC(:,:)! volume heating rate [eV/cm3/s]
+  real,public,allocatable :: HeatingRateLC_IC(:,:)! volume heating rate [eV/cm3/s]
   real,public,allocatable :: NumberDens_IC(:,:) ! number density of SE [/cm3]
   real,public,allocatable :: NumberFlux_IC(:,:) ! number flux of SE [/cm2/s]
   real,public,allocatable :: SecondaryIonRate_IIC(:,:,:) 
@@ -203,6 +207,10 @@ contains
              CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0,iPlas,j),&
                   mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
+
+             CALL midpnt_int(specupLC(iLine,j,i),phiup(iLine,0,iPlas,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,nIono)+1,nAngle+1,1)
+             specupLC(iLine,j,i)=-.5*specupLC(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) time,j,i,iPlas,nThetaAlt_II(iLine,i)/4,&
@@ -298,6 +306,10 @@ contains
              CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0,iPlas,j),&
                   mu_III(iLine,0,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
+
+             CALL midpnt_int(specdnLC(iLine,j,i),phidn(iLine,0,iPlas,j),&
+                  mu_III(iLine,0,i),1, nThetaAlt_II(iLine,nIono)+1,nAngle+1,1)
+             specdnLC(iLine,j,i)=.5*specdnLC(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) time,j,i,iPlas,flag,&
@@ -531,6 +543,8 @@ contains
              CALL midpnt_int(specup(iLine,j,i),iphiup(iLine,:,iIono,j),&
                   mu_III(iLine,:,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
+             specupLC(iLine,j,i)=-.5*specup(iLine,j,i)
+             
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) 'Upward region'
@@ -664,6 +678,7 @@ contains
              CALL midpnt_int(specdn(iLine,j,i),iphidn(iLine,:,iIono,j),&
                   mu_III(iLine,:,i),1, nThetaAlt_II(iLine,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
+             specdnLC(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) 'Downward region'
@@ -912,6 +927,10 @@ contains
              CALL midpnt_int(specup(iLine,j,i),phiup(iLine,0:nAngle,iPlas,j),&
                   mu_IIIC(iLine,0:nAngle,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
+
+             CALL midpnt_int(specupLC(iLine,j,i),phiup(iLine,0:nAngle,iPlas,j),&
+                  mu_IIIC(iLine,0:nAngle,j,i),1, nThetaAlt_IIC(iLine,j,nIono)+1,nAngle+1,1)
+             specupLC(iLine,j,i)=-.5*specupLC(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) time,j,i,iPlas,nThetaAlt_IIC(iLine,j,i)/4,&
@@ -939,6 +958,27 @@ contains
              !fill bc from iono
              !   write(*,*) j,nTop, nThetaAlt_IIC(iLine,j,nTop)
              phidn(iLine,:,nTop+1,j) = 0.0
+
+             !\
+             ! KLUDGE to add reflection potential
+             !/
+             !if (KineticEnergy_IIC(iLine,j,nAltMax)<60.0) then
+             !   !reflect everything with KE < 20V
+             !   !phidn(iLine,:,nAltMax-nIono,j)=&
+             !   !     phiup(iLine,:,nAltMax-nIono,j)
+             !   !phidn(iLine,:,nTop+1,j) = phiup(iLine,:,nTop,j)
+             !   !phidn(iLine,:,nAltMax-nIono+1,j)=&
+             !   !     phiup(iLine,:,nAltMax-nIono,j)
+             !   do k=1,nAngle
+             !      phidn(iLine,k,nAltMax-nIono+1,j)=&
+             !           phiup(iLine,k,nAltMax-nIono,j)
+             !   enddo
+             !   !phidn(iLine,:,nAltMax-nIono,j)=&
+             !   !     phiup(iLine,:,nAltMax-nIono,j)
+             !   !phidn(iLine,:,nAltMax-nIono+1,j)=&
+             !   !     phiup(iLine,:,nAltMax-nIono,j)
+             !endif
+
              
              ! Add precip info here
              if(UsePrecipitation .and. EnergyGrid_I(j) > PrecipEmin &
@@ -1144,6 +1184,12 @@ contains
              CALL midpnt_int(specdn(iLine,j,i),phidn(iLine,0:nAngle,iPlas,j),&
                   mu_IIIC(iLine,0:nAngle,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
+
+             CALL midpnt_int(specdnLC(iLine,j,i),phidn(iLine,0:nAngle,iPlas,j),&
+                  mu_IIIC(iLine,0:nAngle,j,i),1, nThetaAlt_IIC(iLine,j,nIono)+1,nAngle+1,1)
+             specdnLC(iLine,j,i)=.5*specdnLC(iLine,j,i)
+
+             
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) time,j,i,iPlas,flag,&
@@ -1404,6 +1450,11 @@ contains
              CALL midpnt_int(specup(iLine,j,i),iphiup(iLine,:,iIono,j),&
                   mu_IIIC(iLine,:,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specup(iLine,j,i)=-.5*specup(iLine,j,i)
+
+             specupLC(iLine,j,i)=-.5*specup(iLine,j,i)
+
+             
+             
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) 'Upward region'
@@ -1608,6 +1659,7 @@ contains
              CALL midpnt_int(specdn(iLine,j,i),iphidn(iLine,:,iIono,j),&
                   mu_IIIC(iLine,:,j,i),1, nThetaAlt_IIC(iLine,j,i)+1,nAngle+1,1)
              specdn(iLine,j,i)=.5*specdn(iLine,j,i)
+             specdnLC(iLine,j,i)=.5*specdn(iLine,j,i)
              !  Write to a file (if the solution isn't converging)
              IF (count.GT.countmax-2) THEN
                 WRITE (10,*) 'Downward region'
@@ -2496,7 +2548,8 @@ contains
   !============================================================================
   ! A subroutine to get integrated output quantities including number density,
   ! number flux, and volume heating rate
-  subroutine calc_integrated_output(iLine,nNeutral,eThermalDensity_C)
+  subroutine calc_integrated_output(iLine,nNeutral,eThermalDensity_C,&
+       eThermalTemp_C)
     use ModSeGrid, only: nAngle, nPlas, nIono, nEnergy, nPoint,&
          KineticEnergy_IIC, DoIncludePotential,nThetaAlt_II,nThetaAlt_IIC, &
          mu_III,mu_IIIC, EnergyGrid_I, DeltaE_I,MaxAlt_IC,UsePwRegion,nPwRegion
@@ -2506,7 +2559,9 @@ contains
     
     integer, intent(in) :: iLine,nNeutral
     real   , intent(in) :: eThermalDensity_C(nPoint)
+    real   , intent(in) :: eThermalTemp_C(nPoint)
     real,allocatable :: spec(:)   !integrand of heating rate
+    real,allocatable :: specLC(:)   !integrand of heating rate in LC
     real,allocatable :: NumDensIntegrand_I(:) !integrand of number density
     real,allocatable :: IntegrandFluxUp_I(:) !integrand of flux
     real,allocatable :: IntegrandFluxDn_I(:) !integrand of flux
@@ -2521,6 +2576,7 @@ contains
     !---------------------------------------------------------------------------
     !allocate temporary arrays
     if (.not.allocated(spec)) allocate(spec(nEnergy))
+    if (.not.allocated(specLC)) allocate(specLC(nEnergy))
     if (.not.allocated(NumDensIntegrand_I))allocate(NumDensIntegrand_I(nEnergy))
     if (.not.allocated(delKE_I)) allocate(delKE_I(nEnergy))
 
@@ -2538,6 +2594,7 @@ contains
     NumberFlux_IC(iLine,:)=0.0
 
     HeatingRate_IC(iLine,:) = 0.0
+    HeatingRateLC_IC(iLine,:) = 0.0
     NumberDens_IC(iLine,:)=0.0
     
     ALONG_LINE: do iPoint=1,nPoint
@@ -2551,14 +2608,19 @@ contains
              if (iPoint>MaxAlt_IC(iLine,iEnergy) &
                   .and. iPoint<=nPoint-MaxAlt_IC(iLine,iEnergy)) then
                 Spec(iEnergy)=0.0
+                SpecLC(iEnergy)=0.0
                 cycle ENERGY
              endif
 
              if(KineticEnergy_IIC(iLine,iEnergy,iPoint) < 1e-30)then
                 Spec(iEnergy) = 0.0
+                SpecLC(iEnergy) = 0.0
              else
                 Spec(iEnergy)=&
                      (specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint))&
+                     / KineticEnergy_IIC(iLine,iEnergy,iPoint)
+                SpecLC(iEnergy)=&
+                     (specupLC(iLine,iEnergy,iPoint)-specdnLC(iLine,iEnergy,iPoint))&
                      / KineticEnergy_IIC(iLine,iEnergy,iPoint)
              end if
              !set the delta kinetic energy array
@@ -2572,13 +2634,32 @@ contains
              Spec(iEnergy)=&
                   (specup(iLine,iEnergy,iPoint)-specdn(iLine,iEnergy,iPoint))&
                   / EnergyGrid_I(iEnergy)
+             SpecLC(iEnergy)=&
+                  (specupLC(iLine,iEnergy,iPoint)-specdnLC(iLine,iEnergy,iPoint))&
+                  / EnergyGrid_I(iEnergy)
              delKE_I(iEnergy)=DeltaE_I(iEnergy)
           endif
        end do ENERGY
        CALL midpnt_int(HeatingRate_IC(iLine,iPoint),Spec,delKE_I,1,nEnergy,&
             nEnergy,2)
+       CALL midpnt_int(HeatingRateLC_IC(iLine,iPoint),Spec,delKE_I,1,nEnergy,&
+            nEnergy,2)
+      ! HeatingRate_IC(iLine,iPoint)=&
+      !      4.*cPi*Acoef*eThermalDensity_C(iPoint)*HeatingRate_IC(iLine,iPoint)
+
+      !heating rate based on Liemohn 1997 eq 8                       
        HeatingRate_IC(iLine,iPoint)=&
-            4.*cPi*Acoef*eThermalDensity_C(iPoint)*HeatingRate_IC(iLine,iPoint)
+            4.*cPi*Acoef*eThermalDensity_C(iPoint)&
+            *(HeatingRate_IC(iLine,iPoint) &
+            +(specup(iLine,1,iPoint)-specdn(iLine,1,iPoint))&
+            *(1.0-2.0*eThermalTemp_C(iPoint)/KineticEnergy_IIC(iLine,1,iPoint)))
+
+       HeatingRateLC_IC(iLine,iPoint)=&
+            4.*cPi*Acoef*eThermalDensity_C(iPoint)&
+            *(HeatingRateLC_IC(iLine,iPoint) &
+            +(specupLC(iLine,1,iPoint)-specdnLC(iLine,1,iPoint))&
+            *(1.0-2.0*eThermalTemp_C(iPoint)/KineticEnergy_IIC(iLine,1,iPoint)))
+
        !\
        ! calculate the total electron production rate for each altitude
        !/
@@ -2600,11 +2681,19 @@ contains
           
           CALL midpnt_int(TotalIonizationRate_IC(iLine,iPoint),&
                Qstar_ICI(iLine,iIono,:),delKE_I,1,nEnergy,nEnergy,2)
+          !kludge change integration range to exclude lowest energy
+          !CALL midpnt_int(TotalIonizationRate_IC(iLine,iPoint),&
+          !     Qstar_ICI(iLine,iIono,:),delKE_I,2,nEnergy,nEnergy,2)
           TotalIonizationRate_IC(iLine,iPoint) = &
                4.0*cPi*TotalIonizationRate_IC(iLine,iPoint)
        else
           TotalIonizationRate_IC(iLine,iPoint)=0.0
        endif
+
+
+       !kludge add local heating
+  !     HeatingRate_IC(iLine,iPoint)=&
+  !          HeatingRate_IC(iLine,iPoint) + 10.0*TotalIonizationRate_IC(iLine,iPoint)
        
        !\
        ! calculate number density
@@ -2765,6 +2854,9 @@ contains
     if(.not.allocated(specup)) allocate(specup(nLine,nEnergy,nPoint))
     if(.not.allocated(specdn)) allocate(specdn(nLine,nEnergy,nPoint))
 
+    if(.not.allocated(specupLC)) allocate(specupLC(nLine,nEnergy,nPoint))
+    if(.not.allocated(specdnLC)) allocate(specdnLC(nLine,nEnergy,nPoint))
+
     if(.not.allocated(lphiup)) allocate(lphiup(nLine,0:nAngle,nPlas,nEnergy))
     if(.not.allocated(lphidn)) allocate(lphidn(nLine,0:nAngle,nPlas,nEnergy))
 
@@ -2783,6 +2875,7 @@ contains
 
     !allocate arrays to hold integrated output
     if(.not.allocated(HeatingRate_IC)) allocate(HeatingRate_IC(nLine,nPoint))
+    if(.not.allocated(HeatingRateLC_IC)) allocate(HeatingRateLC_IC(nLine,nPoint))
     if(.not.allocated(NumberDens_IC))  allocate(NumberDens_IC(nLine,nPoint))
     if(.not.allocated(NumberFlux_IC))  allocate(NumberFlux_IC(nLine,nPoint))
     if(.not.allocated(SecondaryIonRate_IIC))&
@@ -2794,6 +2887,7 @@ contains
     specup                =0
     specdn                =0
     HeatingRate_IC        =0
+    HeatingRateLC_IC        =0
     NumberDens_IC         =0
     NumberFlux_IC         =0
     SecondaryIonRate_IIC  =0
