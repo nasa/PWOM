@@ -104,6 +104,7 @@ Module ModSeGrid
   ! If we include extra points in PW overlap region (only when coupling PWOM)
   logical,public :: UsePwRegion = .false.
   integer,public :: nPwRegion=50 ! points in overlap region above ionosphere
+  !integer,public :: nPwRegion=100 ! points in overlap region above ionosphere
 
 
   ! public methods
@@ -151,6 +152,7 @@ contains
          /(Lshell_I(iLine)**3*(1-SphiO**2)**3)*cTeslaToGauss
     BFieldIono_I(iLine) = Biono
     BFieldEq_I(iLine)   = Beq
+    
     if(IsVerbose) write(*,*) 'calc bfield and s grid for iLine = ', iLine
     call calc_bfield_sgrid(iLine,Biono,PhiBasePlas)
     if(IsVerbose) write(*,*) 'calc equatorial PA grid', iLine
@@ -188,6 +190,9 @@ contains
        select case(NamePlanet_I(Planet_))
        case('EARTH')
           TopAltPw=8000.0e5
+
+          !kludge
+          !TopAltPw=16000.0e5
        case('JUPITER')
           TopAltPw=60000.0e5
        end select
@@ -314,11 +319,27 @@ contains
     !  (currently assumes 4 zones)
     ThetaZone_II(iLine,1) = asin(sqrt(Beq/Biono)) !zone 1 is the loss cone
     ThetaZone_II(iLine,2) = ThetaZone_II(iLine,1)
-    ThetaZone_II(iLine,3) = 1.2-2.0*ThetaZone_II(iLine,1)
-    ThetaZone_II(iLine,4) = 0.5*cPi-1.2
+    !ThetaZone_II(iLine,3) = 1.2-2.0*ThetaZone_II(iLine,1)
+    !ThetaZone_II(iLine,4) = 0.5*cPi-1.2
+    ThetaZone_II(iLine,3) = 0.03-2.0*ThetaZone_II(iLine,1)
+    ThetaZone_II(iLine,4) = 0.5*cPi-0.03
+
+    !kludge set third zone boundary to cover PW region
+    if(UsePwRegion) then
+       ThetaZone_II(iLine,3) = &
+            asin(sqrt(Bfield_IC(iLine,nIono1+nIono2+nIono3+nIono4+nPwRegion)&
+            /Biono)) - 2.0*ThetaZone_II(iLine,1)
+       ThetaZone_II(iLine,4) = 0.5*cPi &
+            -asin(sqrt(Bfield_IC(iLine,nIono1+nIono2+nIono3+nIono4+nPwRegion)&
+            /Biono))
+    endif
     
     ! Get DeltaTheta for each zone
     dTheta_II(iLine,:) = ThetaZone_II(iLine,:)/nTheta_II(iLine,:)
+
+    !write(*,*) ThetaZone_II(iLine,:)*180.0/cPi
+    !write(*,*) dTheta_II(iLine,:)*180.0/cPi
+    !stop
     
     ! Fill in compuational region of equatorial PA grid
     do iAngle=1,MaxTheta
@@ -1036,10 +1057,10 @@ contains
     call allocate_grid_arrays
 
     Lshell_I(1)=10.0
-    nTheta_II(1,1)=5
-    nTheta_II(1,2)=20
+    nTheta_II(1,1)=10
+    nTheta_II(1,2)=10
     nTheta_II(1,3)=90
-    nTheta_II(1,4)=20
+    nTheta_II(1,4)=25
 
 
     nAngle = sum(nTheta_II(1,:))
