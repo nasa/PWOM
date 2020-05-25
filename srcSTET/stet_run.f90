@@ -10,7 +10,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   use ModSeState,only: check_time,check_time_pot,&
        update_se_state_iono,update_se_state_iono_pot,update_se_state, &
        update_se_state_pot,initplas, initplas_pot, initiono,initiono_pot,&
-       calc_integrated_output,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,&
+       calc_integrated_output,HeatingRate_IC,HeatingRateLC_IC,NumberDens_IC,NumberFlux_IC,&
        TotalIonizationRate_IC,&
        iphiup,iphidn,phiup,phidn,liphiup,liphidn,lphiup,lphidn,&
        specup, specdn, epsilon,delt, Time
@@ -25,7 +25,7 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
   logical :: DoSavePreviousAndReset = .true.
 
   logical,parameter :: IsIono1=.true.
-  real, parameter :: DtCouplePWOM=120.0 !this should come from PWOM in future
+  real, parameter :: DtCouplePWOM=60.0 !this should come from PWOM in future
   !--------------------------------------------------------------------------
   
   
@@ -128,11 +128,12 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
 
   ! Find heating rate, Se number density and flux
   if(IsVerbose) write(*,*) 'Getting Integrals for output'
-  call calc_integrated_output(iLine,nNeutralSpecies,eThermalDensity_IC(iLine,:))
+  call calc_integrated_output(iLine,nNeutralSpecies,eThermalDensity_IC(iLine,:),eThermalTemp_IC(iLine,:))
   
   !\
   ! plot model output
   !/
+  write(*,*) 'DoIncludePotential',DoIncludePotential
   if ((Time-real(floor((Time+1.0e-5)/DtSavePlot))*Dtsaveplot<DtCouplePWOM) &
        .or. .not.DoCouplePWOM)then 
      if(DoIncludePotential) then
@@ -144,18 +145,20 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         call plot_ephoto_prod(iLine,nStep,time)
         
         !     call plot_state_pot(iLine,90,nStep,time,iphiup,iphidn,phiup,phidn)     
-        !     call plot_state_pot(iLine,1,nStep,time,iphiup,iphidn,phiup,phidn)
-        !     call plot_state_pot(iLine,2,nStep,time,iphiup,iphidn,phiup,phidn)
-        !     call plot_state_pot(iLine,3,nStep,time,iphiup,iphidn,phiup,phidn)
-        !     call plot_state_pot(iLine,4,nStep,time,iphiup,iphidn,phiup,phidn)
-        !     call plot_state_pot(iLine,5,nStep,time,iphiup,iphidn,phiup,phidn)
-        !     call plot_state_pot(iLine,6,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,1,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,2,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,3,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,4,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,5,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,6,nStep,time,iphiup,iphidn,phiup,phidn)
+        !call plot_state_pot(iLine,20,nStep,time,iphiup,iphidn,phiup,phidn)
         
         call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.true.)
         call plot_omni_iono_pot(iLine,nStep,time,specup,specdn,.false.)
         
         call plot_omni_pot(iLine,nStep,time,specup,specdn)
-        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC)
+        call plot_along_field(iLine,time,HeatingRate_IC,HeatingRateLC_IC,&
+             NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC,eThermalDensity_IC)
         
         
      else
@@ -169,7 +172,8 @@ subroutine stet_run(iLine,IsOpen,DoCouplePWOM)
         call plot_omni_iono(iLine,nStep,time,specup,specdn,.true.)
         call plot_omni_iono(iLine,nStep,time,specup,specdn,.false.)
         call plot_omni_line(iLine,nStep,time,specup,specdn)
-        call plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC)
+        call plot_along_field(iLine,time,HeatingRate_IC,HeatingRateLC_IC,&
+             NumberDens_IC,NumberFlux_IC,TotalIonizationRate_IC,eThermalDensity_IC)
      end if
   end if
 end subroutine stet_run
