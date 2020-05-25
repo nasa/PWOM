@@ -143,10 +143,17 @@ subroutine set_grid_dimensions_default
   call allocate_grid_arrays
   
   ! default values for theta grid. 
-  nTheta_II(:,1)=5
+  !nTheta_II(:,1)=5
+  !nTheta_II(:,2)=20
+  !nTheta_II(:,3)=90
+  !nTheta_II(:,4)=20
+  !nAngle = 135
+
+
+  nTheta_II(:,1)=20
   nTheta_II(:,2)=20
   nTheta_II(:,3)=90
-  nTheta_II(:,4)=20
+  nTheta_II(:,4)=5
   nAngle = 135
 
 end subroutine set_grid_dimensions_default
