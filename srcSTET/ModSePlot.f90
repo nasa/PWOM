@@ -3,7 +3,7 @@ Module ModSePlot
   
   private !except
   
-  real, public :: DtSavePlot=300.0
+  real, public :: DtSavePlot=60.0
   
   public :: plot_state
   public :: plot_state_pot
@@ -698,45 +698,55 @@ contains
   !============================================================================
   ! 1D output plots of integrated quantities along the field 
   ! (potential, heating rate, SE number density, SE number flux)
-  subroutine plot_along_field(iLine,time,HeatingRate_IC,NumberDens_IC,&
-       NumberFlux_IC,TotalIonizationRate_IC)
+  subroutine plot_along_field(iLine,time,HeatingRate_IC,HeatingRateLC_IC,NumberDens_IC,&
+       NumberFlux_IC,TotalIonizationRate_IC,eThermalDensity_IC)
     use ModSeGrid,     ONLY: FieldLineGrid_IC, DeltaPot_IC, nLine, nPoint, &
                              MinEnergy_IC, EnergyGrid_I,Efield_IC,iLineGlobal_I,&
-                             rPlanetCM
+                             rPlanetCM,Bfield_IC
 
     use ModIoUnit,     ONLY: UnitTmp_
     use ModPlotFile,   ONLY: save_plot_file
     use ModNumConst,   ONLY: cRadToDeg
     integer, intent(in) :: iLine
     real, intent(in) :: time,HeatingRate_IC(nLine,nPoint), &
+         HeatingRateLC_IC(nLine,nPoint), &
          NumberDens_IC(nLine,nPoint),NumberFlux_IC(nLine,nPoint),&
-         TotalIonizationRate_IC(nLine,nPoint)
+         TotalIonizationRate_IC(nLine,nPoint),eThermalDensity_IC(nLine,nPoint)
 
-    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
-    integer, parameter :: nDim =1, nVar=6, Pot_=1, Qe_=2,Nse_=3,Fse_=4,E_=5,&
-                          rate_=6
-    character(len=100),parameter :: NamePlotVar=&
-         'S Pot[eV] Qe[eV/cm3/s] Nse[/cc] Fse[/cm2/s] E[V/m] IonRate[/cm3/s] g r'
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:), dS_C(:)
+    integer, parameter :: nDim =1, nVar=10, Pot_=1, Qe_=2,QeLC_=3,Nse_=4,Fse_=5,E_=6,&
+                          rate_=7,Ne_=8,B_=9,IntQB_=10
+    character(len=120),parameter :: NamePlotVar=&
+         'S Pot[eV] Qe[eV/cm3/s] QeLC[eV/cm3/s] Nse[/cc] Fse[/cm2/s] E[V/m] IonRate[/cm3/s] Ne[/cc] B[G] IntQB0/B g r'
     character(len=100) :: NamePlot
     character(len=*),parameter :: NameHeader='Integrated output'
     character(len=5) :: TypePlot='ascii'
     integer :: iPoint
     logical,save :: IsFirstCall =.true.
     !--------------------------------------------------------------------------
-    allocate(Coord_I(nPoint), PlotState_IV(nPoint,nVar))
+    allocate(Coord_I(nPoint), PlotState_IV(nPoint,nVar), dS_C(nPoint))
     
     PlotState_IV = 0.0
     Coord_I     = 0.0
+
+    do iPoint=1,nPoint-1
+       dS_C(iPoint) = FieldLineGrid_IC(iLine,iPoint+1)-FieldLineGrid_IC(iLine,iPoint)
+    enddo
+    dS_C(nPoint)=dS_C(nPoint-1)
     
     !Set Coordinates along field line and PA
     do iPoint=1,nPoint
        Coord_I(iPoint) = FieldLineGrid_IC(iLine,iPoint)/rPlanetCM
        PlotState_IV(iPoint,Pot_) = DeltaPot_IC(iLine,iPoint)
        PlotState_IV(iPoint,Qe_)  = HeatingRate_IC(iLine,iPoint)
+       PlotState_IV(iPoint,QeLC_)  = HeatingRateLC_IC(iLine,iPoint)
        PlotState_IV(iPoint,Nse_) = NumberDens_IC(iLine,iPoint)
        PlotState_IV(iPoint,Fse_) = NumberFlux_IC(iLine,iPoint)
        PlotState_IV(iPoint,E_)   = Efield_IC(iLine,iPoint)
        PlotState_IV(iPoint,rate_)= TotalIonizationRate_IC(iLine,iPoint)
+       PlotState_IV(iPoint,Ne_)= eThermalDensity_IC(iLine,iPoint)
+       PlotState_IV(iPoint,B_)= Bfield_IC(iLine,iPoint)
+       PlotState_IV(iPoint,IntQB_)= sum(HeatingRate_IC(iLine,1:iPoint)*Bfield_IC(iLine,1)/Bfield_IC(iLine,1:iPoint)*dS_C(1:iPoint))
     enddo
     
     ! set name for plotfile
