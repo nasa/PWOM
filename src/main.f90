@@ -7,6 +7,7 @@ program pw
   use ModCommonPlanet,only:NamePlanet
   use ModMpi
   use ModReadParam
+  use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines
   use CON_planet, ONLY: init_planet_const, set_planet_defaults,is_planet_init
   implicit none
 
@@ -79,6 +80,18 @@ program pw
         ! Get electrodynamics information before updating lines
         call PW_get_electrodynamics
 
+        if (DoRegrid) then
+           if (floor((Time+1.0e-5)/DtRegrid) /= &
+                floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then 
+              call timing_start('regrid_lines')
+              !if (iProc==0) write(*,*) 'before',ThetaLine_I(1),PhiLine_I(1)
+              call regrid_lines
+              !if (iProc==0) write(*,*) 'after',ThetaLine_I(1),PhiLine_I(1)
+              call timing_stop('regrid_lines')
+           endif
+        endif
+
+        
         do iLine=1,nLine
            
            ! move_line moves the flux tube, then we can use the angular

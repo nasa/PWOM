@@ -14,6 +14,7 @@ MODULES = \
 	ModParticle.o\
 	ModOvation.o\
 	ModPW.o\
+	ModReGrid.o\
 	ModParameters.o\
 	ModCommonPlanet_planet.o\
 	ModCommonVariables.o\

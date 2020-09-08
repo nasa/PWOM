@@ -208,7 +208,7 @@ contains
          DtHorizontal, DtOutput, &
          DoPlotElectrodynamics, DtPlotElectrodynamics, &
          Tmax, UseIE
-
+    use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines
     !INPUT/OUTPUT ARGUMENTS:
     real, intent(inout) :: TimeSimulation   ! current time of component
 
@@ -236,10 +236,19 @@ contains
        TimeSimulation = TimeSimulationLimit
        RETURN
     end if
+    
+    if (DoRegrid) then
+       if (floor((Time+1.0e-5)/DtRegrid) /= &
+            floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then 
+          call regrid_lines
+       endif
+    endif
 
+    
     ! Need to get electrodynamics in SA mode
     if(.not. UseIE)call PW_get_electrodynamics
 
+    
     do iLine=1,nLine
        call move_line
        call PW_advance_line

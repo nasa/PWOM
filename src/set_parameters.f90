@@ -21,7 +21,7 @@ subroutine PW_set_parameters(NameAction)
   use ModParticle,ONLY: UseWPI,IsVerboseParticle, TypeWPI, FracLeftHand, &
        SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
        SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap
-
+  use ModReGrid, ONLy: DoRegrid,DtRegrid
   implicit none
   
 
@@ -107,6 +107,10 @@ subroutine PW_set_parameters(NameAction)
         Beta = BetaIn
      case('#RESTART')
         call read_var('IsRestart',IsRestart)
+
+     case('#REGRID')
+        call read_var('DoRegrid',DoRegrid)
+        call read_var('DtRegrid',DtRegrid)
      case('#MOTION')
         call read_var('DoMoveLine',DoMoveLine)
      case('#FAC')

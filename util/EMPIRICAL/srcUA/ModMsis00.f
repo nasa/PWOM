@@ -14,12 +14,12 @@ C          MSISE-00 01-FEB-02
       COMMON/EUA_LOWER7/PTM(10),PDM(10,8)
       COMMON/EUA_MAVG7/PAVGM(10)
 C Small Change here : Ridley
-      character*4 isdate(3),istime(2),name(2)
-      COMMON/EUA_DATIM7/ISDATE,ISTIME,NAME
+!      character*4 isdate(3),istime(2),name(2)
+      COMMON/EUA_DATIM7/ISDATE(3),ISTIME(2),NAME(2)
       COMMON/EUA_METSEL/IMR
       DATA IMR/0/
-      DATA ISDATE/'01-F','EB-0','2   '/,ISTIME/'15:4','9:27'/
-      DATA NAME/'MSIS','E-00'/
+!      DATA ISDATE/'01-F','EB-0','2   '/,ISTIME/'15:4','9:27'/
+!      DATA NAME/'MSIS','E-00'/
 C         TEMPERATURE
       DATA PT1/
      *  9.86573E-01, 1.62228E-02, 1.55270E-02,-1.04323E-01,-3.75801E-03,

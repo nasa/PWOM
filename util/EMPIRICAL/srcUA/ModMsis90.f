@@ -14,12 +14,12 @@ C          MSISE 90 12-MAR-90
       COMMON/LOWER6/PTM(10),PDM(10,8)
       COMMON/MAVG6/PAVGM(10)
 C Small Change here : Ridley
-      character*4 isdate(3),istime(2),name(2)
-      COMMON/DATIM6/ISDATE,ISTIME,NAME
+      !character*4 isdate(3),istime(2),name(2)
+      COMMON/DATIM6/ISDATE(3),ISTIME(2),NAME(2)
       COMMON/METSEL/IMR
       DATA IMR/0/
-      DATA ISDATE/'12-M','AR-9','0   '/,ISTIME/'15:0','9:04'/
-      DATA NAME/'MSIS','E 90'/
+!      DATA ISDATE/'12-M','AR-9','0   '/,ISTIME/'15:0','9:04'/
+!      DATA NAME/'MSIS','E 90'/
 C         TEMPERATURE
       DATA PT1/
      *  9.96040E-01, 3.85528E-02, 3.03445E-03,-1.05531E-01,-6.07134E-03,
