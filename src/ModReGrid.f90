@@ -348,7 +348,7 @@ contains
                 call MPI_recv(Lines_I(iLineGlobal)%Phi,1,MPI_REAL,&
                      iProcList,4,iComm,iStatus_I,iError)
                 !update the xyz location
-                call Lines_I(iLine)%calc_xyz
+                call Lines_I(iLineGlobal)%calc_xyz
              enddo
           enddo
        endif
@@ -486,6 +486,7 @@ contains
   ! fill in the RemapN_I and RemapS_I arrays that hold the remapping plan
   subroutine set_regrid_plan
     use ModTriangulateSpherical, ONLY: find_triangle_sph
+    use ModSort, ONLY: sort_quick
     integer :: iLine, iLineTmp, iCount
     real,    allocatable :: CoordXyz_DI(:,:)
     logical, allocatable :: IsAvailable_I(:)
@@ -493,6 +494,8 @@ contains
     real :: Area1, Area2,Area3
     integer :: iNode1, iNode2, iNode3
     logical :: IsTriangleFound
+    integer,allocatable:: IndexSortN_I(:),IndexSortS_I(:)
+    real,allocatable:: DistN_I(:),DistS_I(:)
     !--------------------------------------------------------------------------
 
     
@@ -500,10 +503,15 @@ contains
     ! remap grid
     if (nNorth>0) then
        if (.not.allocated(RemapN_I)) allocate(RemapN_I(nRemapPointN))
+       if (.not.allocated(IndexSortN_I)) allocate(IndexSortN_I(nNorth))
+       if (.not.allocated(DistN_I)) allocate(DistN_I(nNorth))
+       
     endif
     
     if (nSouth>0) then
        if (.not.allocated(RemapS_I)) allocate(RemapS_I(nRemapPointS))
+       if (.not.allocated(IndexSortS_I)) allocate(IndexSortS_I(nSouth))
+       if (.not.allocated(DistS_I)) allocate(DistS_I(nSouth))
     endif
 
     
@@ -511,6 +519,7 @@ contains
     if (nNorth>0) then
        !initially all lines in hemisphere are available for remap
        allocate(IsAvailable_I(nNorth))
+       
        IsAvailable_I(:) = .true.
        
        !repack xyz coordinate of lines into CoordXyz_DI
@@ -521,6 +530,7 @@ contains
 
        !Counter for remap
        iCount=0
+       
        do iLine = 1,nRemapPointN
           !get Xyz of remap grid point
           Xyz_D(X_) = sin(RemapThetaN_I(iLine))*cos(RemapPhiN_I(iLine))
@@ -532,6 +542,15 @@ contains
                CoordXyz_DI(:,:), listN_I, lptrN_I, lendN_I, &
                Area1, Area2, Area3, IsTriangleFound, &
                iNode1,iNode2,iNode3)
+
+          !kludge
+          !if (RemapThetaN_I(iLine) > 0.55) IsTriangleFound=.false.
+          !write(*,*) iLine, NRemapPointN,RemapThetaN_I(iLine),RemapPhiN_I(iLine),iNode1,iNode2,iNode3
+          !write(*,*) iLine, NRemapPointN,RemapThetaN_I(iLine),RemapPhiN_I(iLine),&
+          !     Lines_I(iIndexNorth_I(iNode1))%theta,Lines_I(iIndexNorth_I(iNode1))%phi,&
+          !     Lines_I(iIndexNorth_I(iNode2))%theta,Lines_I(iIndexNorth_I(iNode2))%phi,&
+          !     Lines_I(iIndexNorth_I(iNode3))%theta,Lines_I(iIndexNorth_I(iNode3))%phi&
+          !     ,Area1,Area2,Area3
 
           if(IsTriangleFound) then
              ! we can remap to this point
@@ -562,54 +581,79 @@ contains
              !set the location of the remaped line from the remap grid
              RemapN_I(iCount)%Theta = RemapThetaN_I(iLine)
              RemapN_I(iCount)%Phi   = RemapPhiN_I(iLine)
+
+             ! determine which global line will be moved to the remap
+             ! find distance of remap point to lines
              
+             do iLineTmp =1,nNorth
+                DistN_I(iLineTmp) = &
+                     sum((Xyz_D - Lines_I(iIndexNorth_I(iLineTmp))%Xyz_D)**2)
+             enddo
+             
+             !get index array that sorts Dist_I from lowest to biggest
+             call sort_quick(nNorth,DistN_I,IndexSortN_I)
+
+             Line_Search:do iLineTmp =1,nNorth
+                if (IsAvailable_I(IndexSortN_I(iLineTmp))) then
+                   RemapN_I(iCount)%iLineGlobal=&
+                        iIndexNorth_I(IndexSortN_I(iLineTmp))
+                   RemapN_I(iCount)%iLineLocal =&
+                        Lines_I(iIndexNorth_I(IndexSortN_I(iLineTmp)))%iLineLocal
+                   RemapN_I(iCount)%iProc=&
+                        Lines_I(iIndexNorth_I(IndexSortN_I(iLineTmp)))%iProc
+                   !make this line no longer available for remap
+                   IsAvailable_I(IndexSortN_I(iLineTmp))=.false.
+                   exit Line_Search
+                endif
+             end do Line_Search
+          endif
              ! determine which global line will be moved to the remap
              ! start by looking at availability of nodes of triangle to
              ! minimize sends and recieves
              
-             if (IsAvailable_I(iNode1)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode1
-                RemapN_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexNorth_I(iNode1))%iLineLocal
-                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc1
-                !make this line no longer available for remap
-                IsAvailable_I(iNode1)=.false.
-             elseif(IsAvailable_I(iNode2)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode2
-                RemapN_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexNorth_I(iNode2))%iLineLocal
-                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc2
-                !make this line no longer available for remap
-                IsAvailable_I(iNode2)=.false.
-             elseif(IsAvailable_I(iNode3)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode3
-                RemapN_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexNorth_I(iNode3))%iLineLocal
-                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc3
-                !make this line no longer available for remap
-                IsAvailable_I(iNode3)=.false.
-             else
-                !seach for any available line to be remaped
-                Line_Search:do iLineTmp =1,nNorth
-                   if (IsAvailable_I(iLineTmp)) then
-                      !set the line index and proc that is bring replaced
-                      !with remap
-                      RemapN_I(iCount)%iLineGlobal=&
-                           iIndexNorth_I(iLineTmp)
-                      RemapN_I(iCount)%iLineLocal =&
-                           Lines_I(iIndexNorth_I(iLineTmp))%iLineLocal
-                      RemapN_I(iCount)%iProc=&
-                           Lines_I(iIndexNorth_I(iLineTmp))%iProc
-                      !make this line no longer available for remap
-                      IsAvailable_I(iLineTmp)=.false.
-                      exit Line_Search
-                   endif
-                enddo Line_Search
-             endif
-          endif
+!             if (IsAvailable_I(iNode1)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode1
+!                RemapN_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexNorth_I(iNode1))%iLineLocal
+!                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc1
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode1)=.false.
+!             elseif(IsAvailable_I(iNode2)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode2
+!                RemapN_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexNorth_I(iNode2))%iLineLocal
+!                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc2
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode2)=.false.
+!             elseif(IsAvailable_I(iNode3)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapN_I(iCount)%iLineGlobal=RemapN_I(iCount)%iNode3
+!                RemapN_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexNorth_I(iNode3))%iLineLocal
+!                RemapN_I(iCount)%iProc=RemapN_I(iCount)%iProc3
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode3)=.false.
+!             else
+!                !seach for any available line to be remaped
+!                Line_Search:do iLineTmp =1,nNorth
+!                   if (IsAvailable_I(iLineTmp)) then
+!                      !set the line index and proc that is bring replaced
+!                      !with remap
+!                      RemapN_I(iCount)%iLineGlobal=&
+!                           iIndexNorth_I(iLineTmp)
+!                      RemapN_I(iCount)%iLineLocal =&
+!                           Lines_I(iIndexNorth_I(iLineTmp))%iLineLocal
+!                      RemapN_I(iCount)%iProc=&
+!                           Lines_I(iIndexNorth_I(iLineTmp))%iProc
+!                      !make this line no longer available for remap
+!                      IsAvailable_I(iLineTmp)=.false.
+!                      exit Line_Search
+!                   endif
+!                enddo Line_Search
+!             endif
+!          endif
 
           !kludge
           !if (iCount==100) then
@@ -625,7 +669,7 @@ contains
           !   write(*,*)'iNodeLocal1', RemapN_I(iCount)%iNodeLocal1
           !   write(*,*)'iNodeLocal2', RemapN_I(iCount)%iNodeLocal2
           !   write(*,*)'iNodeLocal3', RemapN_I(iCount)%iNodeLocal3
-          !endif
+             !endif
        end do
        !record number of point to remap
        nPointsToRemapN = iCount
@@ -689,54 +733,80 @@ contains
              !set the location of the remaped line from the remap grid
              RemapS_I(iCount)%Theta = RemapThetaS_I(iLine)
              RemapS_I(iCount)%Phi   = RemapPhiS_I(iLine)
-             
+
              ! determine which global line will be moved to the remap
-             ! start by looking at availability of nodes of triangle to
-             ! minimize sends and recieves
+             ! find distance of remap point to lines
              
-             if (IsAvailable_I(iNode1)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode1
-                RemapS_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexSouth_I(iNode1))%iLineLocal
-                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc1
-                !make this line no longer available for remap
-                IsAvailable_I(iNode1)=.false.
-             elseif(IsAvailable_I(iNode2)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode2
-                RemapS_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexSouth_I(iNode2))%iLineLocal
-                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc2
-                !make this line no longer available for remap
-                IsAvailable_I(iNode2)=.false.
-             elseif(IsAvailable_I(iNode3)) then
-                !set the line index and proc that is bring replaced with remap
-                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode3
-                RemapS_I(iCount)%iLineLocal =&
-                     Lines_I(iIndexSouth_I(iNode3))%iLineLocal
-                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc3
-                !make this line no longer available for remap
-                IsAvailable_I(iNode3)=.false.
-             else
-                !seach for any available line to be remaped
-                Line_Search_South:do iLineTmp =1,nSouth
-                   if (IsAvailable_I(iLineTmp)) then
-                      !set the line index and proc that is bring replaced with remap
-                      RemapS_I(iCount)%iLineGlobal=&
-                           iIndexSouth_I(iLineTmp)
-                      RemapS_I(iCount)%iLineLocal =&
-                           Lines_I(iIndexSouth_I(iLineTmp))%iLineLocal
-                      RemapS_I(iCount)%iProc=&
-                           Lines_I(iIndexSouth_I(iLineTmp))%iProc
-                      
-                      !make this line no longer available for remap
-                      IsAvailable_I(iLineTmp)=.false.
-                      exit Line_Search_South
-                   endif
-                enddo Line_Search_South
-             endif
+             do iLineTmp =1,nSouth
+                DistS_I(iLineTmp) = &
+                     sum((Xyz_D - Lines_I(iIndexSouth_I(iLineTmp))%Xyz_D)**2)
+             enddo
+             
+             !get index array that sorts Dist_I from lowest to biggest
+             call sort_quick(nSouth,DistS_I,IndexSortS_I)
+
+             Line_Search_South:do iLineTmp =1,nSouth
+                if (IsAvailable_I(IndexSortS_I(iLineTmp))) then
+                   RemapS_I(iCount)%iLineGlobal=&
+                        iIndexSouth_I(IndexSortS_I(iLineTmp))
+                   RemapS_I(iCount)%iLineLocal =&
+                        Lines_I(iIndexSouth_I(IndexSortS_I(iLineTmp)))%iLineLocal
+                   RemapS_I(iCount)%iProc=&
+                        Lines_I(iIndexSouth_I(IndexSortS_I(iLineTmp)))%iProc
+                   !make this line no longer available for remap
+                   IsAvailable_I(IndexSortS_I(iLineTmp))=.false.
+                   exit Line_Search_South
+                endif
+             end do Line_Search_South
           endif
+             
+!             ! determine which global line will be moved to the remap
+!             ! start by looking at availability of nodes of triangle to
+!             ! minimize sends and recieves
+!             
+!             if (IsAvailable_I(iNode1)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode1
+!                RemapS_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexSouth_I(iNode1))%iLineLocal
+!                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc1
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode1)=.false.
+!             elseif(IsAvailable_I(iNode2)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode2
+!                RemapS_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexSouth_I(iNode2))%iLineLocal
+!                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc2
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode2)=.false.
+!             elseif(IsAvailable_I(iNode3)) then
+!                !set the line index and proc that is bring replaced with remap
+!                RemapS_I(iCount)%iLineGlobal=RemapS_I(iCount)%iNode3
+!                RemapS_I(iCount)%iLineLocal =&
+!                     Lines_I(iIndexSouth_I(iNode3))%iLineLocal
+!                RemapS_I(iCount)%iProc=RemapS_I(iCount)%iProc3
+!                !make this line no longer available for remap
+!                IsAvailable_I(iNode3)=.false.
+!             else
+!                !seach for any available line to be remaped
+!                Line_Search_South:do iLineTmp =1,nSouth
+!                   if (IsAvailable_I(iLineTmp)) then
+!                      !set the line index and proc that is bring replaced with remap
+!                      RemapS_I(iCount)%iLineGlobal=&
+!                           iIndexSouth_I(iLineTmp)
+!                      RemapS_I(iCount)%iLineLocal =&
+!                           Lines_I(iIndexSouth_I(iLineTmp))%iLineLocal
+!                      RemapS_I(iCount)%iProc=&
+!                           Lines_I(iIndexSouth_I(iLineTmp))%iProc
+!                      
+!                      !make this line no longer available for remap
+!                      IsAvailable_I(iLineTmp)=.false.
+!                      exit Line_Search_South
+!                   endif
+!                enddo Line_Search_South
+!             endif
+!          endif
        end do
        !record number of point to remap
        nPointsToRemapS = iCount
@@ -1077,7 +1147,9 @@ contains
        do iRequest=1,nRequest
           call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
        enddo
-          
+
+       call MPI_barrier(iComm,iError)
+       
        !\
        ! Loop over plan and apply the remap
        !/
@@ -1094,6 +1166,18 @@ contains
                   Theta      => RemapN_I(iLine)%Theta,&
                   Phi        => RemapN_I(iLine)%Phi)
 
+               !if (iProc==0 .and. iLineLocal>1) then
+               !   write(*,*) 'iLineLocal', iLineLocal
+               !   write(*,*) 'Theta,Phi',Theta,Phi
+               !   write(*,*) 'node1', Lines_I(iNode1)%theta,Lines_I(iNode1)%phi,weight1
+               !   write(*,*) 'node2', Lines_I(iNode2)%theta,Lines_I(iNode2)%phi,weight2
+               !   write(*,*) 'node3', Lines_I(iNode3)%theta,Lines_I(iNode3)%phi,weight3
+               !   write(*,*) 'iNode_I(iNode1)',iNode_I(iNode1)
+               !   write(*,*) 'iNode_I(iNode2)',iNode_I(iNode2)
+               !   write(*,*) 'iNode_I(iNode3)',iNode_I(iNode3)
+               !   !call con_stop('')
+               !endif
+               
                !interpolate solution to make new state vars
                 State_CVI(:,:,iLineLocal) = &
                     weight1*StateRecv_CVI(:,:,iNode_I(iNode1)) &
@@ -1342,7 +1426,9 @@ contains
        do iRequest=1,nRequest
           call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
        enddo
-          
+
+       call MPI_barrier(iComm,iError)
+       
        !\
        ! Loop over plan and apply the remap
        !/
@@ -1407,25 +1493,78 @@ contains
        IsFirstCall=.false.
     end if
 
+    !if(iProc==0) then
+       !write(*,*) 'line list before update_grid_info'
+       ! call print_line_list
+    !endif
     !gather grid info from all procs to zero proc
     call update_grid_info
 
+    !if(iProc==0) then
+    !   write(*,*) 'line list after update_grid_info, time = ', Time
+    !   call print_line_list
+    !endif
+    
     !zero proc gets the triangulation for the grid and build the regrid plan
     if(iProc==0) then
        call get_triangulation
        call set_regrid_plan
     endif
-
+    
+    !if(iProc==0) then
+    !   write(*,*) 'print map at time = ', Time
+    !   call print_map
+    !endif
+    
     !distribute the regrid plan to all Procs
     call distribute_regrid_plan
 
     !apply the regrid plan on all procs
     call apply_regrid
 
-!    if(iProc==0) then
-!       write(*,*) 'Regrid at Time = ', Time
-!       write(*,*) 'Regrid North points = ', nPointsToRemapN
-!       write(*,*) 'Regrid South points = ', nPointsToRemapS
-!    endif
+    if(iProc==0) then
+       write(*,*) 'PW Regrid at Time = ', Time
+       write(*,*) 'PW Regrid North points = ', nPointsToRemapN
+       write(*,*) 'PW Regrid South points = ', nPointsToRemapS
+    endif
   end subroutine regrid_lines
+  !==========================================================================
+  subroutine print_line_list
+    integer:: iLine
+    !-------------------------------------------------------------------------
+    do iLine=1,nTotalLine
+       write(*,*) 'iLine = ', iLine
+       write(*,*) '    iProc      ', Lines_I(iLine)%iProc
+       write(*,*) '    iLineLocal ', Lines_I(iLine)%iLineLocal
+       write(*,*) '    Xyz_D      ', Lines_I(iLine)%Xyz_D
+       write(*,*) '    Theta      ', Lines_I(iLine)%Theta
+       write(*,*) '    Phi        ', Lines_I(iLine)%Phi
+       write(*,*) '    Lat        ', Lines_I(iLine)%Lat
+       write(*,*) '    Lon        ', Lines_I(iLine)%Lon
+       write(*,*) '    IsNorth    ', Lines_I(iLine)%IsNorth
+    enddo
+  end subroutine print_line_list
+
+  !==========================================================================
+  subroutine print_map
+    integer:: iLine
+    !-------------------------------------------------------------------------
+    do iLine=1,nPointsToRemapN
+       write(*,*) 'iLine remap =  ', iLine
+       write(*,*) '    iLineGlobal', RemapN_I(iLine)%iLineGlobal
+       write(*,*) '    iLineLocal ', RemapN_I(iLine)%iLineLocal
+       write(*,*) '    iProc      ', RemapN_I(iLine)%iProc
+       write(*,*) '    Theta      ', RemapN_I(iLine)%Theta
+       write(*,*) '    Phi        ', RemapN_I(iLine)%Phi
+       write(*,*) '    iNode1     ', RemapN_I(iLine)%iNode1
+       write(*,*) '    iNode2     ', RemapN_I(iLine)%iNode2
+       write(*,*) '    iNode3     ', RemapN_I(iLine)%iNode3
+       write(*,*) '    iNodeLocal1', RemapN_I(iLine)%iNodeLocal1
+       write(*,*) '    iNodeLocal2', RemapN_I(iLine)%iNodeLocal2
+       write(*,*) '    iNodeLocal3', RemapN_I(iLine)%iNodeLocal3
+       write(*,*) '    weight1     ', RemapN_I(iLine)%weight1
+       write(*,*) '    weight2     ', RemapN_I(iLine)%weight2
+       write(*,*) '    weight3     ', RemapN_I(iLine)%weight3
+    enddo
+  end subroutine print_map
 end Module ModReGrid
