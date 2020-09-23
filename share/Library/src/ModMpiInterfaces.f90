@@ -404,7 +404,8 @@ module ModMPiInterfaces
     mpi_irecv_r4, &
     mpi_irecv_l0, &
     mpi_irecv_l1, &
-    mpi_irecv_l2
+    mpi_irecv_l2, &
+    mpi_irecv_p
   end interface
 
   interface mpi_irsend
@@ -507,7 +508,8 @@ module ModMPiInterfaces
     mpi_send_r3, &
     mpi_send_r4, &
     mpi_send_s0, &
-    mpi_send_s1
+    mpi_send_s1, &
+    mpi_send_p
   end interface
 
   interface mpi_ssend
@@ -3493,6 +3495,33 @@ contains
           comm, request, ierror)
      end subroutine mpi_irecv_i0
 
+     subroutine mpi_irecv_p(buf, count, datatype, source, tag,      &
+          comm, request, ierror) 
+       type particle
+          sequence
+          integer :: iSpecies
+          integer :: iCell ! cell index for particle
+          real    :: vpar, vperp !velocity in [cm/s]
+          real    :: Alt ! position in configurational space [cm]
+          real    :: NumPerParticle !the weight of the particle (how many real 
+          !particles one macro particle represents).
+          logical :: IsOpen   ! defines if particle is in domain or index is avail.
+       end type particle
+       
+       type(particle), intent(out) :: buf(:)
+       integer, intent(in) :: count
+       integer, intent(in) :: datatype
+       integer, intent(in) :: source
+       integer, intent(in) :: tag
+       integer, intent(in) :: comm
+       integer, intent(out) :: request
+       integer, intent(out) :: ierror
+       external mpi_irecv
+       
+       call mpi_irecv(buf, count, datatype, source, tag,      &
+          comm, request, ierror)
+     end subroutine mpi_irecv_p
+
 
      subroutine mpi_irecv_i1(buf, count, datatype, source, tag,      &
           comm, request, ierror) 
@@ -4883,6 +4912,30 @@ contains
 
        call mpi_send(buf, count, datatype, dest, tag, comm, ierror)
      end subroutine mpi_send_s1
+
+     subroutine mpi_send_p(buf, count, datatype, dest, tag, comm, ierror) 
+       type particle
+          sequence
+          integer :: iSpecies
+          integer :: iCell ! cell index for particle
+          real    :: vpar, vperp !velocity in [cm/s]
+          real    :: Alt ! position in configurational space [cm]
+          real    :: NumPerParticle !the weight of the particle (how many real 
+          !particles one macro particle represents).
+          logical :: IsOpen   ! defines if particle is in domain or index is avail.
+       end type particle
+       
+       type(particle), intent(in) :: buf(:)
+       integer, intent(in) :: count
+       integer, intent(in) :: datatype
+       integer, intent(in) :: dest
+       integer, intent(in) :: tag
+       integer, intent(in) :: comm
+       integer, intent(out) :: ierror
+          external mpi_send
+
+       call mpi_send(buf, count, datatype, dest, tag, comm, ierror)
+     end subroutine mpi_send_p
 
 
      subroutine mpi_ssend_r0(buf, count, datatype, dest, tag, comm, ierror) 

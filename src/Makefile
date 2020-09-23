@@ -11,9 +11,9 @@ include Makefile.DEPEND
 include Makefile.RULES
 
 MODULES = \
+	ModPW.o\
 	ModParticle.o\
 	ModOvation.o\
-	ModPW.o\
 	ModReGrid.o\
 	ModParameters.o\
 	ModCommonPlanet_planet.o\

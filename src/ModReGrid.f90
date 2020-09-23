@@ -4,7 +4,7 @@ Module ModReGrid
   use ModPWOM, only: nTotalLine,iProc, nProc, iComm, &
        ThetaLine_I, PhiLine_I, nLine,iLineGlobal_I=>iLineGlobal,State_CVI,Time,&
        GeoMagLon_I,GeoMagLat_I,xLine_I,yLine_I,zLine_I,xLineOld_I,yLineOld_I,&
-       zLineOld_I, rLowerBoundary
+       zLineOld_I, rLowerBoundary, UseParticles
   implicit none
   private !except
 
@@ -26,6 +26,9 @@ Module ModReGrid
      !Is this a north or South line? 
      logical :: IsNorth
 
+     !number of particles on the line
+     integer :: nParticle
+     
    contains
      procedure :: calc_xyz => line_calc_xyz
      
@@ -56,6 +59,9 @@ Module ModReGrid
 
      !local line index (on it's proc) of nodes of triangle for interpolation
      integer :: iNodeLocal1, iNodeLocal2, iNodeLocal3
+
+     !number of particles on each line
+     integer :: nParticle1, nParticle2, nParticle3
 
      !proc holding each node
      integer :: iProc1, iProc2, iProc3
@@ -109,7 +115,8 @@ contains
   ! initialize the regriding by gathering field line info to iproc0
   ! and building list of north and south lines
   subroutine init_regrid
-    integer ::iError, iProcList, iLine, iLineGlobal,iNorth,iSouth
+    use ModParticle, only:create_particle_mpi_data_type, get_particles_line
+    integer ::iError, iProcList, iLine, iLineGlobal,iNorth,iSouth,nParticleLine
     ! MPI status variable
     integer :: iStatus_I(MPI_STATUS_SIZE)
     !--------------------------------------------------------------------------
@@ -117,6 +124,10 @@ contains
     if (.not.allocated(Lines_I)) allocate(Lines_I(nTotalLine))
 
     if (.not.allocated(nLine_P)) allocate(nLine_P(0:nProc-1))
+
+    if(UseParticles) then
+       call create_particle_mpi_data_type
+    endif
     
     if (iProc > 0) then
        !send number of lines on iProc
@@ -127,6 +138,11 @@ contains
           call MPI_send(iLineGlobal_I(iLine),1,MPI_INTEGER,0,2,iComm,iError)
           call MPI_send(ThetaLine_I(iLine),1,MPI_REAL,0,3,iComm,iError)
           call MPI_send(PhiLine_I(iLine),1,MPI_REAL,0,4,iComm,iError)
+
+          if(UseParticles) then
+             call get_particles_line(iLine,nParticleLine)
+             call MPI_send(nParticleLine,1,MPI_INTEGER,0,5,iComm,iError)
+          end if
        enddo
     else
        !loop over procs >1 and recieve
@@ -143,7 +159,11 @@ contains
                      iProcList,3,iComm,iStatus_I,iError)
                 call MPI_recv(Lines_I(iLineGlobal)%Phi,1,MPI_REAL,&
                      iProcList,4,iComm,iStatus_I,iError)
-                
+
+                if(UseParticles) then
+                   call MPI_recv(Lines_I(iLineGlobal)%nParticle,1,&
+                        MPI_INTEGER,iProcList,5,iComm,iStatus_I,iError)
+                end if
              enddo
           end do
        endif
@@ -155,6 +175,11 @@ contains
           Lines_I(iLineGlobal_I(iLine))%iProc=0
           Lines_I(iLineGlobal_I(iLine))%Theta=ThetaLine_I(iLine)
           Lines_I(iLineGlobal_I(iLine))%Phi=PhiLine_I(iLine)
+
+          if (UseParticles) then
+             call get_particles_line(iLine,nParticleLine)
+             Lines_I(iLineGlobal_I(iLine))%nParticle=nParticleLine
+          endif
        enddo
 
        !loop over Lines_I and update the xyz and find total number of north and
@@ -324,7 +349,8 @@ contains
   !============================================================================
   ! routine to gather the grid info from across procs to the zero proc
   subroutine update_grid_info
-    integer ::iError, iProcList, iLine, iLineGlobal,iNorth,iSouth
+    use ModParticle, only:get_particles_line
+    integer ::iError, iProcList, iLine, iLineGlobal,iNorth,iSouth,nParticleLine
     ! MPI status variable
     integer :: iStatus_I(MPI_STATUS_SIZE)
     !--------------------------------------------------------------------------
@@ -335,6 +361,11 @@ contains
           call MPI_send(iLineGlobal_I(iLine),1,MPI_INTEGER,0,2,iComm,iError)
           call MPI_send(ThetaLine_I(iLine),1,MPI_REAL,0,3,iComm,iError)
           call MPI_send(PhiLine_I(iLine),1,MPI_REAL,0,4,iComm,iError)
+
+          if(UseParticles) then
+             call get_particles_line(iLine,nParticleLine)
+             call MPI_send(nParticleLine,1,MPI_INTEGER,0,5,iComm,iError)
+          end if
        enddo
     else
        !loop over procs >1 and recieve
@@ -347,6 +378,12 @@ contains
                      iProcList,3,iComm,iStatus_I,iError)
                 call MPI_recv(Lines_I(iLineGlobal)%Phi,1,MPI_REAL,&
                      iProcList,4,iComm,iStatus_I,iError)
+
+                if(UseParticles) then
+                   call MPI_recv(Lines_I(iLineGlobal)%nParticle,1,&
+                        MPI_INTEGER,iProcList,5,iComm,iStatus_I,iError)
+                end if
+
                 !update the xyz location
                 call Lines_I(iLineGlobal)%calc_xyz
              enddo
@@ -362,6 +399,11 @@ contains
           !write(*,*) iLine,Lines_I(iLineGlobal_I(iLine))%Theta,Lines_I(iLineGlobal_I(iLine))%Phi
           call Lines_I(iLine)%calc_xyz
           !write(*,*) iLine,Lines_I(iLineGlobal_I(iLine))%Xyz_D
+
+          if (UseParticles) then
+             call get_particles_line(iLine,nParticleLine)
+             Lines_I(iLineGlobal_I(iLine))%nParticle=nParticleLine
+          endif
        enddo
 
        !update the triangulation with new line coords
@@ -573,6 +615,16 @@ contains
              RemapN_I(iCount)%iProc2 = Lines_I(iIndexNorth_I(iNode2))%iProc
              RemapN_I(iCount)%iProc3 = Lines_I(iIndexNorth_I(iNode3))%iProc
 
+             if (UseParticles) then
+                !set number of particles on each node
+                RemapN_I(iCount)%nParticle1 = &
+                     Lines_I(iIndexNorth_I(iNode1))%nParticle
+                RemapN_I(iCount)%nParticle2 = &
+                     Lines_I(iIndexNorth_I(iNode2))%nParticle
+                RemapN_I(iCount)%nParticle3 = &
+                     Lines_I(iIndexNorth_I(iNode3))%nParticle
+             endif
+             
              !set the interpolation weights (area of the sub triangles)
              RemapN_I(iCount)%weight1 = Area1
              RemapN_I(iCount)%weight2 = Area2
@@ -711,6 +763,16 @@ contains
              RemapS_I(iCount)%iNode2 = iIndexSouth_I(iNode2)
              RemapS_I(iCount)%iNode3 = iIndexSouth_I(iNode3)
 
+             if (UseParticles) then
+                !set number of particles on each node
+                RemapS_I(iCount)%nParticle1 = &
+                     Lines_I(iIndexSouth_I(iNode1))%nParticle
+                RemapS_I(iCount)%nParticle2 = &
+                     Lines_I(iIndexSouth_I(iNode2))%nParticle
+                RemapS_I(iCount)%nParticle3 = &
+                     Lines_I(iIndexSouth_I(iNode3))%nParticle
+             endif
+             
              !set local line index of node on it's proc
              RemapS_I(iCount)%iNodeLocal1 = &
                   Lines_I(iIndexSouth_I(iNode1))%iLineLocal
@@ -848,7 +910,15 @@ contains
                iError)
           call MPI_bcast(RemapN_I(iLine)%iNodeLocal3,1,MPI_INTEGER,0,iComm,&
                iError)
-
+          if (UseParticles) then
+             call MPI_bcast(RemapN_I(iLine)%nParticle1,1,MPI_INTEGER,0,iComm,&
+                  iError)
+             call MPI_bcast(RemapN_I(iLine)%nParticle2,1,MPI_INTEGER,0,iComm,&
+                  iError)
+             call MPI_bcast(RemapN_I(iLine)%nParticle3,1,MPI_INTEGER,0,iComm,&
+                  iError)
+          endif
+          
           call MPI_bcast(RemapN_I(iLine)%iProc1,1,MPI_INTEGER,0,iComm,iError)
           call MPI_bcast(RemapN_I(iLine)%iProc2,1,MPI_INTEGER,0,iComm,iError)
           call MPI_bcast(RemapN_I(iLine)%iProc3,1,MPI_INTEGER,0,iComm,iError)
@@ -884,6 +954,16 @@ contains
           call MPI_bcast(RemapS_I(iLine)%iNodeLocal3,1,MPI_INTEGER,0,iComm,&
                iError)
 
+          if (UseParticles) then
+             call MPI_bcast(RemapS_I(iLine)%nParticle1,1,MPI_INTEGER,0,iComm,&
+                  iError)
+             call MPI_bcast(RemapS_I(iLine)%nParticle2,1,MPI_INTEGER,0,iComm,&
+                  iError)
+             call MPI_bcast(RemapS_I(iLine)%nParticle3,1,MPI_INTEGER,0,iComm,&
+                  iError)
+          endif
+          
+          
           call MPI_bcast(RemapS_I(iLine)%iProc1,1,MPI_INTEGER,0,iComm,iError)
           call MPI_bcast(RemapS_I(iLine)%iProc2,1,MPI_INTEGER,0,iComm,iError)
           call MPI_bcast(RemapS_I(iLine)%iProc3,1,MPI_INTEGER,0,iComm,iError)
@@ -911,9 +991,10 @@ contains
   !============================================================================
   ! execute the regrid plan
   subroutine apply_regrid
-    use ModPWOM, only:nAlt, nVar
+    use ModPWOM, only:nAlt, nVar, UseParticles
     use ModNumConst, ONLY: cRadToDeg
-    
+    use ModParticle, only: allocate_particle_recv,post_particle_line_recv, &
+         post_particle_line_send, check_particle_recv,interp_particle_line
     ! How many remaps on our proc
     integer :: nRemapLocal
     !counter for remap number
@@ -929,16 +1010,18 @@ contains
 
     !array to convert global index to locally recieved nodes
     integer, allocatable :: iNode_I(:)
-
+    
     integer :: nNode, iNode, iLine, nRequest, iRequest
     
     !array to act as a mask to tell if node is alrady allocated to send/recv
     logical, allocatable :: IsRecvNode_I(:),IsSendNode_IP(:,:)
     !--------------------------------------------------------------------------
     if (.not. allocated(IsRecvNode_I)) allocate(IsRecvNode_I(nTotalLine))
+    if (.not. allocated(IsRecvNode_I)) allocate(IsRecvNode_I(nTotalLine))
     if (.not. allocated(IsSendNode_IP)) allocate(IsSendNode_IP(nTotalLine,0:nProc-1))
     if (.not. allocated(iNode_I)) allocate(iNode_I(nTotalLine))
     if (.not. allocated(iRequest_I)) allocate(iRequest_I(nTotalLine))
+    
     
     
     !regrid North first
@@ -989,7 +1072,11 @@ contains
        !/
        if (allocated(StateRecv_CVI)) deallocate(StateRecv_CVI)
        allocate(StateRecv_CVI(nAlt,nVar,nNode))
-             
+
+       if(UseParticles) then
+          call allocate_particle_recv(nNode,nTotalLine)
+       endif
+       
        !\
        ! Loop over plan and post all recieves
        !/
@@ -1009,6 +1096,9 @@ contains
                   iNodeLocal1 => RemapN_I(iLine)%iNodeLocal1,&
                   iNodeLocal2 => RemapN_I(iLine)%iNodeLocal2,&
                   iNodeLocal3 => RemapN_I(iLine)%iNodeLocal3,&
+                  nParticle1 => RemapN_I(iLine)%nParticle1,&
+                  nParticle2 => RemapN_I(iLine)%nParticle2,&
+                  nParticle3 => RemapN_I(iLine)%nParticle3,&
                   iProc1 => RemapN_I(iLine)%iProc1,&
                   iProc2 => RemapN_I(iLine)%iProc2,&
                   iProc3 => RemapN_I(iLine)%iProc3)
@@ -1032,6 +1122,10 @@ contains
                           iProc1,iNode1,&
                           iComm,iRequest_I(nRequest),iError)
                   endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle1,iProc1,&
+                          iNode1,iNodeLocal1,nRequest)
+                  endif
                endif
                if (.not.IsRecvNode_I(iNode2))then
                   IsRecvNode_I(iNode2) =.true.
@@ -1050,6 +1144,10 @@ contains
                           iProc2,iNode2,&
                           iComm,iRequest_I(nRequest),iError)
                   endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle2,iProc2,&
+                          iNode2,iNodeLocal2,nRequest)
+                  endif
                endif
                if (.not.IsRecvNode_I(iNode3))then
                   IsRecvNode_I(iNode3) =.true.
@@ -1067,6 +1165,10 @@ contains
                      call MPI_irecv(StateRecv_CVI(:,:,iNode),nAlt*nVar,MPI_REAL,&
                           iProc3,iNode3,&
                           iComm,iRequest_I(nRequest),iError)
+                  endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle3,iProc3,&
+                          iNode3,iNodeLocal3,nRequest)
                   endif
                endif
              end associate
@@ -1106,6 +1208,10 @@ contains
                   if (iProc /= iProcRecv) then
                      call MPI_send(State_CVI(:,:,iNodeLocal1),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode1,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal1,iProcRecv,&
+                             iNode1)
+                     endif
                   endif
                endif
             end if
@@ -1120,6 +1226,10 @@ contains
                   if (iProc /= iProcRecv) then
                      call MPI_send(State_CVI(:,:,iNodeLocal2),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode2,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal2,iProcRecv,&
+                             iNode2)
+                     endif
                   endif
                endif
             endif
@@ -1135,6 +1245,10 @@ contains
                      !if (iProc==5) write(*,*) iNodeLocal3,iProc,nLine,iLine
                      call MPI_send(State_CVI(:,:,iNodeLocal3),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode3,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal3,iProcRecv,&
+                             iNode3)
+                     endif
                   endif
                endif
             endif
@@ -1147,7 +1261,10 @@ contains
        do iRequest=1,nRequest
           call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
        enddo
-
+       !now check the particle recieves
+       if(UseParticles) then
+          call check_particle_recv(nRequest)
+       endif
        call MPI_barrier(iComm,iError)
        
        !\
@@ -1184,6 +1301,12 @@ contains
                     +weight2*StateRecv_CVI(:,:,iNode_I(iNode2))&
                     +weight3*StateRecv_CVI(:,:,iNode_I(iNode3))
 
+                if(UseParticles) then
+                   call interp_particle_line(weight1,weight2,weight3,&
+                        iNode_I(iNode1),iNode_I(iNode2),iNode_I(iNode3),&
+                        iLineLocal)
+                end if
+                
            !     write(*,*) 'before theta phi', ThetaLine_I(iLineLocal),PhiLine_I(iLineLocal)
                                
                !update position

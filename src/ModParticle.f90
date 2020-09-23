@@ -6,20 +6,26 @@ Module ModParticle
   
   !basic particle type
   type particle
+     sequence
      integer :: iSpecies
      integer :: iCell ! cell index for particle
      real    :: vpar, vperp !velocity in [cm/s]
      real    :: Alt ! position in configurational space [cm]
-     logical :: IsOpen   ! defines if particle is in domain or index is avail.
      real    :: NumPerParticle !the weight of the particle (how many real 
-                                !particles one macro particle represents).
+     !particles one macro particle represents).
+     logical :: IsOpen   ! defines if particle is in domain or index is avail.
   end type particle
-
+  
   !type for holding pointer for particles of a specific species in a cell
   type particleCellSpecies
      type(particle),pointer :: Particle 
   end type particleCellSpecies
 
+  ! a new MPI particle type needed for passing particles via MPI
+  integer ::  MpiParticleType
+  ! mpi request array for non-blocking recv in regridding
+  integer,allocatable :: iRequest_I(:)
+  
   !type for holding array of particles (mostly for bury and disinter)
   type particleHolder
      integer :: nParticleOnLine
@@ -46,10 +52,11 @@ Module ModParticle
   integer, public, allocatable :: iLineGlobal_I(:)
   integer :: iLineCurrent
   
-  !Frequency of outputs
-  real :: DtSaveProfile=300
-  real :: DtSaveDF=60.0
-
+  !Output Params outputs
+  real,public :: DtSaveProfile=300
+  real,public :: DtSaveDF=60.0
+  logical,public :: DoSavePlotParticle = .false.
+  
   real :: DtSplitJoin=60.0
   
   !How many and which altitudes should the DF be saved
@@ -63,7 +70,9 @@ Module ModParticle
 !  integer,parameter :: nSaveDfAlts=1
 !  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
   !hold the buried lines
-  type(particleHolder),allocatable :: BuriedParticles_I(:) 
+  type(particleHolder),allocatable :: BuriedParticles_I(:)
+
+  type(particleHolder),allocatable :: ParticlesRecv_I(:) 
   
   ! grid variables
   integer :: nAlt    ! points on grid
@@ -152,6 +161,15 @@ Module ModParticle
   public :: test_coulomb_collision
   public :: test_wpi
   public :: test_combine_fluid_particle
+
+  !for regridding
+  public :: create_particle_mpi_data_type
+  public :: allocate_particle_recv
+  public :: post_particle_line_recv
+  public :: get_particles_line
+  public :: post_particle_line_send
+  public :: check_particle_recv
+  public :: interp_particle_line
 contains
 
   !============================================================================
@@ -1004,8 +1022,8 @@ contains
     call calc_moments_cell(iSpecies,iCell,&
          density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
     
-    write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
-         ,density,uBulkPar,uBulkPerp,Pressure,Temp
+    !write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
+   !      ,density,uBulkPar,uBulkPerp,Pressure,Temp
     ! calculate thermal velocity
 
     uTherm=sqrt(8.0*cBoltzmannCGS*Temp/Mass_I(iSpecies)/cPi)
@@ -3458,16 +3476,16 @@ contains
        TimeAdvance=TimeAdvance+DtMove
        
        !plot profile of moments
-       if (floor((Time+1.0e-5)/DtSaveProfile) &
-            /=floor((Time+1.0e-5-DtMove)/DtSaveProfile) )then 
+       if (DoSavePlotParticle .and. (floor((Time+1.0e-5)/DtSaveProfile) &
+            /=floor((Time+1.0e-5-DtMove)/DtSaveProfile)) )then 
           do iSpecies=1,nSpecies
              call plot_profile(iSpecies)
           enddo
        endif
 
        !plot DF                                                                 
-       if (floor((Time+1.0e-5)/DtSaveDF) &
-            /=floor((Time+1.0e-5-DtMove)/DtSaveDF) )then
+       if (DoSavePlotParticle .and. (floor((Time+1.0e-5)/DtSaveDF) &
+            /=floor((Time+1.0e-5-DtMove)/DtSaveDF)) )then
           do iSpecies=1,nSpecies
              do iAltPlot=1,nSaveDfAlts
                 call plot_distribution_cell(iSpecies,iAltsDF_I(iAltPlot))
@@ -3516,7 +3534,209 @@ contains
     fci = cElectronCharge/(Mass_I(iIon)*cGtoKg)*B0ref/cTwoPi
     
   end subroutine get_fci
+  
+  !============================================================================
+  !subroutines for REMAP
+  !============================================================================
+  !create particle mpi data type
+  subroutine create_particle_mpi_data_type
+    use ModMpi
+    use ModPWOM, only: iProc, nProc, iComm
+    integer  ::  oldtypes(0:2), blockcounts(0:2), offsets(0:2), extent
+    integer  ::  RealExtent, IntegerExtent, iError
+    !--------------------------------------------------------------------------
+    !get extents
+    call MPI_TYPE_EXTENT(MPI_REAL, RealExtent, iError)
+    call MPI_TYPE_EXTENT(MPI_INTEGER, IntegerExtent, iError)
+    
+    !define offsets 
+    offsets(0) = 0
+    oldtypes(0) = MPI_INTEGER
+    blockcounts(0) = 2
+    
+    offsets(1) = 2*IntegerExtent
+    oldtypes(1) = MPI_REAL
+    blockcounts(1) = 4
+    
+    
+    offsets(2) = 2*IntegerExtent+4*RealExtent
+    oldtypes(2) = MPI_LOGICAL
+    blockcounts(2) = 1
+    
+    ! define structured type and commit it 
+    call MPI_TYPE_STRUCT(3, blockcounts, offsets, oldtypes, &
+         MpiParticleType, iError)
+    call MPI_TYPE_COMMIT(MpiParticleType, iError)
+  end subroutine create_particle_mpi_data_type
+  !==========================================================================
+  !return number of particles on a given local line
+  subroutine get_particles_line(iLine,nParticleLine)
+    integer,intent(in)  :: iLine
+    integer,intent(out) :: nParticleLine
+    !-------------------------------------------------------------------------
+    nParticleLine = BuriedParticles_I(iLine)%nParticleOnLine
+  end subroutine get_particles_line
 
+  !==========================================================================
+  ! allocate the structure to hodl the incomming particles for remap
+  subroutine allocate_particle_recv(nNode,nTotalLine)
+    integer, intent(in) :: nNode,nTotalLine
+    !------------------------------------------------------------------------
+    if(allocated(ParticlesRecv_I)) deallocate(ParticlesRecv_I)
+    allocate(ParticlesRecv_I(nNode)) 
+
+    if (.not. allocated(iRequest_I)) allocate(iRequest_I(nTotalLine))
+  end subroutine allocate_particle_recv
+  
+  !==========================================================================
+  ! allocate size of node and post recv  
+  subroutine post_particle_line_recv(iNode,nParticleRecv,iProcSend,&
+       iLineGlobal,iLineLocal,iRequest)
+    use ModMpi
+    use ModPWOM, only: iProc, nProc, iComm
+
+    integer, intent(in) :: iNode,nParticleRecv,iProcSend,iLineGlobal
+    integer, intent(in) :: iLineLocal,iRequest
+    integer :: iError
+    !type(Particle),allocatable ::TmpParticle_I(:)
+    !------------------------------------------------------------------------
+
+    !set the size of the node being recieved
+    ParticlesRecv_I(iNode)%nParticleOnLine=nParticleRecv
+    allocate(ParticlesRecv_I(iNode)%SavedParticles_I(nParticleRecv))
+    
+    !allocate(TmpParticle_I(nParticleRecv))
+    !copy particle array over or post recv
+    !post a nonblocking recv for the particle array of iNode with the global
+    !line number as the tag
+    if(iProc==iProcSend) then
+       ParticlesRecv_I(iNode)%SavedParticles_I = &
+            BuriedParticles_I(iLineLocal)%SavedParticles_I
+    else
+       call MPI_irecv(ParticlesRecv_I(iNode)%SavedParticles_I,nParticleRecv,&
+            MpiParticleType,iProcSend,iLineGlobal,iComm,iRequest_I(iRequest),&
+            iError)
+      endif
+  end subroutine post_particle_line_recv
+  
+
+  !==========================================================================
+  ! post sends 
+  subroutine post_particle_line_send(iLineLocal,iProcRecv,iLineGlobal)
+    use ModMpi
+    use ModPWOM, only: iProc, nProc, iComm
+
+    integer, intent(in) :: iLineLocal,iProcRecv,iLineGlobal
+    integer :: iError,nParticleSend
+    !------------------------------------------------------------------------
+
+    !get the size of the node being sent
+    nParticleSend = BuriedParticles_I(iLineLocal)%nParticleOnLine
+    
+    !post a send for the particle array of iNode with the global
+    !line number as the tag
+    if(iProc/=iProcRecv) then
+         call MPI_send(BuriedParticles_I(iLineLocal)%SavedParticles_I,&
+            nParticleSend,MpiParticleType,iProcRecv,iLineGlobal,iComm,iError)
+      endif
+  end subroutine post_particle_line_send
+  !==========================================================================
+  ! check that all the non-blocking recv have completed 
+  subroutine check_particle_recv(nRequest)
+    use ModMpi
+    use ModPWOM, only: iProc
+    integer, intent(in) :: nRequest
+    integer :: iRequest, iError
+    integer :: iStatus_I(MPI_STATUS_SIZE)    
+    !------------------------------------------------------------------------
+    do iRequest=1,nRequest
+       
+       call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
+    enddo
+  end subroutine check_particle_recv
+
+  !==========================================================================
+  ! apply the regridding in the particles
+  subroutine interp_particle_line(weight1,weight2,weight3,&
+                        iNodeLocal1,iNodeLocal2,iNodeLocal3,iLineLocal)
+    real,   intent(in) :: weight1,weight2,weight3
+    integer,intent(in) :: iNodeLocal1,iNodeLocal2,iNodeLocal3,iLineLocal
+    integer :: iParticle, nParticles1,nParticles2, &
+         nParticles3,iJoin
+    !-------------------------------------------------------------------------
+    write(*,*) weight1,weight2,weight3
+    !get number of particles for each node
+    nParticles1 = ParticlesRecv_I(iNodeLocal1)%nParticleOnLine
+    nParticles2 = ParticlesRecv_I(iNodeLocal2)%nParticleOnLine
+    nParticles3 = ParticlesRecv_I(iNodeLocal3)%nParticleOnLine
+    
+    !the new total number of particles will be the total from all
+    !nodes used in the interpolation
+    nParticle = nParticles1+nParticles2+nParticles3
+
+    !deallocate current particle array and reallocate with number of particle
+    !on the regridded line
+    if (allocated(Particles_I)) &
+         deallocate(Particles_I)
+
+    allocate(Particles_I(nParticle))
+    iLineCurrent = iLineLocal
+    
+    !concatonate all nodes particles together
+    Particles_I(1:nParticles1) = &
+         ParticlesRecv_I(iNodeLocal1)%SavedParticles_I
+
+    Particles_I(nParticles1+1:nParticles1+nParticles2) = &
+         ParticlesRecv_I(iNodeLocal2)%SavedParticles_I
+
+    Particles_I(nParticles1+nParticles2+1:nParticle) = &
+         ParticlesRecv_I(iNodeLocal3)%SavedParticles_I
+
+    !adjust statistical weights by interpolation weights
+    do iParticle=1,nParticle
+       if (iParticle<=nParticles1) then
+          Particles_I(iParticle)%NumPerParticle = &
+               Particles_I(iParticle)%NumPerParticle * weight1
+          
+       elseif((iParticle > nParticles1) .and. &
+            (iParticle <= nParticles1+nParticles2)) then
+          Particles_I(iParticle)%NumPerParticle = &
+               Particles_I(iParticle)%NumPerParticle * weight2
+          
+       elseif((iParticle > nParticles1+nParticles2) .and. &
+            (iParticle <= nParticle)) then
+          Particles_I(iParticle)%NumPerParticle = &
+               Particles_I(iParticle)%NumPerParticle * weight3
+       endif
+    enddo
+
+    !remove any zero weight particles. This can happen if one of the
+    !interpolatation weights are zero
+    call clean_zero_weight_particles
+
+    !sort particles before we can split/join
+    call timing_start('sort_particles')
+    call sort_particles
+    call timing_stop('sort_particles')
+    
+    !now join particles until target is reached. 10 joins is about right
+    join_loop: do iJoin=1,10
+       call timing_start('split_join_particles')
+       call split_join_particles(0.05)
+       call timing_stop('split_join_particles')
+
+       call timing_start('sort_particles')
+       call sort_particles
+       call timing_stop('sort_particles')
+    
+    enddo join_loop
+
+    !bury the final regridded line
+    call bury_line(iLineLocal)
+  end subroutine interp_particle_line
+
+  
+  ! UNIT TESTS ===============================================================
   !============================================================================
   ! unit test subroutine for sampling
   subroutine test_sample

@@ -20,7 +20,8 @@ subroutine PW_set_parameters(NameAction)
        DoPlotOvation
   use ModParticle,ONLY: UseWPI,IsVerboseParticle, TypeWPI, FracLeftHand, &
        SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
-       SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap
+       SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap, &
+       DoSavePlotParticle,DtSaveProfile, DtSaveDF
   use ModReGrid, ONLy: DoRegrid,DtRegrid
   implicit none
   
@@ -259,6 +260,12 @@ subroutine PW_set_parameters(NameAction)
         call read_var('AltMaxParticles', AltMaxParticles)
         call read_var('UseWPI', UseWPI)
         call read_var('IsVerboseParticle', IsVerboseParticle)
+
+     case('#SAVEPLOTPARTICLE')
+        call read_var('DoSavePlotParticle',  DoSavePlotParticle)
+        call read_var('DtSaveProfile',  DtSaveProfile)
+        call read_var('DtSaveDF',  DtSaveDF)
+        
         
      case('#WPI')
         call read_var('TypeWPI',  TypeWPI)
