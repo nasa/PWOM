@@ -394,8 +394,14 @@ contains
        
        !Assign cell index to particle
        CELL_ASSIGN: do iAlt=0,nAlt+1
-          if(Particles_I(iParticle)%Alt>AltBot_F(iAlt) &
-               .and. Particles_I(iParticle)%Alt<AltTop_F(iAlt)) then
+          if(Particles_I(iParticle)%Alt<AltBot_F(0) )then
+             Particles_I(iParticle)%iCell=-1
+             exit CELL_ASSIGN
+          else if (Particles_I(iParticle)%Alt>=AltTop_F(nAlt+1) )  then 
+             Particles_I(iParticle)%iCell=nAlt+2
+             exit CELL_ASSIGN
+          else if(Particles_I(iParticle)%Alt>=AltBot_F(iAlt) &
+               .and. Particles_I(iParticle)%Alt<AltTop_F(iAlt)) then 
              Particles_I(iParticle)%iCell=iAlt
              exit CELL_ASSIGN
           endif
@@ -587,8 +593,14 @@ contains
        
        !Assign cell index to particle
        CELL_ASSIGN: do iAlt=0,nAlt+1
-          if(Particles_I(iParticle)%Alt>AltBot_F(iAlt) &
-               .and. Particles_I(iParticle)%Alt<AltTop_F(iAlt)) then
+          if(Particles_I(iParticle)%Alt<AltBot_F(0) )then
+             Particles_I(iParticle)%iCell=-1
+             exit CELL_ASSIGN
+          else if (Particles_I(iParticle)%Alt>=AltTop_F(nAlt+1) )  then 
+             Particles_I(iParticle)%iCell=nAlt+2
+             exit CELL_ASSIGN
+          else if(Particles_I(iParticle)%Alt>=AltBot_F(iAlt) &
+               .and. Particles_I(iParticle)%Alt<AltTop_F(iAlt)) then 
              Particles_I(iParticle)%iCell=iAlt
              exit CELL_ASSIGN
           endif
