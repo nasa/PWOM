@@ -88,6 +88,7 @@ Module ModReGrid
   !number of points to remap
   integer :: nPointsToRemapN, nPointsToRemapS
 
+  logical, public :: DoSavePoints=.false.
   logical, public :: DoRegrid=.false.
   real   , public :: DtRegrid = 600.0
   !main calling routine is public
@@ -1632,6 +1633,10 @@ contains
     if(iProc==0) then
        call get_triangulation
        call set_regrid_plan
+
+       !save ponts and triangulation before applying the regrid plan
+       if (DoSavePoints)&
+            call save_plot_points
     endif
     
     !if(iProc==0) then
@@ -1690,4 +1695,77 @@ contains
        write(*,*) '    weight3     ', RemapN_I(iLine)%weight3
     enddo
   end subroutine print_map
+
+  !==========================================================================
+  ! routine to save the current points and triangulation ahead of remap
+  subroutine save_plot_points
+    use ModPWOM, only: Time
+    use ModIoUnit, ONLY: UnitTmp_
+    use ModTriangulateSpherical,ONLY:trlist
+    integer,parameter :: nRow=6
+    integer,allocatable :: ltri_II(:,:)
+    integer :: nTriangle,iError,iTriangle,iNode,iTimeOut
+    Character(len=100) :: NameFile
+    !--------------------------------------------------------------------
+    !save the north triangulation first
+    if (nNorth>0) then
+       iTimeOut=int(Time)
+       write(NameFile,"(a,i8.8,a)") &
+            'PW/plots/NorthPoints_Time',iTimeOut,'.dat'
+       open(UnitTmp_,file=NameFile)
+       
+       if (allocated(ltri_II) ) deallocate(ltri_II)
+       allocate(ltri_II(nRow,2*nNorth-4))
+       call trlist ( nNorth, listN_I, lptrN_I, lendN_I, nrow, &
+            nTriangle, ltri_II, iError)
+       
+       write(UnitTmp_,'(a)') &
+            'VARIABLES = "X"  "Y" "Z"'
+       write(UnitTmp_,'(a)') &
+            'ZONE T="Triangulation North"'
+       write(UnitTmp_,'(a,1es18.10)') &
+            'SolutionTime = ', Time
+       write(UnitTmp_,'(a,i3,a,i3,a)') 'NODES =', nNorth, &
+            ', ELEMENTS = ',nTriangle, &
+            ', DATAPACKING=POINT, ZONETYPE=FETRIANGLE'
+       do iNode=1,nNorth
+          write(UnitTmp_,"(100es18.10)") Lines_I(iIndexNorth_I(iNode))%Xyz_D
+       enddo
+       do iTriangle=1,nTriangle
+          write(UnitTmp_,'(i4,i4,i4)') ltri_II(1:3,iTriangle)
+       enddo
+       close(UnitTmp_)
+    endif
+
+    !now svae the south points
+    if (nSouth>0) then
+       iTimeOut=int(Time)
+       write(NameFile,"(a,i8.8,a)") &
+            'PW/plots/SouthPoints_Time',iTimeOut,'.dat'
+       open(UnitTmp_,file=NameFile)
+       
+       if (allocated(ltri_II) ) deallocate(ltri_II)
+       allocate(ltri_II(nRow,2*nSouth-4))
+       call trlist ( nSouth, listS_I, lptrS_I, lendS_I, nrow, &
+            nTriangle, ltri_II, iError)
+       
+       write(UnitTmp_,'(a)') &
+            'VARIABLES = "X"  "Y" "Z"'
+       write(UnitTmp_,'(a)') &
+            'ZONE T="Triangulation South"'
+       write(UnitTmp_,'(a,1es18.10)') &
+            'SolutionTime = ', Time
+       write(UnitTmp_,'(a,i3,a,i3,a)') 'NODES =', nSouth, &
+            ', ELEMENTS = ',nTriangle, &
+            ', DATAPACKING=POINT, ZONETYPE=FETRIANGLE'
+       do iNode=1,nSouth
+          write(UnitTmp_,"(100es18.10)") Lines_I(iIndexSouth_I(iNode))%Xyz_D
+       enddo
+       do iTriangle=1,nTriangle
+          write(UnitTmp_,'(i4,i4,i4)') ltri_II(1:3,iTriangle)
+       enddo
+       close(UnitTmp_)
+    endif
+    
+  end subroutine save_plot_points
 end Module ModReGrid

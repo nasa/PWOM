@@ -22,7 +22,7 @@ subroutine PW_set_parameters(NameAction)
        SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
        SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap, &
        DoSavePlotParticle,DtSaveProfile, DtSaveDF
-  use ModReGrid, ONLy: DoRegrid,DtRegrid
+  use ModReGrid, ONLy: DoRegrid,DtRegrid,DoSavePoints
   implicit none
   
 
@@ -112,6 +112,7 @@ subroutine PW_set_parameters(NameAction)
      case('#REGRID')
         call read_var('DoRegrid',DoRegrid)
         call read_var('DtRegrid',DtRegrid)
+        call read_var('DoSavePoints',DoSavePoints)
      case('#MOTION')
         call read_var('DoMoveLine',DoMoveLine)
      case('#FAC')
