@@ -446,7 +446,8 @@ module ModMPiInterfaces
     mpi_recv_l0, &
     mpi_recv_l1, &
     mpi_recv_s0, &
-    mpi_recv_s1
+    mpi_recv_s1, &
+    mpi_recv_p
   end interface
 
   interface mpi_reduce
@@ -3505,7 +3506,7 @@ contains
           real    :: Alt ! position in configurational space [cm]
           real    :: NumPerParticle !the weight of the particle (how many real 
           !particles one macro particle represents).
-          logical :: IsOpen   ! defines if particle is in domain or index is avail.
+          logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
        end type particle
        
        type(particle), intent(out) :: buf(:)
@@ -4128,6 +4129,34 @@ contains
        call mpi_recv(buf, count, datatype, source, tag, comm, &
           status, ierror)
      end subroutine mpi_recv_s1
+
+     subroutine mpi_recv_p(buf, count, datatype, source, tag, comm, &
+          status, ierror) 
+       use ModMpiOrig, only: mpi_status_size
+       type particle
+          sequence
+          integer :: iSpecies
+          integer :: iCell ! cell index for particle
+          real    :: vpar, vperp !velocity in [cm/s]
+          real    :: Alt ! position in configurational space [cm]
+          real    :: NumPerParticle !the weight of the particle (how many real 
+          !particles one macro particle represents).
+          logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
+       end type particle
+       
+       type(particle), intent(out) :: buf(:)
+       integer, intent(in) :: count
+       integer, intent(in) :: datatype
+       integer, intent(in) :: source
+       integer, intent(in) :: tag
+       integer, intent(in) :: comm
+       integer, intent(out) :: status(mpi_status_size)
+       integer, intent(out) :: ierror
+          external mpi_recv
+
+       call mpi_recv(buf, count, datatype, source, tag, comm, &
+          status, ierror)
+     end subroutine mpi_recv_p
 
 
      subroutine mpi_reduce_i2(sendbuf, recvbuf, count, datatype, op, &
@@ -4922,7 +4951,7 @@ contains
           real    :: Alt ! position in configurational space [cm]
           real    :: NumPerParticle !the weight of the particle (how many real 
           !particles one macro particle represents).
-          logical :: IsOpen   ! defines if particle is in domain or index is avail.
+          logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
        end type particle
        
        type(particle), intent(in) :: buf(:)
