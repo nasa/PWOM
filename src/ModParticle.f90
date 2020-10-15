@@ -13,7 +13,7 @@ Module ModParticle
      real    :: Alt ! position in configurational space [cm]
      real    :: NumPerParticle !the weight of the particle (how many real 
      !particles one macro particle represents).
-     logical :: IsOpen   ! defines if particle is in domain or index is avail.
+     logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
   end type particle
   
   !type for holding pointer for particles of a specific species in a cell
@@ -22,7 +22,7 @@ Module ModParticle
   end type particleCellSpecies
 
   ! a new MPI particle type needed for passing particles via MPI
-  integer ::  MpiParticleType
+  integer ::  MpiParticleType,MpiParticleTypeArr
   ! mpi request array for non-blocking recv in regridding
   integer,allocatable :: iRequest_I(:)
   
@@ -3554,32 +3554,84 @@ contains
   subroutine create_particle_mpi_data_type
     use ModMpi
     use ModPWOM, only: iProc, nProc, iComm
-    integer  ::  oldtypes(0:2), blockcounts(0:2), offsets(0:2), extent
-    integer  ::  RealExtent, IntegerExtent, iError
+    type (Particle) :: TestParticle,TestParticle_I(2)
+    integer  ::  iError
+    integer(KIND=MPI_ADDRESS_KIND) :: disp(8), base, lb, extent 
+    integer :: blocklen(8), type(8)  
+
     !--------------------------------------------------------------------------
-    !get extents
-    call MPI_TYPE_EXTENT(MPI_REAL, RealExtent, iError)
-    call MPI_TYPE_EXTENT(MPI_INTEGER, IntegerExtent, iError)
+ 
+    call MPI_GET_ADDRESS(TestParticle%iSpecies, disp(1), iError) 
+    call MPI_GET_ADDRESS(TestParticle%iCell, disp(2), iError) 
+    call MPI_GET_ADDRESS(TestParticle%vpar, disp(3), iError) 
+    call MPI_GET_ADDRESS(TestParticle%vperp, disp(4), iError)
+    call MPI_GET_ADDRESS(TestParticle%Alt, disp(5), iError) 
+    call MPI_GET_ADDRESS(TestParticle%NumPerParticle, disp(6), iError) 
+    call MPI_GET_ADDRESS(TestParticle%IsOpen, disp(7), iError) 
+    call MPI_GET_ADDRESS(TestParticle%IsOpen, disp(8), iError) 
     
-    !define offsets 
-    offsets(0) = 0
-    oldtypes(0) = MPI_INTEGER
-    blockcounts(0) = 2
+    base = disp(1) 
+    disp(1) = disp(1) - base 
+    disp(2) = disp(2) - base 
+    disp(3) = disp(3) - base 
+    disp(4) = disp(4) - base 
+    disp(5) = disp(5) - base 
+    disp(6) = disp(6) - base 
+    disp(7) = disp(7) - base 
+    disp(8) = disp(8) - base 
     
-    offsets(1) = 2*IntegerExtent
-    oldtypes(1) = MPI_REAL
-    blockcounts(1) = 4
+    blocklen(:)=1
     
+    type(1) = MPI_INTEGER16 
+    type(2) = MPI_INTEGER16 
+    type(3) = MPI_DOUBLE_PRECISION!MPI_REAL
+    type(4) = MPI_DOUBLE_PRECISION!MPI_REAL
+    type(5) = MPI_DOUBLE_PRECISION!MPI_REAL
+    type(6) = MPI_DOUBLE_PRECISION
+    type(7) = MPI_LOGICAL
+    type(8) = MPI_LOGICAL
     
-    offsets(2) = 2*IntegerExtent+4*RealExtent
-    oldtypes(2) = MPI_LOGICAL
-    blockcounts(2) = 1
-    
-    ! define structured type and commit it 
-    call MPI_TYPE_STRUCT(3, blockcounts, offsets, oldtypes, &
-         MpiParticleType, iError)
+    call MPI_TYPE_CREATE_STRUCT(8, blocklen, disp, type, MpiParticleType, iError) 
     call MPI_TYPE_COMMIT(MpiParticleType, iError)
+    
+    call MPI_GET_ADDRESS(TestParticle_I(1), disp(1), iError) 
+    call MPI_GET_ADDRESS(TestParticle_I(2), disp(2), iError) 
+    extent = disp(2) - disp(1) 
+    lb = 0 
+    call MPI_TYPE_CREATE_RESIZED(MpiParticleType, lb, extent, MpiParticleTypeArr, iError) 
+    call MPI_TYPE_COMMIT(MpiParticleTypeArr, iError)  
+
   end subroutine create_particle_mpi_data_type
+
+!  subroutine create_particle_mpi_data_type
+!    use ModMpi
+!    use ModPWOM, only: iProc, nProc, iComm
+!    integer  ::  oldtypes(0:2), blockcounts(0:2), offsets(0:2), extent
+!    integer  ::  RealExtent, IntegerExtent, iError
+!    !--------------------------------------------------------------------------
+!    !get extents
+!    call MPI_TYPE_EXTENT(MPI_REAL, RealExtent, iError)
+!    call MPI_TYPE_EXTENT(MPI_INTEGER, IntegerExtent, iError)
+!    
+!    !define offsets 
+!    offsets(0) = 0
+!    oldtypes(0) = MPI_INTEGER
+!    blockcounts(0) = 2
+!    
+!    offsets(1) = 2*IntegerExtent
+!    oldtypes(1) = MPI_REAL
+!    blockcounts(1) = 4
+!    
+!    offsets(2) = 2*IntegerExtent+4*RealExtent
+!    oldtypes(2) = MPI_LOGICAL
+!    blockcounts(2) = 1
+!    
+!    ! define structured type and commit it 
+!    call MPI_TYPE_STRUCT(3, blockcounts, offsets, oldtypes, &
+!         MpiParticleType, iError)
+!    call MPI_TYPE_COMMIT(MpiParticleType, iError)
+!  end subroutine create_particle_mpi_data_type
+!
   !==========================================================================
   !return number of particles on a given local line
   subroutine get_particles_line(iLine,nParticleLine)
@@ -3626,7 +3678,7 @@ contains
             BuriedParticles_I(iLineLocal)%SavedParticles_I
     else
        call MPI_irecv(ParticlesRecv_I(iNode)%SavedParticles_I,nParticleRecv,&
-            MpiParticleType,iProcSend,iLineGlobal,iComm,iRequest_I(iRequest),&
+            MpiParticleTypeArr,iProcSend,iLineGlobal,iComm,iRequest_I(iRequest),&
             iError)
       endif
   end subroutine post_particle_line_recv
@@ -3648,9 +3700,9 @@ contains
     !post a send for the particle array of iNode with the global
     !line number as the tag
     if(iProc/=iProcRecv) then
-         call MPI_send(BuriedParticles_I(iLineLocal)%SavedParticles_I,&
-            nParticleSend,MpiParticleType,iProcRecv,iLineGlobal,iComm,iError)
-      endif
+       call MPI_send(BuriedParticles_I(iLineLocal)%SavedParticles_I,&
+            nParticleSend,MpiParticleTypeArr,iProcRecv,iLineGlobal,iComm,iError)
+    endif
   end subroutine post_particle_line_send
   !==========================================================================
   ! check that all the non-blocking recv have completed 
@@ -3662,7 +3714,6 @@ contains
     integer :: iStatus_I(MPI_STATUS_SIZE)    
     !------------------------------------------------------------------------
     do iRequest=1,nRequest
-       
        call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
     enddo
   end subroutine check_particle_recv
@@ -3676,11 +3727,16 @@ contains
     integer :: iParticle, nParticles1,nParticles2, &
          nParticles3,iJoin
     !-------------------------------------------------------------------------
-    write(*,*) weight1,weight2,weight3
+    !write(*,*) weight1,weight2,weight3
     !get number of particles for each node
     nParticles1 = ParticlesRecv_I(iNodeLocal1)%nParticleOnLine
     nParticles2 = ParticlesRecv_I(iNodeLocal2)%nParticleOnLine
     nParticles3 = ParticlesRecv_I(iNodeLocal3)%nParticleOnLine
+    
+    !write(*,*) iNodeLocal1,iNodeLocal2,iNodeLocal3
+    !write(*,*) 'recv Particle 1', ParticlesRecv_I(iNodeLocal1)%SavedParticles_I(1)!%NumPerParticle
+    !write(*,*) 'recv Particle 2', ParticlesRecv_I(iNodeLocal2)%SavedParticles_I(1)!%NumPerParticle
+    !write(*,*) 'recv Particle 3', ParticlesRecv_I(iNodeLocal3)%SavedParticles_I(1)!%NumPerParticle
     
     !the new total number of particles will be the total from all
     !nodes used in the interpolation
