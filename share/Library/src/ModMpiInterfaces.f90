@@ -40,6 +40,7 @@ module ModMPiInterfaces
   public:: mpi_ssend
   public:: mpi_wait
   public:: mpi_waitall
+  public:: mpi_get_address
 
 
   interface
@@ -539,9 +540,67 @@ module ModMPiInterfaces
   end interface
 
 
+  interface mpi_get_address
+     module procedure &
+          mpi_get_address_i, &
+          mpi_get_address_r, &
+          mpi_get_address_l,&
+          mpi_get_address_p
+  end interface mpi_get_address
+     
 
 contains
+  subroutine mpi_get_address_i(Var,disp,iError)
+    use ModMpiOrig, only: MPI_ADDRESS_KIND
+    integer, intent(in) :: var
+    integer(KIND=MPI_ADDRESS_KIND), intent(in) :: disp
+    integer, intent(in) :: iError
+    external mpi_get_address
 
+    call mpi_get_address(Var,disp,iError)
+  end subroutine mpi_get_address_i
+
+  subroutine mpi_get_address_r(Var,disp,iError)
+    use ModMpiOrig, only: MPI_ADDRESS_KIND
+    real, intent(in) :: var
+    integer(KIND=MPI_ADDRESS_KIND), intent(in) :: disp
+    integer, intent(in) :: iError
+    external mpi_get_address
+
+    call mpi_get_address(Var,disp,iError)
+  end subroutine mpi_get_address_r
+
+  subroutine mpi_get_address_l(Var,disp,iError)
+    use ModMpiOrig, only: MPI_ADDRESS_KIND
+    logical, intent(in) :: var
+    integer(KIND=MPI_ADDRESS_KIND), intent(in) :: disp
+    integer, intent(in) :: iError
+    external mpi_get_address
+    
+    call mpi_get_address(Var,disp,iError)
+  end subroutine mpi_get_address_l
+
+  subroutine mpi_get_address_p(Var,disp,iError)
+    use ModMpiOrig, only: MPI_ADDRESS_KIND
+    type particle
+       sequence
+       integer :: iSpecies
+       integer :: iCell ! cell index for particle
+       real    :: vpar, vperp !velocity in [cm/s]
+       real    :: Alt ! position in configurational space [cm]
+       real    :: NumPerParticle !the weight of the particle (how many real 
+       !particles one macro particle represents).
+       logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
+    end type particle
+    type(particle), intent(in) :: var
+    integer(KIND=MPI_ADDRESS_KIND), intent(in) :: disp
+    integer, intent(in) :: iError
+    external mpi_get_address
+    
+    call mpi_get_address(Var,disp,iError)
+  end subroutine mpi_get_address_p
+
+    
      subroutine mpi_allgather_i2(sendbuf, sendcount, sendtype,       &
           recvbuf, recvcount, recvtype, comm, ierror) 
        integer, intent(in) :: sendbuf(:,:)

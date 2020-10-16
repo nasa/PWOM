@@ -1392,7 +1392,11 @@ contains
        !/
        if (allocated(StateRecv_CVI)) deallocate(StateRecv_CVI)
        allocate(StateRecv_CVI(nAlt,nVar,nNode))
-             
+
+       if(UseParticles) then
+          call allocate_particle_recv(nNode,nTotalLine)
+       endif
+       
        !\
        ! Loop over plan and post all recieves
        !/
@@ -1412,6 +1416,9 @@ contains
                   iNodeLocal1 => RemapS_I(iLine)%iNodeLocal1,&
                   iNodeLocal2 => RemapS_I(iLine)%iNodeLocal2,&
                   iNodeLocal3 => RemapS_I(iLine)%iNodeLocal3,&
+                  nParticle1 => RemapS_I(iLine)%nParticle1,&
+                  nParticle2 => RemapS_I(iLine)%nParticle2,&
+                  nParticle3 => RemapS_I(iLine)%nParticle3,&
                   iProc1 => RemapS_I(iLine)%iProc1,&
                   iProc2 => RemapS_I(iLine)%iProc2,&
                   iProc3 => RemapS_I(iLine)%iProc3)
@@ -1435,6 +1442,10 @@ contains
                           iProc1,iNode1,&
                           iComm,iRequest_I(nRequest),iError)
                   endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle1,iProc1,&
+                          iNode1,iNodeLocal1,nRequest)
+                  endif
                endif
                if (.not.IsRecvNode_I(iNode2))then
                   IsRecvNode_I(iNode2) =.true.
@@ -1453,6 +1464,10 @@ contains
                           iProc2,iNode2,&
                           iComm,iRequest_I(nRequest),iError)
                   endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle2,iProc2,&
+                          iNode2,iNodeLocal2,nRequest)
+                  endif
                endif
                if (.not.IsRecvNode_I(iNode3))then
                   IsRecvNode_I(iNode3) =.true.
@@ -1470,6 +1485,10 @@ contains
                      call MPI_irecv(StateRecv_CVI(:,:,iNode),nAlt*nVar,MPI_REAL,&
                           iProc3,iNode3,&
                           iComm,iRequest_I(nRequest),iError)
+                  endif
+                  if(UseParticles) then
+                     call post_particle_line_recv(iNode,nParticle3,iProc3,&
+                          iNode3,iNodeLocal3,nRequest)
                   endif
                endif
              end associate
@@ -1509,6 +1528,10 @@ contains
                   if (iProc /= iProcRecv) then
                      call MPI_send(State_CVI(:,:,iNodeLocal1),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode1,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal2,iProcRecv,&
+                             iNode2)
+                     endif
                   endif
                endif
             end if
@@ -1523,6 +1546,10 @@ contains
                   if (iProc /= iProcRecv) then
                      call MPI_send(State_CVI(:,:,iNodeLocal2),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode2,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal2,iProcRecv,&
+                             iNode2)
+                     endif
                   endif
                endif
             endif
@@ -1538,6 +1565,10 @@ contains
                      !if (iProc==5) write(*,*) iNodeLocal3,iProc,nLine,iLine
                      call MPI_send(State_CVI(:,:,iNodeLocal3),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode3,iComm,iError)
+                     if(UseParticles) then
+                        call post_particle_line_send(iNodeLocal3,iProcRecv,&
+                             iNode3)
+                     endif
                   endif
                endif
             endif
@@ -1550,7 +1581,10 @@ contains
        do iRequest=1,nRequest
           call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
        enddo
-
+       !now check the particle recieves
+       if(UseParticles) then
+          call check_particle_recv(nRequest)
+       endif
        call MPI_barrier(iComm,iError)
        
        !\
@@ -1575,6 +1609,12 @@ contains
                     +weight2*StateRecv_CVI(:,:,iNode_I(iNode2))&
                     +weight3*StateRecv_CVI(:,:,iNode_I(iNode3))
 
+               if(UseParticles) then
+                  call interp_particle_line(weight1,weight2,weight3,&
+                       iNode_I(iNode1),iNode_I(iNode2),iNode_I(iNode3),&
+                       iLineLocal)
+               end if
+               
                !update position
                ThetaLine_I(iLineLocal) = Theta
                PhiLine_I(iLineLocal) = Phi
