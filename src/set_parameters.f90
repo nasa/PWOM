@@ -82,7 +82,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DtSavePlot',DtOutput)
         call read_var('DnSavePlot',DnOutput)
         call read_var('SaveFirst',DoSavePlot)
-        
+        call read_var('DoAppendPlot',DoAppendPlot)
+
      case('#TYPEPLOT')
         call read_var('TypePlot',TypePlot)
 

@@ -75,7 +75,7 @@ module ModPWOM
   logical::  UseIE=.false.,UseAurora=.false.
   logical::  UseWeimer = .false., UseConstantIMF = .false.
   logical::  DoPlotElectrodynamics=.false.
-  logical::  DoSavePlot=.true.
+  logical::  DoSavePlot=.true., DoAppendPlot=.false.
   character(len=100) :: NamePhiNorth, NamePhiSouth
 
   character(len=100) :: NameInput,  &

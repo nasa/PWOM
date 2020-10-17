@@ -169,8 +169,12 @@ subroutine PW_initialize
         write(NameGraphics(iLine),"(a,i4.4,a)") &
              'PW/plots/south_plots_iline',iLineGlobal(iLine),'.out'
      endif
-     
-     open(UnitTmp_,FILE=NameGraphics(iLine),STATUS='replace')
+
+     if (DoAppendPlot) then 
+        open(UnitTmp_,FILE=NameGraphics(iLine),status="old", position="append")
+     else
+        open(UnitTmp_,FILE=NameGraphics(iLine),STATUS='replace')
+     endif
      close(UnitTmp_)
   enddo
   !****************************************************************************
