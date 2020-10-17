@@ -253,6 +253,7 @@ contains
   ! by processor 0
   subroutine define_remap_grid(nPoint,IsNorth)
     use ModIoUnit, ONLY: UnitTmp_
+    use ModNumConst, ONLY: cPi
     integer, intent(in) :: nPoint
     logical, intent(in) :: IsNorth
     integer :: iCount
@@ -262,11 +263,10 @@ contains
     real :: ThetaCap
     real :: rCap, hcap,theta,phi
     
-    real,parameter :: cPi=3.14
     logical,parameter :: DoTest = .true.
     !---------------------------------------------------------------------------
 
-    ThetaCap=40.0*3.14/180.0
+    ThetaCap=40.0*cPi/180.0
 
     !allocate remap grid if not allocated
     if (IsNorth) then
@@ -308,7 +308,7 @@ contains
              RemapPhiN_I(iCount)=phi
              nRemapPointN = iCount
           else
-             RemapThetaS_I(iCount)=-1.0*theta
+             RemapThetaS_I(iCount)=cPi-1.0*theta
              RemapPhiS_I(iCount)=phi
              nRemapPointS = iCount
           endif
@@ -1529,8 +1529,8 @@ contains
                      call MPI_send(State_CVI(:,:,iNodeLocal1),nAlt*nVar,MPI_REAL,&
                           iProcRecv,iNode1,iComm,iError)
                      if(UseParticles) then
-                        call post_particle_line_send(iNodeLocal2,iProcRecv,&
-                             iNode2)
+                        call post_particle_line_send(iNodeLocal1,iProcRecv,&
+                             iNode1)
                      endif
                   endif
                endif
@@ -1581,12 +1581,14 @@ contains
        do iRequest=1,nRequest
           call MPI_wait(iRequest_I(iRequest),iStatus_I,iError)
        enddo
+
        !now check the particle recieves
        if(UseParticles) then
           call check_particle_recv(nRequest)
        endif
+
        call MPI_barrier(iComm,iError)
-       
+
        !\
        ! Loop over plan and apply the remap
        !/
