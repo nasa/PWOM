@@ -292,7 +292,6 @@ contains
     allocate(Efield_G(-1:nAlt+2))
     
     ! allocate array to tell number of particles of a given type in each cell
-    write(*,*) nAlt+1
     allocate(nSortedParticle_II(nSpecies,0:nAlt+1))
 
 
@@ -648,8 +647,7 @@ contains
     ! Find number of particles represented by a macro particle by !
     !taking Ntrue=density*volume and dividing by nParticlesPerCell
     NumPerParticle=Density * Volume_G(iCell)/real(nNew)
-    !write(*,*) nNew
-
+    
     ! allocate array to hold new particles
     allocate(NewParticle_I(nNew))
    
@@ -681,7 +679,6 @@ contains
        !increment particle counter
        iParticle=iParticle+1
     end do sample_loop
-!    write(*,*) 'nNew',nNew
 !    if(DoTest) then 
 !       call plot_distribution_cell(iSpecies,iCell,nNew,NewParticle_I)
 !       return
@@ -779,8 +776,7 @@ contains
     ! Find number of particles represented by a macro particle by !
     !taking Ntrue=density*volume and dividing by nParticlesPerCell
     NumPerParticle=Density * Volume_G(iCell)/real(nNew)
-    !write(*,*) nNew
-
+    
     uTherm=sqrt(8.0*cBoltzmannCGS*Temperature/Mass_I(iSpecies)/cPi)
     
     ! allocate array to hold new particles
@@ -836,7 +832,6 @@ contains
          *NewParticle_I(:)%NumPerParticle
     
     
-!    write(*,*) 'nNew',nNew
 !    if(DoTest) then 
 !       call plot_distribution_cell(iSpecies,iCell,nNew,NewParticle_I)
 !       return
@@ -978,7 +973,6 @@ contains
        end if
     end do
     !Plot 
-    !write(NamePlot,"(a)") 'Profile.out'
     write(NamePlot,"(a,i5.5,a)") &
          'PW/plots/Profile_',iLineGlobal_I(iLineCurrent),'.out'
 
@@ -1457,15 +1451,7 @@ contains
           if(Alt<Alt_G(iCell-1) .or. Alt>Alt_G(iCell+1)) cycle PARTICLE_LOOP
           weight=1.0-abs(Alt_G(iCell)-Alt)/dAlt_G(iCell) !assumes uniform grid!
           
-!          write(*,*) iParticle
           !density is particles in cell over volume
-!          if (iParticle==1005)then
-!             write(*,*) ' '
-!             write(*,*) iCell,iSpecies
-!             write(*,*)SortParticles_III(iParticle,iSpecies,iCell)%Particle%Alt
-!             write(*,*)SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
-!          endif
-             
           density=density+weight&
                *SortParticles_III(iParticle,iSpecies,iAlt)%Particle&
                %NumPerParticle/Volume_G(iCell)
@@ -1655,7 +1641,6 @@ contains
        iCell=Particles_I(iParticle)%iCell
        if(iCell<0 .or.iCell>nAlt+1) cycle PARTICLE_LOOP2
        iSpecies=Particles_I(iParticle)%iSpecies
-!       if(iSpecies==0)write(*,*)iParticle,nParticle
        
        !get the thread number
        iThread=0
@@ -2264,6 +2249,7 @@ contains
   ! if outside the target then split or join particles as required to reach 
   ! target number of particles in a cell. Then resort when done
   subroutine split_join_particles(Tolerance)
+    use ModPWOM, only: iProc
     !integer, intent(in) :: iSpecies
     real   , intent(in) :: Tolerance
     integer :: iCell, nParticleInCell
@@ -2316,7 +2302,7 @@ contains
              !set number of joined particles to create never letting the number 
              !exceed 10% of the particles at a time
              nJoin=min(abs(nParticleInCell-nParticlePerCell_I(iSpecies)),&
-                  floor(0.1*nParticleInCell))
+                  floor(0.4*nParticleInCell))
              !nJoin=abs(nParticleInCell-nParticlePercell)
              
              !need loop to deal with case when not all particles can be joined
@@ -2589,7 +2575,7 @@ contains
   subroutine join_particles_cell(iCell,iSpecies,nJoin,NewParticle_I,nJoinRevise)
     use ModSort, ONLY: sort_quick
     use ModNumConst, ONLY: cPi,cTwoPi
-    
+    use ModPWOM, only: iProc
     integer,intent(in) :: iSpecies,iCell,nJoin
     type(particle),intent(out):: NewParticle_I(nJoin)
     integer,intent(out):: nJoinRevise
@@ -2627,6 +2613,8 @@ contains
     integer,allocatable :: IndexAvail_I(:)
     logical :: IsEnough
     !---------------------------------------------------------------------------
+    
+
     TrueParticles=0
     nJoinRevise=nJoin
     
@@ -2668,8 +2656,9 @@ contains
     ! discretize velocity space, center around bulk velocity to 
     !5 uTherm in every direction with grid size .2 uTherm
     vParMin=uBulkPar-5.0*uTherm
-    vPerpMin=0.0
     dVel=0.1*uTherm
+    vPerpMin=-dVel
+    
     
     ! discretize velocity space but make sure enough particle are in enough 
     ! bins to join particles
@@ -2941,6 +2930,7 @@ contains
   ! standalone PWOM mode particles must be buried after
   subroutine read_restart_particle(iLine)
     use ModIoUnit, ONLY: UnitTmp_
+    use ModPWOM, only: iProc, nProc, iComm
     integer, intent(in) :: iLine
     character(len=150) :: NameRestart
     integer :: iParticle
@@ -2967,7 +2957,6 @@ contains
 
     call clean_zero_weight_particles
 
-    
   end subroutine read_restart_particle
   
   !============================================================================
@@ -3017,6 +3006,110 @@ contains
 
     deallocate(Index_I, ParticlesOld_I)
   end subroutine clean_zero_weight_particles
+
+  !============================================================================
+  ! aggressively clean cell if it has excessive number of particles by
+  ! removing lighter weight particles. In general this should be avoided
+  ! in favor of particle joining, but for extreme cases can be more efficient.
+  ! note that sorting must be done before calling and again after
+  subroutine aggressive_clean_particles(UseAggressiveClean)
+    use ModPWOM, only: iProc
+    use ModSort, ONLY: sort_quick
+    logical,intent(out) :: UseAggressiveClean
+    integer :: nParticleOld, iParticle,iParticleOld
+    type(particle),allocatable ::ParticlesOld_I(:)
+    integer :: iCell, iSpecies, jParticle, nParticleInCell, nOpen
+    ! how much larger above the target particles per cell triggers the aggressive clean
+    real :: FactorAboveTarget = 10.0
+
+    real,allocatable :: weights_I(:)
+    integer,allocatable:: IndexSort_I(:)
+
+    !--------------------------------------------------------------------------
+    UseAggressiveClean = .false.
+    nOpen=0
+    !loop through species and cells to see if agressive cleaning is needed
+    do iCell=1,nAlt
+       do iSpecies=1,nSpecies
+          nParticleInCell = nSortedParticle_II(iSpecies,iCell)
+          if ( nParticleInCell &
+               > FactorAboveTarget*nParticlePerCell_I(iSpecies)) then
+             !aggressive cleaning triggered
+             UseAggressiveClean = .true.
+
+             write(*,*) 'PW WARNING: Aggressive particle clean needed, excessive use should be investigated', iProc,iCell,iSpecies
+             ! get particles in cell ordered by weight so lightest particles
+             ! are removed
+             if (allocated(weights_I)) deallocate(weights_I)
+             allocate(weights_I(nParticleInCell))
+             if (allocated(IndexSort_I)) deallocate(IndexSort_I)
+             allocate(IndexSort_I(nParticleInCell))
+
+             !get array of weights
+             do iParticle=1,nParticleInCell
+                weights_I(iParticle)=&
+                     SortParticles_III(iParticle,iSpecies,iCell)&
+                     %Particle%NumPerParticle
+             enddo
+
+             !get index array that sorts weights_I from lowest to biggest
+             call sort_quick(nParticleInCell,weights_I,IndexSort_I)
+
+!             do iParticle=1,3*nParticlePerCell_I(iSpecies)
+!                write(*,*) &
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%iSpecies,&
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%iCell,&
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%Alt*1e-5,&
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar*1e-5,&
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp*1e-5,&
+!              SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
+!             enddo
+             !Keep the largest weight particles and set lighter weight
+             !particles to zero starting at an index three times the
+             !target number of  particles per cell
+             do iParticle=3*nParticlePerCell_I(iSpecies), nParticleInCell
+                jParticle = IndexSort_I(iParticle)
+                SortParticles_III(iParticle,iSpecies,iCell)&
+                     %Particle%IsOpen = .true.
+             end do
+          end if
+       end do
+    end do
+
+    !If aggressive cleaning was needed then reduce particle array to remove
+    !open particles
+    if (UseAggressiveClean) then
+       !count up total number of open particles
+       nOpen = 0
+       do iParticle=1,nParticle
+          if(Particles_I(iParticle)%IsOpen) nOpen = nOpen + 1
+       end do
+
+
+       !save old particle array information
+       nParticleOld=nParticle
+       allocate(ParticlesOld_I(nParticleOld))
+       ParticlesOld_I=Particles_I
+       deallocate(Particles_I)
+       
+       !allocate new Particles_I array
+       nParticle=nParticleOld-nOpen
+       allocate(Particles_I(nParticle))
+       
+       !fill in particle array with non-zero particles
+       iParticle=1
+       do iParticleOld=1,nParticleOld
+          if(.not.ParticlesOld_I(iParticleOld)%IsOpen) then
+             Particles_I(iParticle)=ParticlesOld_I(iParticleOld)
+             iParticle=iParticle+1
+          endif
+       end do
+       !write(*,*) 'iParticle,nParticle',iParticle,nParticle
+    end if
+    if (allocated(weights_I))      deallocate(weights_I)
+    if (allocated(IndexSort_I))    deallocate(IndexSort_I)
+    if (allocated(ParticlesOld_I)) deallocate(ParticlesOld_I)
+  end subroutine aggressive_clean_particles
   !============================================================================
   ! combine a fluid solution and a particle solution with some percent from the 
   ! fluid and some from the particle. Idea is to sample the maxwellian 
@@ -3722,21 +3815,18 @@ contains
   ! apply the regridding in the particles
   subroutine interp_particle_line(weight1,weight2,weight3,&
                         iNodeLocal1,iNodeLocal2,iNodeLocal3,iLineLocal)
+    use ModPWOM, only: iProc
     real,   intent(in) :: weight1,weight2,weight3
     integer,intent(in) :: iNodeLocal1,iNodeLocal2,iNodeLocal3,iLineLocal
     integer :: iParticle, nParticles1,nParticles2, &
          nParticles3,iJoin
+    logical :: UseAggressiveClean
     !-------------------------------------------------------------------------
     !write(*,*) weight1,weight2,weight3
     !get number of particles for each node
     nParticles1 = ParticlesRecv_I(iNodeLocal1)%nParticleOnLine
     nParticles2 = ParticlesRecv_I(iNodeLocal2)%nParticleOnLine
     nParticles3 = ParticlesRecv_I(iNodeLocal3)%nParticleOnLine
-    
-    !write(*,*) iNodeLocal1,iNodeLocal2,iNodeLocal3
-    !write(*,*) 'recv Particle 1', ParticlesRecv_I(iNodeLocal1)%SavedParticles_I(1)!%NumPerParticle
-    !write(*,*) 'recv Particle 2', ParticlesRecv_I(iNodeLocal2)%SavedParticles_I(1)!%NumPerParticle
-    !write(*,*) 'recv Particle 3', ParticlesRecv_I(iNodeLocal3)%SavedParticles_I(1)!%NumPerParticle
     
     !the new total number of particles will be the total from all
     !nodes used in the interpolation
@@ -3777,7 +3867,7 @@ contains
                Particles_I(iParticle)%NumPerParticle * weight3
        endif
     enddo
-
+    
     !remove any zero weight particles. This can happen if one of the
     !interpolatation weights are zero
     call clean_zero_weight_particles
@@ -3787,8 +3877,18 @@ contains
     call sort_particles
     call timing_stop('sort_particles')
     
+    call timing_start('aggressive_clean_particles')
+    call aggressive_clean_particles(UseAggressiveClean)
+    call timing_stop('aggressive_clean_particles')
+    
+    if (UseAggressiveClean) then
+       call timing_start('sort_particles')
+       call sort_particles
+       call timing_stop('sort_particles')
+    endif
+
     !now join particles until target is reached. 10 joins is about right
-    join_loop: do iJoin=1,10
+    join_loop: do iJoin=1,3
        call timing_start('split_join_particles')
        call split_join_particles(0.05)
        call timing_stop('split_join_particles')
