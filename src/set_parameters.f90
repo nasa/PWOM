@@ -21,7 +21,8 @@ subroutine PW_set_parameters(NameAction)
   use ModParticle,ONLY: UseWPI,IsVerboseParticle, TypeWPI, FracLeftHand, &
        SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
        SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap, &
-       DoSavePlotParticle,DtSaveProfile, DtSaveDF
+       DoSavePlotParticle,DtSaveProfile, DtSaveDF,&
+       nWaveFile, NameWaveFile
   use ModReGrid, ONLy: DoRegrid,DtRegrid,DoSavePoints
   implicit none
   
@@ -271,16 +272,22 @@ subroutine PW_set_parameters(NameAction)
         
      case('#WPI')
         call read_var('TypeWPI',  TypeWPI)
-        call read_var('FracLeftHand',  FracLeftHand)
-        call read_var('SpectralIndexAur',  SpectralIndexAur)
-        call read_var('rWaveRefAur', rWaveRefAur)
-        call read_var('E2WaveRefAur',  E2WaveRefAur)
-        call read_var('fWaveRefAur', fWaveRefAur)
-        call read_var('SpectralIndexCap',  SpectralIndexCap)
-        call read_var('rWaveRefCap', rWaveRefCap)
-        call read_var('E2WaveRefCap',  E2WaveRefCap)
-        call read_var('fWaveRefCap', fWaveRefCap)
-
+        if (TypeWPI == 'File') then
+           call read_var('FracLeftHand',  FracLeftHand)
+           call read_var('nWaveFile',  nWaveFile)
+           call read_var('NameWaveFile',  NameWaveFile)
+        else
+           call read_var('FracLeftHand',  FracLeftHand)
+           call read_var('SpectralIndexAur',  SpectralIndexAur)
+           call read_var('rWaveRefAur', rWaveRefAur)
+           call read_var('E2WaveRefAur',  E2WaveRefAur)
+           call read_var('fWaveRefAur', fWaveRefAur)
+           call read_var('SpectralIndexCap',  SpectralIndexCap)
+           call read_var('rWaveRefCap', rWaveRefCap)
+           call read_var('E2WaveRefCap',  E2WaveRefCap)
+           call read_var('fWaveRefCap', fWaveRefCap)
+        end if
+        
      case('#UPPERBC')
         call read_var('NameUpperBC',  NameUpperBC)
 

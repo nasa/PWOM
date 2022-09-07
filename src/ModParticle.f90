@@ -65,7 +65,7 @@ Module ModParticle
   !real,allocatable :: SaveDfAlts_I(:)
 
   integer,parameter :: nSaveDfAlts=14
-  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,133,145,157/)
+  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,37,49,61,73,85,97,109,121,133,145,235,238/)
 
 !  integer,parameter :: nSaveDfAlts=1
 !  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
@@ -112,7 +112,7 @@ Module ModParticle
   real,allocatable::ReducedMass_II(:,:)
 
   !variable for WPI
-  real,allocatable :: Dperp_I(:),Dexp_I(:)
+  real,allocatable :: Dperp_I(:),Dexp_I(:), Dperp_II(:,:)
   logical,public :: UseWPI=.false.
   character(len=100),public :: TypeWPI='Barakat'
   real,public :: FracLeftHand=0.125
@@ -127,6 +127,10 @@ Module ModParticle
   real,public :: E2waveRefCap=1.2e-6 !V^2 m^-2 Hz^-1
   real,public :: fWaveRefCap=5.6    !Hz
 
+  !when reading wave power from a file
+  integer, public :: nWaveFile = 511
+  character(len=100),public ::NameWaveFile
+  real,allocatable :: WaveFreqFile_I(:), WavePowerFile_I(:)
   
   !should the output associated with particles be verbose
   logical,public :: IsVerboseParticle = .false.
@@ -175,14 +179,16 @@ contains
   !============================================================================
   subroutine init_particle(nAltIn,AltMin,AltMax,TypeGrid)
     use ModPlanetConst, ONLY: Planet_, NamePlanet_I, rPlanet_I
+    use ModIoUnit, ONLY: UnitTmp_
     integer,intent(in) :: nAltIn
     real,   intent(in) :: AltMin, AltMax
     character(len=100),intent(in):: TypeGrid
     real, parameter :: cGramsPerAMU=1.66054e-24
     real :: rPlanetCM, alpha, Area, AreaBot,AreaTop, dAlt
-    integer :: iAlt,iSpecies,jSpecies
+    integer :: iAlt,iSpecies,jSpecies, iLine
     real, parameter :: cMtoCm=1e2
 
+    character(len=100) :: junk
     real :: dFrac
     !--------------------------------------------------------------------------
     !set number of species and mass
@@ -214,6 +220,30 @@ contains
        !set WPI variables
        allocate(Dperp_I(nSpecies))
        allocate(Dexp_I(nSpecies))
+
+       if (TypeWPI == 'File') then
+          allocate(Dperp_II(nAltIn,nSpecies))
+          ! read wave power from file and assume it is fixed in alt
+          
+          allocate(WaveFreqFile_I(nWaveFile), WavePowerFile_I(nWaveFile))
+          
+          !open and read file
+          open(UnitTmp_,file=NameWaveFile)
+          
+          !read and discard header
+          do iLine=1,3
+             read(UnitTmp_) junk
+          enddo
+          
+          !read the data
+          do iLine=1,nWaveFile
+             read(UnitTmp_) WaveFreqFile_I(iLine), WavePowerFile_I(iLine)
+             !convert from kHz to Hz
+             WaveFreqFile_I(iLine) = WaveFreqFile_I(iLine)*1000.0
+          enddo
+          
+       endif
+
     case('JUPITER')
        nSpecies=3
        H3_=1
@@ -234,7 +264,7 @@ contains
        !init the target particle per cell numbers
        allocate(nParticlePerCell_I(nSpecies))
        nParticlePerCell_I(H3_)=5000
-       nParticlePerCell_I(H_)=5000
+       nParticlePerCell_I(H_)=100000
        nParticlePerCell_I(H2_)=5000
 
        
@@ -242,7 +272,30 @@ contains
        allocate(Dperp_I(nSpecies))
        allocate(Dexp_I(nSpecies))
        
+       if (TypeWPI == 'File') then
+          allocate(Dperp_II(nAltIn,nSpecies))
+          ! read wave power from file and assume it is fixed in alt
+          
+          allocate(WaveFreqFile_I(nWaveFile), WavePowerFile_I(nWaveFile))
 
+          !open and read file
+          open(UnitTmp_,file=NameWaveFile)
+
+          !read and discard header
+          do iLine=1,3
+             read(UnitTmp_,*) junk
+          enddo
+
+          !read the data
+          do iLine=1,nWaveFile
+             read(UnitTmp_,*) WaveFreqFile_I(iLine), WavePowerFile_I(iLine)
+             !convert from kHz to Hz
+             WaveFreqFile_I(iLine) = WaveFreqFile_I(iLine)*1000.0
+          enddo
+          
+       endif
+
+       
     case DEFAULT
        call con_stop('particles not for planet')
     end select
@@ -1102,7 +1155,166 @@ contains
     endif
     
     deallocate(Coord_DII, PlotState_IIV)
-  end subroutine plot_distribution_cell 
+  end subroutine plot_distribution_cell
+
+    !============================================================================
+  subroutine plot_diff_energy_flux_cell(iSpecies,iCell)
+    use ModNumConst, ONLY: cPi,cTwoPi
+    use ModPlotFile,   ONLY: save_plot_file
+    integer,intent(in) :: iSpecies,iCell
+    integer :: nParticleInCell
+    
+    real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
+    real :: dVel, vMin, vMax,dTheta, ThetaMin, ThetaMax
+    real :: Velx,Vely,phi
+    real, parameter :: VelSc = 50e5
+    real :: Tpar,Tperp,Hpar,Hperp
+    integer, parameter :: nVel = 100, nTheta = 18, Flux_=1, Angle_=2, E_=3, nVar=3
+    real :: v_C(nVel),Energy_C(nVel), Theta_C(nTheta)
+    real :: Velocity, Theta, DeltaE
+    integer :: iVel, iParticle, iTheta
+    real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
+    !grid parameters
+    integer, parameter :: nDim =1
+    !plot variables
+    character(len=100) :: NamePlot
+    character(len=100),parameter :: NamePlotVar='E[KeV]  Flux[cm-2sr-1s-1KeV-1] AveAngle[deg] E[KeV] g'
+    character(len=*),parameter :: NameHeader='distribution function'
+    character(len=5) :: TypePlot='ascii'
+    !here true particles is particles in energy bin, unlike other routines
+    real,allocatable :: TrueParticles_I(:) 
+
+    real,parameter :: cEvToKeV = .001, cErgToEv = 6.242e11
+    integer,save :: iCounter=0
+    !---------------------------------------------------------------------------
+    if(.not.allocated(TrueParticles_I))allocate(TrueParticles_I(nVel))
+    TrueParticles_I(:)=0
+        
+    nParticleInCell=nSortedParticle_II(iSpecies,iCell)
+    if(nParticleInCell==0)return
+    allocate(Coord_I(nVel),PlotState_IV(nVel,nVar))
+    
+    ! get moments in cell so we can calculate thermal velocity
+    call calc_moments_cell(iSpecies,iCell,&
+         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
+    
+    !write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
+   !      ,density,uBulkPar,uBulkPerp,Pressure,Temp
+    ! calculate thermal velocity
+
+    uTherm=sqrt(8.0*cBoltzmannCGS*Temp/Mass_I(iSpecies)/cPi)
+
+    ! discretize velocity space, using magnitude and angle
+    ! constrain binning to 10 thermal velocities in mag
+    ! with grid size .1 uTherm, and 5 deg PA steps 
+    vMin=0.0
+    vMax=10.0*uTherm
+    ThetaMin=0.0
+    ThetaMax=cPi
+    dVel=(vMax-vMin)/nVel
+    dTheta=(ThetaMax-ThetaMin)/nTheta
+    do iVel=1,nVel
+       v_C(iVel)=vMin+iVel*dVel
+    enddo
+
+    do iVel=1,nVel
+       Energy_C(iVel) = 0.5*Mass_I(iSpecies)*v_C(iVel)**2 * cErgToEv*cEvToKeV
+    enddo
+
+    do iTheta=1,nTheta
+       Theta_C(iTheta)=ThetaMin+iTheta*dTheta
+    enddo
+
+    do iVel=1,nVel
+       Coord_I(iVel)=Energy_C(iVel)
+    enddo
+    
+    PlotState_IV=0.0
+    !Sort particles into bins
+    do iParticle=1,nParticleInCell
+       !get theta and vel for particle
+       Velocity = &
+            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar*2.0 &
+            + SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp**2.0)
+
+       !kludge here we add the spacecraft velocity
+       
+       phi=random_real(iSeed)*cTwoPi
+       Velx=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp*cos(phi)
+       Vely=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp*sin(phi)
+       Velocity = &
+            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar*2.0 &
+            + (Velx-VelSc)**2.0 + Vely**2)
+
+       !end kludge
+
+
+       Theta = atan2(&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp,&
+            SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar)
+       
+       iTheta =floor((Theta-ThetaMin )/dTheta)
+       iVel =floor((Velocity-vMin )/dVel)
+       
+       if (iVel>0 .and.iVel<=nVel) then
+          if (iVel==nVel) then
+             DeltaE = (Energy_C(iVel)-Energy_C(iVel-1))*cEvToKeV
+          else
+             DeltaE = (Energy_C(iVel+1)-Energy_C(iVel))*cEvToKeV
+          endif
+          PlotState_IV(iVel,Flux_)=&
+               PlotState_IV(iVel,Flux_)&
+           +SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle&
+           *Velocity/(Volume_G(iCell)*4.0*cPi*DeltaE)
+          
+          PlotState_IV(iVel,Angle_)=&
+               PlotState_IV(iVel,Angle_)&
+           +SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle&
+           *Theta*180.0/cPi
+
+          TrueParticles_I(iVel)=TrueParticles_I(iVel)&
+               +SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle
+          
+       endif
+    enddo
+    
+    ! divide the angle*particles in each velocity bin by the
+    ! number of particles to get the average theta
+    do iVel = 1,nVel
+       if (TrueParticles_I(iVel) == 0) then
+          PlotState_IV(iVel,Angle_) = 0.0
+       else
+          PlotState_IV(iVel,Angle_) = PlotState_IV(iVel,Angle_)&
+               /TrueParticles_I(iVel)
+       endif
+    enddo
+
+    !for now add energy as a variable as well as a coordinate so that I can
+    !plot with the line class of spacepy. later we will have to update the class
+    PlotState_IV(:,E_)= Energy_C(:)
+
+    !Plot 
+    write(NamePlot,"(a,a,a,i5.5,a,i5.5,a)") &
+         'PW/plots/DiffFlux_',NameSpecies_I(iSpecies),'Alt',&
+         floor(Alt_G(iCell)*1e-5),'km_iLine',iLineGlobal_I(iLineCurrent),'.out'
+
+    if(iCounter<(nSaveDfAlts*nLine)) then
+       call save_plot_file(NamePlot, TypePositionIn='rewind', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6/))
+       iCounter=iCounter+1
+    else
+       call save_plot_file(NamePlot, TypePositionIn='append', &
+            TypeFileIn=TypePlot,StringHeaderIn = NameHeader,  &
+            NameVarIn = NamePlotVar, nStepIn=0,TimeIn=time,     &
+            nDimIn=nDim,CoordIn_I=Coord_I,                &
+            VarIn_IV = PlotState_IV, ParamIn_I = (/1.6/))
+    endif
+    
+    deallocate(Coord_I, PlotState_IV,TrueParticles_I)
+  end subroutine plot_diff_energy_flux_cell
   !=============================================================================
   subroutine plot_distribution_cell_orig(iSpecies,iCell,nParticleInCell,CellParticle_I)
     use ModNumConst, ONLY: cPi,cTwoPi
@@ -2187,6 +2399,7 @@ contains
   subroutine apply_wave_particle_interaction(rWaveRef)
     use ModPlanetConst, ONLY: Planet_,rPlanet_I
     use ModNumConst, ONLY: cTwoPi
+
     real, intent(in):: rWaveRef
     real :: rPlanetCM, rCoord, Dperp,variance
     integer :: iSpecies, iParticle
@@ -2195,6 +2408,11 @@ contains
     real,allocatable :: RandNum1_I(:),RandNum2_I(:),RandNum3_I(:),&
          RandNum4_I(:),RandNum5_I(:)
     real, parameter :: cMtoCm=1e2
+
+    !interpolation variables
+    real :: xAlt, Dx1, Dx2
+    integer :: iMin,iMax
+    
     !--------------------------------------------------------------------------
 
     !precompute random numbers for collisions (for optimizing openmp loop)
@@ -2211,7 +2429,7 @@ contains
 
     rPlanetCM=rPlanet_I(Planet_)*cMtoCm
     !$OMP PARALLEL PRIVATE(iParticle, iSpecies,vpar,vperp,vmag,rCoord,Dperp,&
-    !$OMP variance,dVx,dVy,Velx,Vely,theta,phi)
+    !$OMP variance,dVx,dVy,Velx,Vely,theta,phi, xAlt, iMin, iMax,Dx1,Dx2)
     
     !$OMP DO  
     do iParticle=1,nParticle
@@ -2221,7 +2439,26 @@ contains
        vmag =sqrt(vpar**2+vperp**2)
 
        rCoord=rPlanetCM+Particles_I(iParticle)%Alt
-       Dperp=Dperp_I(iSpecies)*(rCoord/rWaveRef)**Dexp_I(iSpecies)
+
+       if(TypeWPI=='File') then
+          xAlt=(Particles_I(iParticle)%Alt-Alt_G(1))/dAlt_G(1)-1.0
+          iMin=floor(xAlt)
+          iMax=ceiling(xAlt)
+          !set interpolation weights
+          Dx1=xAlt-iMin ; Dx2=1.0-Dx1
+          !interpolate but check bounds
+          if (iMin<1 .or. iMax>nAlt) then
+             Dperp=0.0
+          else
+             Dperp=Dx2*Dperp_II(iMin,iSpecies)+Dx1*Dperp_II(iMax,iSpecies)
+          endif
+       else
+          Dperp=Dperp_I(iSpecies)*(rCoord/rWaveRef)**Dexp_I(iSpecies)
+       endif
+       !kludge kill dperp above certain alt
+       !if (Particles_I(iParticle)%Alt<14000e5) Dperp=Dperp*10.0       
+       !end kludge
+       
        variance=2*Dperp*DtMove
        dVx=sqrt(-2.0*variance*log(RandNum1_I(iParticle)))&
             *cos(cTwoPi*RandNum2_I(iParticle))
@@ -3415,7 +3652,8 @@ contains
   ! advance the particle solution for some DtAdvance
   subroutine run_particles(DtAdvance,IsCuspOrAurora,SmLat)
     use ModConst,           ONLY: cElectronCharge
-    use ModPlanetConst,     ONLY: Planet_, NamePlanet_I, rPlanet_I  
+    use ModPlanetConst,     ONLY: Planet_, NamePlanet_I, rPlanet_I
+    use ModInterpolate, only: linear
     real, intent(in) :: DtAdvance,SmLat
     logical, intent(in) :: IsCuspOrAurora
 
@@ -3425,6 +3663,9 @@ contains
     real :: WaveCoef, fci, SpectralIndex, E2waveRef,fWaveRef, rWaveRef
     character(len=100):: TypeGrid
 
+    !factor for wave scaling with altitude for 'File' case
+    real :: AltFactor
+    
     real,parameter :: cGtoKg = 1.0e-3, cMtoCm=1e2
     !---------------------------------------------------------------------------
     
@@ -3554,6 +3795,28 @@ contains
                      * WaveCoef*fci**(-SpectralIndex)*(cMtoCm**2)
                 Dexp_I(iSpecies) = 3.0*SpectralIndex
              enddo
+          case('File')
+             ! uses approach described by Crew et al. [1990], as well as
+             ! Retterer et al [1987], but instead of power law we read
+             ! wave power data from a file
+
+             !loop over species and altitude and set Dperp for each 
+             do iSpecies=1,nSpecies
+                do iAlt=1,nAlt
+                   !if (Alt_G(iAlt)>27800.e5) then
+                      AltFactor = 1.0
+                   !else
+                   !   AltFactor = -99.0*(Alt_G(iAlt)-27800.e5)/17800.e5+1.0
+                   !endif
+                   call get_fci(Alt_G(iAlt), iSpecies,SmLat, fci)
+                   WaveCoef = linear(WavePowerFile_I(1:nWaveFile),1,     &
+                        nWaveFile,fci,WaveFreqFile_I(1:nWaveFile))
+                   Dperp_II(iAlt,iSpecies) = AltFactor * &
+                     (FracLeftHand*cElectronCharge**2)&
+                     /(4.0*(Mass_I(iSpecies)*cGtoKg)**2) &
+                     * WaveCoef*(cMtoCm**2)
+                end do
+             end do
              
           end select
              
@@ -3594,6 +3857,7 @@ contains
           do iSpecies=1,nSpecies
              do iAltPlot=1,nSaveDfAlts
                 call plot_distribution_cell(iSpecies,iAltsDF_I(iAltPlot))
+                call plot_diff_energy_flux_cell(iSpecies,iAltsDF_I(iAltPlot))
              enddo
           enddo
        endif
