@@ -202,7 +202,7 @@ contains
   subroutine get_gitm_point(gLat,gLon,Alt,Tn,Ti,Te,nO,nN2,nO2,nO2P,nOP,ne,&
        Veast,Vnorth,Vup)
     use ModConst,       ONLY: cProtonMass,cBoltzmann
-    use ModInterpolate, ONLY: bilinear,trilinear
+    use ModInterpolateScalar, ONLY: bilinear_scalar,trilinear_scalar
     real, intent(in) :: gLat,gLon !input in degrees
     real, intent(in) :: Alt !input in km
     real, intent(out):: Tn,Ti,Te,nO,nN2,nO2,nO2P,nOP,ne,Veast,Vnorth,Vup 
@@ -211,51 +211,51 @@ contains
     
     if (Alt>Alt_G(0) .and. Alt<Alt_G(nAlt)) then
        Tn= &
-            trilinear(Tn_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Tn_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        Ti= &
-            trilinear(Ti_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Ti_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        Te= &
-            trilinear(Te_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Te_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        nO= &
-            trilinear(nO_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(nO_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        nN2= &
-            trilinear(nN2_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(nN2_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        nO2= &
-            trilinear(nO2_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(nO2_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        nO2P= &
-            trilinear(nO2P_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(nO2P_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        nOP= &
-            trilinear(nOP_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(nOP_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        ne= &
-            trilinear(ne_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(ne_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        Veast= &
-            trilinear(Veast_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Veast_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        Vnorth= &
-            trilinear(Vnorth_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Vnorth_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
 
        Vup= &
-            trilinear(Vup_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
+            trilinear_scalar(Vup_G,0,nLon+1,0,nLat+1,0,nAlt+1,(/gLon,gLat,Alt/),&
             Lon_G,Lat_G,Alt_G,DoExtrapolate=.false.)
        
     elseif(Alt<=Alt_G(0)) then
@@ -265,67 +265,67 @@ contains
        !when above maximum of GITM altitude use hydrostatic assumption based
        !on last cell
        Tn= &
-            bilinear(Tn_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Tn_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)
 
        Ti= &
-            bilinear(Ti_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Ti_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)
 
        Te= &
-            bilinear(Te_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Te_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)
               
        
        ScaleHeight = cBoltzmann*Tn/( MassO*cProtonMass*GravSurface )
        nO= &
-            bilinear(nO_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(nO_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        ScaleHeight = cBoltzmann*Tn/( MassN2*cProtonMass*GravSurface )
        nN2= &
-            bilinear(nN2_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(nN2_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        ScaleHeight = cBoltzmann*Tn/( MassO2*cProtonMass*GravSurface )
        nO2= &
-            bilinear(nO2_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(nO2_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        ScaleHeight = cBoltzmann*Tn/( MassO2*cProtonMass*GravSurface )
        nO2p= &
-            bilinear(nO2p_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(nO2p_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
        
        ScaleHeight = cBoltzmann*Tn/( MassO*cProtonMass*GravSurface )
        nOP= &
-            bilinear(nOP_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(nOP_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        !dont extend ne above upper boundary, just keep it constant
        !same with neutral winds. just keep constant
        ne= &
-            bilinear(ne_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(ne_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)
 
        
        Veast= &
-            bilinear(Veast_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Veast_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        Vnorth= &
-            bilinear(Vnorth_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Vnorth_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
        Vup= &
-            bilinear(Vup_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
+            bilinear_scalar(Vup_G(:,:,nAlt),0,nLon+1,0,nLat+1,(/gLon,gLat/),&
             Lon_G,Lat_G,DoExtrapolate=.false.)*exp(-(Alt-Alt_G(nAlt))&
             /ScaleHeight)
 
