@@ -65,7 +65,8 @@ Module ModParticle
   !real,allocatable :: SaveDfAlts_I(:)
 
   integer,parameter :: nSaveDfAlts=14
-  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,37,49,61,73,85,97,109,121,133,145,235,238/)
+
+  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,174,175,176/)
 
 !  integer,parameter :: nSaveDfAlts=1
 !  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
@@ -3665,7 +3666,9 @@ contains
 
     !factor for wave scaling with altitude for 'File' case
     real :: AltFactor
-    
+
+    logical :: UseAggressiveClean = .false.
+
     real,parameter :: cGtoKg = 1.0e-3, cMtoCm=1e2
     !---------------------------------------------------------------------------
     
@@ -3830,6 +3833,17 @@ contains
        ! for speed up, only split and join every DtSplitJoin 
        if (floor((Time+1.0e-5)/DtSplitJoin) &
             /=floor((Time+1.0e-5-DtMove)/DtSplitJoin) )then 
+
+          call timing_start('aggressive_clean_particles')
+          call aggressive_clean_particles(UseAggressiveClean)
+          call timing_stop('aggressive_clean_particles')
+          
+          if (UseAggressiveClean) then
+             call timing_start('sort_particles')
+             call sort_particles
+             call timing_stop('sort_particles')
+          end if
+          
           call timing_start('split_join_particles')
           call split_join_particles(0.05)
           call timing_stop('split_join_particles')
@@ -4013,7 +4027,7 @@ contains
   ! allocate size of node and post recv  
   subroutine post_particle_line_recv(iNode,nParticleRecv,iProcSend,&
        iLineGlobal,iLineLocal,iRequest)
-    use ModMpi
+    use ModMpiPwom
     use ModPWOM, only: iProc, nProc, iComm
 
     integer, intent(in) :: iNode,nParticleRecv,iProcSend,iLineGlobal
@@ -4044,7 +4058,7 @@ contains
   !==========================================================================
   ! post sends 
   subroutine post_particle_line_send(iLineLocal,iProcRecv,iLineGlobal)
-    use ModMpi
+    use ModMpiPwom
     use ModPWOM, only: iProc, nProc, iComm
 
     integer, intent(in) :: iLineLocal,iProcRecv,iLineGlobal
