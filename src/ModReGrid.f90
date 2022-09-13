@@ -28,7 +28,9 @@ Module ModReGrid
 
      !number of particles on the line
      integer :: nParticle
-     
+
+     !Is this line an anchor point for the grid edge
+     logical :: IsAnchor=.false.
    contains
      procedure :: calc_xyz => line_calc_xyz
      
@@ -91,6 +93,10 @@ Module ModReGrid
   logical, public :: DoSavePoints=.false.
   logical, public :: DoRegrid=.false.
   real   , public :: DtRegrid = 600.0
+
+  !vars for anchor points
+  integer,parameter    :: nAnchorZones = 16
+
   !main calling routine is public
   public :: regrid_lines
 contains
@@ -526,6 +532,80 @@ contains
   end subroutine get_triangulation
 
   !============================================================================
+  ! set anchor points (lines that don't remap) to anchor the grid and keep it
+  ! from creeping inward after remap. 
+  subroutine set_anchor_points
+    integer,allocatable :: iAnchor_I(:),SmallestLat_I(:)
+    integer :: iMltBin, iLine
+    !--------------------------------------------------------------------------
+    if (nAnchorZones==0) return
+    if (nNorth>0) then
+       if(.not.allocated(iAnchor_I)) allocate(iAnchor_I(nAnchorZones))
+       if(.not.allocated(SmallestLat_I)) allocate(SmallestLat_I(nAnchorZones))
+       iAnchor_I(:)=0
+       SmallestLat_I(:)=90.0
+       
+       !Sort lines into Longitude bins
+       do iLine = 1,nNorth
+          !initialize anchor value to false
+          Lines_I(iIndexNorth_I(iLine))%IsAnchor=.false.
+          
+          !find mlt bin
+          iMltBin = &
+               floor(Lines_I(iIndexNorth_I(iLine))%Lon/360.0*nAnchorZones)+1
+
+          !test if lat is lower than prior point
+          if (abs(Lines_I(iIndexNorth_I(iLine))%Lat) &
+               < abs(SmallestLat_I(iMltBin)))then
+             !unAnchor previous anchor point
+             if (iAnchor_I(iMltBin) /= 0) then
+                Lines_I(iAnchor_I(iMltBin))%IsAnchor=.false.
+             endif
+
+             !set new anchor point
+             iAnchor_I(iMltBin) = iIndexNorth_I(iLine)
+             Lines_I(iAnchor_I(iMltBin))%IsAnchor=.true.
+             SmallestLat_I(iMltBin)=Lines_I(iAnchor_I(iMltBin))%Lat
+          endif
+       enddo
+       deallocate(iAnchor_I,SmallestLat_I)
+    end if
+
+    !now set south anchor points
+    if (nSouth>0) then
+       if(.not.allocated(iAnchor_I)) allocate(iAnchor_I(nAnchorZones))
+       if(.not.allocated(SmallestLat_I)) allocate(SmallestLat_I(nAnchorZones))
+       iAnchor_I(:)=0
+       SmallestLat_I(:)=90.0
+       
+       !Sort lines into Longitude bins
+       do iLine = 1,nSouth
+          !initialize anchor value to false
+          Lines_I(iIndexSouth_I(iLine))%IsAnchor=.false.
+          
+          !find mlt bin
+          iMltBin = &
+               floor(Lines_I(iIndexSouth_I(iLine))%Lon/360.0*nAnchorZones)+1
+
+          !test if lat is lower than prior point
+          if (abs(Lines_I(iIndexSouth_I(iLine))%Lat) &
+               < abs(SmallestLat_I(iMltBin)))then
+             !unAnchor previous anchor point
+             if (iAnchor_I(iMltBin) /= 0) then
+                Lines_I(iAnchor_I(iMltBin))%IsAnchor=.false.
+             endif
+
+             !set new anchor point
+             iAnchor_I(iMltBin) = iIndexSouth_I(iLine)
+             Lines_I(iAnchor_I(iMltBin))%IsAnchor=.true.
+             SmallestLat_I(iMltBin)=Lines_I(iAnchor_I(iMltBin))%Lat
+          endif
+       enddo
+       deallocate(iAnchor_I,SmallestLat_I)
+    end if
+  end subroutine set_anchor_points
+  
+  !============================================================================
   ! fill in the RemapN_I and RemapS_I arrays that hold the remapping plan
   subroutine set_regrid_plan
     use ModTriangulateSpherical, ONLY: find_triangle_sph
@@ -562,9 +642,8 @@ contains
     if (nNorth>0) then
        !initially all lines in hemisphere are available for remap
        allocate(IsAvailable_I(nNorth))
-       
        IsAvailable_I(:) = .true.
-       
+             
        !repack xyz coordinate of lines into CoordXyz_DI
        allocate(CoordXyz_DI(3,nNorth))
        do iLine = 1,nNorth
@@ -573,8 +652,9 @@ contains
 
        !Counter for remap
        iCount=0
-       
-       do iLine = 1,nRemapPointN
+
+       !loop over remap points but leave room for anchor points
+       do iLine = 1,nRemapPointN - nAnchorZones 
           !get Xyz of remap grid point
           Xyz_D(X_) = sin(RemapThetaN_I(iLine))*cos(RemapPhiN_I(iLine))
           Xyz_D(Y_) = sin(RemapThetaN_I(iLine))*sin(RemapPhiN_I(iLine))
@@ -647,7 +727,10 @@ contains
              call sort_quick(nNorth,DistN_I,IndexSortN_I)
 
              Line_Search:do iLineTmp =1,nNorth
-                if (IsAvailable_I(IndexSortN_I(iLineTmp))) then
+                !write(*,*) iLineTmp, IsAvailable_I(IndexSortN_I(iLineTmp))
+                if (IsAvailable_I(IndexSortN_I(iLineTmp)) .and. .not.&
+                     Lines_I(iIndexNorth_I(IndexSortN_I(iLineTmp)))%IsAnchor) &
+                     then
                    RemapN_I(iCount)%iLineGlobal=&
                         iIndexNorth_I(IndexSortN_I(iLineTmp))
                    RemapN_I(iCount)%iLineLocal =&
@@ -744,7 +827,7 @@ contains
 
        !Counter for remap
        iCount=0
-       do iLine = 1,nRemapPointS
+       do iLine = 1,nRemapPointS-nAnchorZones
           !get Xyz of remap grid point
           Xyz_D(X_) = sin(RemapThetaS_I(iLine))*cos(RemapPhiS_I(iLine))
           Xyz_D(Y_) = sin(RemapThetaS_I(iLine))*sin(RemapPhiS_I(iLine))
@@ -809,7 +892,9 @@ contains
              call sort_quick(nSouth,DistS_I,IndexSortS_I)
 
              Line_Search_South:do iLineTmp =1,nSouth
-                if (IsAvailable_I(IndexSortS_I(iLineTmp))) then
+                if (IsAvailable_I(IndexSortS_I(iLineTmp)).and. .not.&
+                     Lines_I(iIndexSouth_I(IndexSortS_I(iLineTmp)))%IsAnchor) &
+                     then
                    RemapS_I(iCount)%iLineGlobal=&
                         iIndexSouth_I(IndexSortS_I(iLineTmp))
                    RemapS_I(iCount)%iLineLocal =&
@@ -1674,6 +1759,7 @@ contains
     !zero proc gets the triangulation for the grid and build the regrid plan
     if(iProc==0) then
        call get_triangulation
+       call set_anchor_points
        call set_regrid_plan
 
        !save ponts and triangulation before applying the regrid plan
