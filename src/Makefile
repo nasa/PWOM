@@ -11,6 +11,8 @@ include Makefile.DEPEND
 include Makefile.RULES
 
 MODULES = \
+	ModMpiPwomInterfaces.o\
+	ModMpiPwom.o\
 	ModPW.o\
 	ModParticle.o\
 	ModOvation.o\
