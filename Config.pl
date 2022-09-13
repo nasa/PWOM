@@ -6,6 +6,9 @@
 # Allow in-place editing
 $^I = "";
 
+# Add local directory to search                                                 
+push @INC, ".";
+
 use strict;
 
 our $Component       = 'PW';
@@ -14,6 +17,7 @@ our $MakefileDefOrig = 'src/Makefile.def';
 our @Arguments       = @ARGV;
 
 # Planet variables
+my $ConfigLog = "config.log";
 my $MakefilePlanet = "Makefile.planet";
 my $Planet;
 my $NewPlanet;
@@ -21,7 +25,23 @@ my $NewPlanet;
 # Make sure that Makefile.planet exists
 `touch $MakefilePlanet`;
 
-my $config     = "share/Scripts/Config.pl";
+# Make sure that config.log exists
+`touch $ConfigLog`;
+
+#PWOM non-SWMF developers should use the following gitdir
+#my $GITDIR   = "https://github.com/MSTEM-QUDA";
+#SWMF developers should use the following gitdir
+my $GITDIR   = "git\@gitlab.umich.edu:swmf_software";
+
+my $config   = "share/Scripts/Config.pl";
+my $gitclone = "share/Scripts/gitclone -s";
+
+# Git clone missing directories as needed. Start with share/ to get $gitclone.
+if (not -f $config and not -f "../../$config"){
+    `git clone $GITDIR/share; git clone $GITDIR/util`;
+}
+
+
 if(-f $config){
     require $config;
 }else{
