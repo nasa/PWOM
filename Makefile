@@ -298,6 +298,7 @@ clean:
 	cd src; make clean
 	cd srcSTET; make clean
 	cd srcTWOSTREAM; make clean
+	cd srcGITMREADER; make clean
 	cd srcInterface; make clean
 	cd doc/Tex; make clean
 	cd srcPostProc; make clean
