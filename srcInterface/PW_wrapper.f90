@@ -3,7 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 module PW_wrapper
-
+  use ModUtilities, ONLY: CON_set_do_test, CON_stop
   ! Wrapper for the PWOM (PW) component
 
   implicit none

@@ -1,4 +1,5 @@
 Module ModParticle
+  use ModUtilities,    ONLY: CON_stop
   Use ModRandomNumber, ONLY: random_real
   implicit none
   

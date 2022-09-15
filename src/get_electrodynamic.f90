@@ -11,6 +11,7 @@ subroutine PW_get_electrodynamics
   use ModNumConst, ONLY:cDegToRad
   use ModAurora , ONLY: set_aurora
   use ModCommonVariables,ONLY:Ap
+  use ModUtilities, ONLY: CON_stop
   implicit none
 
   character (len=100), dimension(100):: Lines_I
@@ -62,8 +63,7 @@ subroutine PW_get_electrodynamics
      
      call EIE_Initialize(iError)
      if (iError /= 0) then
-        write(*,*) 'PW_ERROR: EIE_Initialize failed at get_electrodynamic'
-        call con_stop()
+        call con_stop('PW_ERROR: EIE_Initialize failed at get_electrodynamic')
      endif
 
   end if

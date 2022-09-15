@@ -1,4 +1,5 @@
 Module ModElecTrans
+  use ModUtilities,ONLY: CON_stop
   PRIVATE
   
   real,allocatable :: ALPHA(JMAX), BETA(JMAX), GAMA(JMAX), PSI(JMAX), &

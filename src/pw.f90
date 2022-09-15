@@ -154,6 +154,7 @@ subroutine move_line
   use ModPWOM
   use ModIoUnit, ONLY: UnitTmp_, io_unit_new
   use ModInterpolate, ONLY: bilinear
+  use ModUtilities, ONLY: CON_stop
   implicit none
   real :: a,sTheta
   character(len=*), parameter :: NameSub = 'PW_move_line'

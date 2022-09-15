@@ -19,12 +19,13 @@ subroutine PW_initialize
        PrecipEnergyMean, PrecipEnergyFlux, UseFixedPrecip, DoCoupleSE,&
        PolarRainEMin, PolarRainEMax, &
        PolarRainEMean, PolarRainEFlux, UsePolarRain, IsVerboseSE
-  use ModOvation, ONLY: UseOvation, StartTimeOvation=>StartTime, &
+  use ModOvation,  ONLY: UseOvation, StartTimeOvation=>StartTime, &
        OvationEmin,OvationEmax
   use ModParticle, ONLY: init_particle, put_to_particles, bury_line,&
        nLineParticle=>nLine,iLineGlobalParticle_I=>iLineGlobal_I, &
        read_restart_particle
-  use CON_axes,         ONLY: init_axes
+  use CON_axes,    ONLY: init_axes
+  use ModUtilities,ONLY: CON_stop
   implicit none
 
   ! Temporary variables

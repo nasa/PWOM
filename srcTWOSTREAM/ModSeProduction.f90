@@ -1,4 +1,5 @@
 Module ModSeProduction
+  use ModUtilities,ONLY: CON_stop
   ! This module contains all of the converted awfulness 
   save
   private !except

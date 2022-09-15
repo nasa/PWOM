@@ -28,7 +28,8 @@ C
       use ModTimeConvert, ONLY: time_real_to_int
       use ModOvation, ONLY: UseOvation,get_ovation_point,
      &     read_ovation_all,OvationEmin,OvationEmax
-      
+      use ModUtilities,ONLY: CON_stop
+
       real :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,
      &        EFluxMono
 C     
@@ -231,8 +232,7 @@ c      AP(I)=50.
          AP(7) = AP(7)/24.0
 !     check for errors when reading ap
          if (iError /= 0) then
-            write(*,*) 'PW_ERROR: get_ap failed in startupPW_planet'
-            call con_stop()
+            call con_stop('PW_ERROR: get_ap failed in startupPW_planet')
          endif              
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                     
@@ -241,16 +241,14 @@ c      AP(I)=50.
          call get_f107(CurrentTime, TempF107, iError)
          F107 = TempF107
          if(iError /=0) then
-            write(*,*) 'PW_ERROR: get_f107 failed in startupPW_planet'
-            call con_stop()
+            call con_stop('PW_ERROR: get_f107 failed in startupPW_planet')
          endif
          
          call get_f107a(CurrentTime, TempF107a, iError)
          F107A = TempF107a
          
          if(iError /=0) then
-!write(*,*) 'PW_ERROR: get_f107a failed in startupPW_planet'
-            call con_stop()
+            call con_stop('PW_ERROR: get_f107a failed in startupPW_planet')
          endif
          
       endif
@@ -365,7 +363,7 @@ C                                                                      C
                   SZA=acos(cos(SmLat*cDegToRad)*cos(SmLon*cDegToRad))*cRadToDeg
                else
                   !ERROR, planet modified but not IDEALAXES
-                  call con_stop()
+                  call con_stop('')
                endif
             else
                ! Standard situation: Real axes
@@ -1383,6 +1381,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       use ModPWOM,ONLY: IsRestart
       use CON_planet,  ONLY: IsPlanetModified, RotAxisTheta, RotAxisPhi
       use ModNumConst, ONLY: cDegToRad, cRadToDeg
+      use ModUtilities,ONLY: CON_stop
 C     
 C     
 C     
@@ -1402,7 +1401,7 @@ C      PHIHE=1.30E-7
             SZA=acos(cos(SmLat*cDegToRad)*cos(SmLon*cDegToRad))*cRadToDeg
          else
             !ERROR, planet modified but not IDEALAXES
-            call con_stop()
+            call con_stop('')
          endif
       else
          ! Standard situation: Real axes

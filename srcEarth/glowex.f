@@ -65,6 +65,7 @@ C
      &     F107A,IYD,SEC,iUnitOutput, SmLat, SmLon
       use ModNumConst, ONLY: cRadToDeg, cDegToRad, cPi
       use CON_planet,  ONLY: IsPlanetModified, RotAxisTheta, RotAxisPhi
+      use ModUtilities,ONLY: CON_stop
 
 C      PARAMETER (JMAX=92)
 C      PARAMETER (NBINS=84)

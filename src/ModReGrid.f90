@@ -1,5 +1,6 @@
 !module to hold routines for regriding the pwom grid
 Module ModReGrid
+  use ModUtilities,    ONLY: CON_stop
   use ModMpi
   use ModPWOM, only: nTotalLine,iProc, nProc, iComm, &
        ThetaLine_I, PhiLine_I, nLine,iLineGlobal_I=>iLineGlobal,State_CVI,Time,&

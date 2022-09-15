@@ -1,4 +1,5 @@
 Module ModCouplePWOMtoSE
+  use ModUtilities,ONLY: CON_stop
   implicit none
   
   private !except

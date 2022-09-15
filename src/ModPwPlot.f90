@@ -154,7 +154,7 @@ contains
   
   !========================================================================
   real function alog10_check(x)
-    
+    use ModUtilities,ONLY: CON_stop
     implicit none
     real, intent(in) :: x
     

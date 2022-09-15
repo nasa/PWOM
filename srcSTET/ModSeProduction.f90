@@ -2139,6 +2139,7 @@ contains
        ProbSpecies,SigAbsSpecies,SigIonSpecies)
     use ModInterpolate, ONLY: linear
     use ModIoUnit,      ONLY: UnitTmp_
+    use ModUtilities,ONLY: CON_stop
     character (len=*), intent(in) :: NameNeutral
     integer, intent(in) :: nStates
 

@@ -1,4 +1,5 @@
 Module ModElecTrans
+  use ModUtilities,ONLY: CON_stop
   implicit none
 
   PRIVATE

@@ -7,6 +7,7 @@ subroutine get_weimer_potential
   use ModPWOM,    ONLY:Theta_G,Phi_G,nTheta,nPhi,&
        SigmaH_G,SigmaP_G,Jr_G,Potential_G,&
        Time,allocate_ie_variables,nLine,IsNorth_I
+  use ModUtilities, ONLY: CON_stop
   implicit none
   character (len=100), dimension(100):: Lines_I
   integer :: iError,iPhi,iTheta,iLine
