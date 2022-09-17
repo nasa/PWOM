@@ -8,7 +8,7 @@ module ModPWOM
 
   logical :: IsStandAlone = .false.
   logical :: UseIonHeat=.true.,UseEleHeat=.true.,UseExplicitHeat=.false.
-  logical :: UseIndicies
+  logical :: UseIndicies=.false.
   integer :: iUnitOut
   character (len=7) :: StringPrefix=''
 

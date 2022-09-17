@@ -24,6 +24,7 @@ subroutine PW_initialize
   use ModParticle, ONLY: init_particle, put_to_particles, bury_line,&
        nLineParticle=>nLine,iLineGlobalParticle_I=>iLineGlobal_I, &
        read_restart_particle
+  use ModPwIndices, ONLY: UsePwIndicesFile,read_pw_indices_file
   use CON_axes,    ONLY: init_axes
   use ModUtilities,ONLY: CON_stop
   implicit none
@@ -75,6 +76,8 @@ subroutine PW_initialize
   !make ovation starttime match simulation start time
   if (UseOvation) StartTimeOvation=StartTime
 
+  if (UsePwIndicesFile) call read_pw_indices_file(StartTime)
+  
   !\
   ! Set axes for coord transform when in standalone mode
   !/

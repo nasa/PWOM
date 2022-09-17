@@ -28,6 +28,8 @@ C
       use ModTimeConvert, ONLY: time_real_to_int
       use ModOvation, ONLY: UseOvation,get_ovation_point,
      &     read_ovation_all,OvationEmin,OvationEmax
+      use ModPwIndices, ONLY: UsePwIndicesFile,get_pw_indices_ap_array,
+     &     get_pw_indices_F107, get_pw_indices_F107A
       use ModUtilities,ONLY: CON_stop
 
       real :: EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,
@@ -250,7 +252,10 @@ c      AP(I)=50.
          if(iError /=0) then
             call con_stop('PW_ERROR: get_f107a failed in startupPW_planet')
          endif
-         
+      elseif(UsePwIndicesFile) then
+         call get_pw_indices_ap_array(Time,AP)
+         call get_pw_indices_F107(Time,F107)
+         call get_pw_indices_F107A(Time,F107A)
       endif
         
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 

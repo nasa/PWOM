@@ -23,7 +23,8 @@ subroutine PW_set_parameters(NameAction)
        SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap, &
        DoSavePlotParticle,DtSaveProfile, DtSaveDF,&
        nWaveFile, NameWaveFile
-  use ModReGrid, ONLy: DoRegrid,DtRegrid,DoSavePoints
+  use ModReGrid, ONLY: DoRegrid,DtRegrid,DoSavePoints
+  use ModPwIndices, ONLY: UsePwIndicesFile 
   implicit none
   
 
@@ -223,6 +224,9 @@ subroutine PW_set_parameters(NameAction)
            write(*,*) "PW_ERROR: read indices was NOT successful"
         endif
 
+     case('#INDICESFILE')
+        call read_var('UsePwIndicesFile',UsePwIndicesFile )
+        
      case('#SE')
         call read_var('DoCoupleSE', DoCoupleSE)
         call read_var('UseFeedbackFromSE', UseFeedbackFromSE)
