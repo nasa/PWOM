@@ -69,7 +69,7 @@ program pw
   ! Move the flux tube, solve each fieldline, and advance the time
   !****************************************************************************
 
-  if (DoTimeAccurate) then
+  if (IsTimeAccurate) then
      TIMELOOP:do
         if (Time >= Tmax) exit TIMELOOP
         DtHorizontal = min(DtHorizontalOrig, Tmax - Time)

@@ -9,7 +9,7 @@ subroutine PW_initialize
   use ModPwom
   use ModCommonPlanet,ONLY: nIon,iRho_I,iU_I,iP_I,iT_I
   use ModCommonVariables, ONLY:IYD,ALTD,Mass_I,DRBND,MassElecIon_I,Rgas_I,XAMU,&
-       RGAS,Ion1_,Ion2_,Ion3_,nIon
+       RGAS,Ion1_,Ion2_,Ion3_,nIon,NameRestartInDir,NameRestartOutDir
   use ModTimeConvert, ONLY: time_int_to_real
   use ModPwTime
   use ModAurora, ONLY: init_aurora
@@ -123,10 +123,10 @@ subroutine PW_initialize
              + ((iproc)-mod(nTotalLine,nProc))                        &
              *floor(real(nTotalLine)/real(nProc))+iLine
      endif
-     write(NameRestartIn(iLine),"(a,i4.4,a)") &
-          'PW/restartIN/restart_iline',iLineGlobal(iLine),'.dat'
-     write(NameRestart(iLine),"(a,i4.4,a)") &
-          'PW/restartOUT/restart_iline',iLineGlobal(iLine),'.dat'
+     write(NameRestartIn(iLine),"(a,i4.4,a)") trim(NameRestartInDir) //  &
+          'restart_iline',iLineGlobal(iLine),'.dat'
+     write(NameRestart(iLine),"(a,i4.4,a)") trim(NameRestartOutDir) // &
+          'restart_iline',iLineGlobal(iLine),'.dat'
      
      !Setup log files
      if (nLog == -1) then
@@ -343,7 +343,8 @@ subroutine PW_initialize
         enddo
      else
         
-        allocate(Density_IC(nIon-1,nAlt),Velocity_IC(nIon-1,nAlt),Temperature_IC(nIon-1,nAlt))
+        allocate(Density_IC(nIon-1,nAlt),Velocity_IC(nIon-1,nAlt), &
+             Temperature_IC(nIon-1,nAlt))
         do iLine=1,nLine
            do iIon=1,nIon-1
               Density_IC(iIon,:)=State_CVI(1:nAlt,iRho_I(iIon),iLine)/Mass_I(iIon)
@@ -382,7 +383,7 @@ integer function julianday(year, mon, day) result(Julian_Day)
   dayofmon(11) = 30
   dayofmon(12) = 31
   
-  if (mod(year,4).eq.0) dayofmon(2) = dayofmon(1) + 1
+  if (mod(year,4) == 0) dayofmon(2) = dayofmon(1) + 1
   Julian_Day = 0
   do i = 1, mon-1
      Julian_Day = Julian_Day + dayofmon(i)

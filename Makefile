@@ -97,14 +97,20 @@ rundir:
 			ln -s ${EMPIRICALIEDIR}/data EIE;\
 		fi;)
 	cd ${RUNDIR}/PW; \
-		mkdir restartIN restartOUT plots; \
-		cp ${MYDIR}/data/input/${PLANET}/restartfiles/restart_iline* restartIN/ ;\
+		mkdir restartOUT plots; \
+		rm -f restartIN; ln -s ${MYDIR}/data/input/${PLANET}/restartfiles restartIN ;\
 		cp ${MYDIR}/data/input/${PLANET}/*.dat .;\
 		cp ${MYDIR}/data/input/${PLANET}/*.txt .;\
 		cp -r ${MYDIR}/data/IRI_DATA .;\
 		cp -r ${MYDIR}/data/crossection_data/*dat .;\
 		cp -r ${MYDIR}/data/nightside_fluxes/*dat .;\
 		cp ${MYDIR}/data/input/*dat .
+	@(if [ "$(NCIRCLE)" != "" ]; then \
+		cd ${RUNDIR}/PW; \
+		mkdir RESTART0; cp restartIN/restart_iline0001.dat RESTART0; \
+		rm -f restartIN; ln -s ${RUNDIR}/PW/RESTART0 restartIN; \
+		cd RESTART0; ${MYDIR}/Scripts/CreateRestart.pl ${NCIRCLE}; \
+	fi)
 	@(if [ "$(STANDALONE)" != "NO" ]; then \
 		cd ${RUNDIR}; \
 			ln -s ${BINDIR}/PWOM.exe .; \
@@ -120,13 +126,13 @@ rundir_gitmreader:
 		cp ${MYDIR}/srcGITMREADER/gitm_20110614_040000_PWOM.dat.tgz PW/UAfiles/ ;\
 		cd PW/UAfiles;\
 		tar xvfz gitm_20110614_040000_PWOM.dat.tgz
+.NOTPARALLEL: test
 
 test:
-	-@(make test_saturn)
-	-@(make test_restart)
+	-@(make test_saturn TESTDIR=run_test_saturn)
+	-@(make test_restart TESTDIR=run_test_saturn)
 	rm -f src/neutral_atmosphere_planet.f90
-	-@(make test_earth)
-	-@(make test_restart)
+	-@(make test_earth TESTDIR=run_test_earth)
 
 test_orig:
 	-@(make test_jupiter)
@@ -216,7 +222,7 @@ test_rundir:
 	make rundir RUNDIR=${TESTDIR} STANDALONE="YES" PWDIR=`pwd`
 
 test_run:
-	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe
+	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe | tee runlog
 
 test_check:
 	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
@@ -266,15 +272,15 @@ test_restart:
 	make   test_check MYTEST=_restart
 
 test_restart_save:
-	cp data/input/${PLANET}/restartfiles/restart_iline* ${TESTDIR}/PW/restartIN/
 	cp input/${PLANET}/PARAM.in.restartsave ${TESTDIR}/PARAM.in
-	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe
-	cd ${TESTDIR}; mv PW/restartOUT/* PW/restartIN/
+	cd ${TESTDIR}/PW/; rm -f restartIN; ln -s data/input/${PLANET}/restartfiles restartIN
+	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe | tee runlog_restart_save
+	cd ${TESTDIR}/PW; rm -f restartIN; ln -s restartOUT restartIN
 	cd ${TESTDIR}/PW; rm -rf plot_save; mv plots plots_save; mkdir plots
 
 test_restart_read:
 	cp input/${PLANET}/PARAM.in.restartread ${TESTDIR}/PARAM.in
-	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe
+	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe | tee runlog_restart_read
 	cd ${TESTDIR}/PW; \
 	rm -rf plots_read; mv plots plots_read; mv plots_save plots
 	cd ${TESTDIR}/PW; \

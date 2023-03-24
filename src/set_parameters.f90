@@ -1,8 +1,12 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine PW_set_parameters(NameAction)
 
-  use ModIoUnit, ONLY: UnitTmp_, io_unit_new
+  !****************************************************************************
+  ! This subroutine gets the inputs for PWOM
+  !****************************************************************************
+
   use ModPwom
   use ModReadParam
   use ModCommonVariables, ONLY: F107,F107A,AP,UseStaticAtmosphere,DrBnd,&
@@ -26,60 +30,57 @@ subroutine PW_set_parameters(NameAction)
   use ModReGrid, ONLY: DoRegrid,DtRegrid,DoSavePoints
   use ModPwIndices, ONLY: UsePwIndicesFile 
   implicit none
-  
 
-  character (len=100) :: cLine
-  character (len=100) :: cTempLine
-  character (len=100), dimension(100) :: cTempLines
-  character (len=100)           :: NameCommand
-  character (len=*), intent(in) :: NameAction
+  character (len=*), intent(in) :: NameAction ! READ or CHECK
+
+  character (len=100) :: StringLine
+  character (len=100) :: StringLine_I(100)
+  character (len=100) :: NameCommand
+  real:: Vx, Bx, Bz, By, HPI
+  integer:: iDate, iError
+
   character (len=*), parameter  :: NameSub = 'PW_set_parameters'
-  real :: Vx, Bx, Bz, By, HPI
-  
-  !****************************************************************************
-  ! This subroutine gets the inputs for PWOM
-  !****************************************************************************
-
-  real:: ddt1, xxx
-  integer:: ns,iDate,iError
-
   !---------------------------------------------------------------------------
-  
   do
      if(.not.read_line() ) EXIT
      if(.not.read_command(NameCommand)) CYCLE
      select case(NameCommand)
      case('#STOP')
         if(IsStandAlone)then
-           call read_var('Tmax',Tmax)
-           call read_var('MaxStep',MaxStep)
+           call read_var('Tmax', Tmax)
+           call read_var('MaxStep', MaxStep)
         else
            write(*,*)'PWOM WARNING: #STOP command is ignored in the framework'
         end if
+
      case('#STARTTIME')
         if(IsStandAlone)then
            !read in iYear,iMonth,iDay,iHour,iMinute,iSecond into iStartTime
-           do iDate=1,6
-              call read_var('iStartTime',iStartTime(iDate))
+           do iDate = 1, 6
+              call read_var('iStartTime', iStartTime(iDate))
            enddo
            
         else
-           write(*,*)'PWOM WARNING: #STARTTIME command is ignored in the framework'
+           write(*,*)'PWOM WARNING: ', &
+                '#STARTTIME command is ignored in the framework'
         end if
+
      case('#STATICATMOSPHERE')
         call read_var('UseStaticAtmosphere', UseStaticAtmosphere)
+
      case('#MSISPARAM')
         call read_var('F107' ,F107)
-        call read_var('F107A',F107A)
-        call read_var('AP(1)',AP(1))
-        call read_var('AP(2)',AP(2))
-        call read_var('AP(3)',AP(3))
-        call read_var('AP(4)',AP(4))
-        call read_var('AP(5)',AP(5))
-        call read_var('AP(6)',AP(6))
-        call read_var('AP(7)',AP(7))
+        call read_var('F107A', F107A)
+        call read_var('AP1', AP(1))
+        call read_var('AP2', AP(2))
+        call read_var('AP3', AP(3))
+        call read_var('AP4', AP(4))
+        call read_var('AP5', AP(5))
+        call read_var('AP6', AP(6))
+        call read_var('AP7', AP(7))
+
      case('#TIMEACCURATE')
-        call read_var('DoTimeAccurate',DoTimeAccurate)
+        call read_var('IsTimeAccurate',IsTimeAccurate)
      case('#SAVEPLOT')
         call read_var('DtSavePlot',DtOutput)
         call read_var('DnSavePlot',DnOutput)
@@ -87,97 +88,112 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DoAppendPlot',DoAppendPlot)
 
      case('#TYPEPLOT')
-        call read_var('TypePlot',TypePlot)
+        call read_var('TypePlot', TypePlot)
 
      case('#SAVEPLOTELECTRODYNAMICS')
-        call read_var('DoPlotElectrodynamics',DoPlotElectrodynamics)
-        call read_var('DtPlotElectrodynamics',DtPlotElectrodynamics)
+        call read_var('DoPlotElectrodynamics', DoPlotElectrodynamics)
+        call read_var('DtPlotElectrodynamics', DtPlotElectrodynamics)
+
      case('#SCHEME')
-        call read_var('TypeSolver',TypeSolver)
-        call read_var('TypeFlux',TypeFlux)
-        call read_var('DtVertical',DtVertical)
+        call read_var('TypeSolver', TypeSolver)
+        call read_var('TypeFlux', TypeFlux)
+        call read_var('DtVertical', DtVertical)
         call read_var('IsFullyImplicit'   ,IsFullyImplicit)
         if(IsFullyImplicit)then
            IsPointImplicit = .false.
            IsPointImplicitAll = .false.
         else
            call read_var('IsPointImplicit'   ,IsPointImplicit)
-           call read_var('IsPointImplicitAll',IsPointImplicitAll)
+           call read_var('IsPointImplicitAll', IsPointImplicitAll)
         end if
+
      case('#VARIABLEDT')
-        call read_var('IsVariableDt',IsVariableDt)
+        call read_var('IsVariableDt', IsVariableDt)
+
      case('#LIMITER')
-        call read_var('LimiterBeta',BetaIn)
+        call read_var('LimiterBeta', BetaIn)
         Beta = BetaIn
+
      case('#RESTART')
-        call read_var('IsRestart',IsRestart)
+        call read_var('IsRestart', IsRestart)
 
      case('#REGRID')
         call read_var('DoRegrid',DoRegrid)
         call read_var('DtRegrid',DtRegrid)
         call read_var('DoSavePoints',DoSavePoints)
      case('#MOTION')
-        call read_var('DoMoveLine',DoMoveLine)
+        call read_var('DoMoveLine', DoMoveLine)
+
      case('#FAC')
-        call read_var('UseJr',UseJr)
+        call read_var('UseJr', UseJr)
+
      case('#AURORA')
-        call read_var('UseAurora',UseAurora)
+        call read_var('UseAurora', UseAurora)
+
      case('#JOULEHEATING')
-        call read_var('UseJouleHeating',UseJouleHeating)
+        call read_var('UseJouleHeating', UseJouleHeating)
+
      case('#ROTATION')
-        call read_var('UseCentrifugal',UseCentrifugal)
+        call read_var('UseCentrifugal', UseCentrifugal)
+
      case('#WAVES')
-        call read_var('UseWaveAcceleration',UseWaveAcceleration)
+        call read_var('UseWaveAcceleration', UseWaveAcceleration)
+
      case('#TIMESTEP')
-        call read_var('DtHorizontal',DtHorizontal)
+        call read_var('DtHorizontal', DtHorizontal)
         DtHorizontalOrig = DtHorizontal
+
      case('#VERTICALGRID')
-        call read_var('nPoints',nAlt)
-        call read_var('DeltaR',DrBnd)
+        call read_var('nPoints', nAlt)
+        call read_var('DeltaR', DrBnd)
+
      case('#FIELDLINE')
-        call read_var('nTotalLine',nTotalLine)
+        call read_var('nTotalLine', nTotalLine)
+
      case('#LOG')
-        call read_var('WriteLog',nLog) ! nLog=-1 write for all lines
-                                       ! nLog= 0 write for no lines
-                                       ! nLog= 1..nTotalLine, write one line
+        call read_var('WriteLog', nLog) ! nLog=-1 write for all lines
+                                        ! nLog= 0 write for no lines
+                                        ! nLog= 1..nTotalLine, write one line
      case('#TEST')
-        call read_var('StringTest',StringTest)
-        call read_var('iProcTest', iProcTest)
-        call read_var('iLinetest', iLineTest)
+        call read_var('StringTest', StringTest)
+        call read_var('iProcTest',  iProcTest)
+        call read_var('iLinetest',  iLineTest)
+
      case('#HEAT')
-        call read_var('UseIonHeat',UseIonHeat)
-        call read_var('UseEleHeat',UseEleHeat)
+        call read_var('UseIonHeat', UseIonHeat)
+        call read_var('UseEleHeat', UseEleHeat)
         if (UseEleHeat) then
-           call read_var('UseExplicitHeat',UseExplicitHeat)
+           call read_var('UseExplicitHeat', UseExplicitHeat)
         else
            UseExplicitHeat = .false.
         endif
         
      case('#HEATFLUX')
-        call read_var('UsePhotoElectronHeatFlux',UsePhotoElectronHeatFlux)
-        call read_var('UseAuroralHeatFlux',UseAuroralHeatFlux)
-        call read_var('UseCuspHeatFlux',UseCuspHeatFlux)
+        call read_var('UsePhotoElectronHeatFlux', UsePhotoElectronHeatFlux)
+        call read_var('UseAuroralHeatFlux', UseAuroralHeatFlux)
+        call read_var('UseCuspHeatFlux', UseCuspHeatFlux)
+
      case ("#MHD_INDICES")
-        cTempLines(1) = NameCommand
-        call read_var('UpstreamFile',cTempLine)
-        cTempLines(2) = cTempLine
-        cTempLines(3) = " "
-        cTempLines(4) = "#END"
+        StringLine_I(1) = NameCommand
+        call read_var('UpstreamFile', StringLine)
+        StringLine_I(2) = StringLine
+        StringLine_I(3) = " "
+        StringLine_I(4) = "#END"
         
-        call IO_set_inputs(cTempLines)
+        call IO_set_inputs(StringLine_I)
         call read_MHDIMF_Indices(iError)
         ! When reading solar wind data, use the Weimer potential
         UseWeimer = .true.
         UseConstantIMF = .false.
 
      case ("#SOLARWIND")
-        call read_var('bx',bx)
-        call read_var('by',by)
-        call read_var('bz',bz)
-        call read_var('vx',vx)
-        call IO_set_imf_by_single(by)
-        call IO_set_imf_bz_single(bz)
-        call IO_set_sw_v_single(abs(vx))
+        call read_var('Bx', Bx)
+        call read_var('By', By)
+        call read_var('Bz', Bz)
+        call read_var('Vx', Vx)
+        call IO_set_imf_by_single(By)
+        call IO_set_imf_bz_single(Bz)
+        call IO_set_sw_v_single(abs(Vx))
         ! When using fixed solar wind data, use the Weimer potential
         UseWeimer = .true.
         UseConstantIMF = .true.
@@ -187,35 +203,34 @@ subroutine PW_set_parameters(NameAction)
         call IO_set_hpi_single(HPI)
         
      case ("#NOAAHPI_INDICES")
-        cTempLines(1) = "#NOAAHPI_INDICES"
-        call read_var('NameHpiFile',cTempLine)
-        cTempLines(2) = cTempLine
-        cTempLines(3) = " "
-        cTempLines(4) = "#END"
-        call IO_set_inputs(cTempLines)
+        StringLine_I(1) = "#NOAAHPI_INDICES"
+        call read_var('NameHpiFile', StringLine)
+        StringLine_I(2) = StringLine
+        StringLine_I(3) = " "
+        StringLine_I(4) = "#END"
+        call IO_set_inputs(StringLine_I)
         call read_NOAAHPI_Indices(iError)
-        if (iError /= 0) then
-           write(*,*) "PW_ERROR: read hpi indices was NOT successful"
-        endif
+        if (iError /= 0) &
+             write(*,*) "PW_ERROR: read hpi indices was NOT successful"
 
      case ("#NGDC_INDICES")
-        cTempLines(1) = "#NGDC_INDICES"
-        call read_var('NameNgdcFile',cTempLine)
-        cTempLines(2) = cTempLine
-        cTempLines(3) = " "
-        cTempLines(4) = "#END"
+        StringLine_I(1) = "#NGDC_INDICES"
+        call read_var('NameNgdcFile', StringLine)
+        StringLine_I(2) = StringLine
+        StringLine_I(3) = " "
+        StringLine_I(4) = "#END"
         
-        call IO_set_inputs(cTempLines)
+        call IO_set_inputs(StringLine_I)
         call read_NGDC_Indices(iError)
 
         ! F107 file                                                            
-        cTempLines(1) = "#NGDC_INDICES"
-        call read_var('NameNgdcFile',cTempLine)
-        cTempLines(2) = cTempLine
-        cTempLines(3) = " "
-        cTempLines(4) = "#END"
+        StringLine_I(1) = "#NGDC_INDICES"
+        call read_var('NameNgdcFile', StringLine)
+        StringLine_I(2) = StringLine
+        StringLine_I(3) = " "
+        StringLine_I(4) = "#END"
 
-        call IO_set_inputs(cTempLines)
+        call IO_set_inputs(StringLine_I)
         call read_NGDC_Indices(iError)
         
         UseIndicies = .true.
@@ -229,33 +244,37 @@ subroutine PW_set_parameters(NameAction)
         
      case('#SE')
         call read_var('DoCoupleSE', DoCoupleSE)
-        call read_var('UseFeedbackFromSE', UseFeedbackFromSE)
-        call read_var('IsVerboseSE', IsVerboseSE)
-        call read_var('DtGetSe', DtGetSe)
-        
+        if(DoCoupleSE)then
+           call read_var('UseFeedbackFromSE', UseFeedbackFromSE)
+           call read_var('IsVerboseSE', IsVerboseSE)
+           call read_var('DtGetSe', DtGetSe)
+        end if
 
      case('#SETPRECIP')
-        call read_var('UseFixedPrecip',  UseFixedPrecip)
-        call read_var('PrecipEnergyMin', PrecipEnergyMin)        
-        call read_var('PrecipEnergyMax', PrecipEnergyMax)        
-        call read_var('PrecipEnergyMean',PrecipEnergyMean)        
-        call read_var('PrecipEnergyFlux',PrecipEnergyFlux)        
+        call read_var('UseFixedPrecip', UseFixedPrecip)
+        if(UseFixedPrecip)then
+           call read_var('PrecipEnergyMin',  PrecipEnergyMin)        
+           call read_var('PrecipEnergyMax',  PrecipEnergyMax)        
+           call read_var('PrecipEnergyMean', PrecipEnergyMean)        
+           call read_var('PrecipEnergyFlux', PrecipEnergyFlux)        
+        end if
 
-!        if(.not.DoCoupleSE) &
-!             write(*,*) 'PW_WARNING: #SETPRECIP invoked but SE not coupled'
      case('#OVATION')
-        call read_var('UseOvation',  UseOvation)
-        call read_var('DoPlotOvation',  DoPlotOvation)
-        call read_var('OvationEmin',  OvationEmin)
-        call read_var('OvationEmax',  OvationEmax)
+        call read_var('UseOvation',   UseOvation)
+        if(UseOvation)then
+           call read_var('DoPlotOvation', DoPlotOvation)
+           call read_var('OvationEmin',   OvationEmin)
+           call read_var('OvationEmax',   OvationEmax)
+        end if
 
      case('#POLARRAIN')
-        call read_var('UsePolarRain',  UsePolarRain)
-        call read_var('PolarRainEMin', PolarRainEMin)        
-        call read_var('PolarRainEMax', PolarRainEMax)        
-        call read_var('PolarRainEMean',PolarRainEMean)        
-        call read_var('PolarRainEFlux',PolarRainEFlux)        
-
+        call read_var('UsePolarRain', UsePolarRain)
+        if(UsePolarRain)then
+           call read_var('PolarRainEMin',  PolarRainEMin)        
+           call read_var('PolarRainEMax',  PolarRainEMax)        
+           call read_var('PolarRainEMean', PolarRainEMean)        
+           call read_var('PolarRainEFlux', PolarRainEFlux)        
+        end if
 
      case('#PARTICLES')
         call read_var('UseParticles',  UseParticles)
@@ -273,6 +292,8 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DtSaveProfile',  DtSaveProfile)
         call read_var('DtSaveDF',  DtSaveDF)
         
+
+
         
      case('#WPI')
         call read_var('TypeWPI',  TypeWPI)
@@ -298,7 +319,7 @@ subroutine PW_set_parameters(NameAction)
 
      endselect
   enddo
-  
-  
+  !============================================================================
 end subroutine PW_set_parameters
+!==============================================================================
 

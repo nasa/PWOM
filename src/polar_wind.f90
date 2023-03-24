@@ -9,7 +9,7 @@ subroutine polar_wind
   !
   
   use ModPWOM, only: DtVertical,nLine,IsStandAlone,DoSavePlot,iLine,&
-       IsFullyImplicit,UseExplicitHeat,DoTimeAccurate,MaxStep,DnOutput,&
+       IsFullyImplicit,UseExplicitHeat,IsTimeAccurate,MaxStep,DnOutput,&
        nAlt, IsVariableDt, UseParticles,DtCoupleParticles,UseParticleFeedback,&
        iAltParticle,UseIE
   use ModIoUnit, ONLY: UnitTmp_
@@ -262,7 +262,7 @@ subroutine polar_wind
      NSTEP=NSTEP+1
       if (IsVariableDt) call calc_dt
      StateOld_GV=State_GV
-     if (DoTimeAccurate)then
+     if (IsTimeAccurate)then
         TIME=TIME+DT
         if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
            CALL PW_print_plot
@@ -295,7 +295,7 @@ subroutine polar_wind
 
      NSTEP=NSTEP+1
      if (IsVariableDt) call calc_dt
-     if (DoTimeAccurate)then
+     if (IsTimeAccurate)then
         TIME=TIME+DT
         if (floor((Time+1.0e-5)/DToutput)/=floor((Time+1.0e-5-DT)/DToutput) )then 
            CALL PW_print_plot

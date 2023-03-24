@@ -6,6 +6,9 @@ module ModCommonVariables
   use ModCommonPlanet
   
   use ModParameters
+
+  character(len=100):: NameRestartInDir  = 'PW/restartIN/'
+  character(len=100):: NameRestartOutDir = 'PW/restartOUT/'
   
   integer iUnitInput, iUnitOutput, iUnitGraphics, iUnitRestart, &
        iUnitCollision, iUnitSourceGraphics
