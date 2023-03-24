@@ -30,7 +30,7 @@ T
 50.0		DtSavePlot
 -1		DnSavePlot
 T		SaveFirst
-
+F		DoPlotAppend
 
 #SCHEME
 Godunov		TypeSolver
