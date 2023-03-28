@@ -1,5 +1,5 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, 
-!  portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 
 module PW_wrapper
@@ -9,7 +9,7 @@ module PW_wrapper
   implicit none
 
   private ! except
- 
+
   public:: PW_set_param
   public:: PW_init_session
   public:: PW_run
@@ -22,9 +22,9 @@ module PW_wrapper
 
   ! coupling with IE
   public:: PW_put_from_ie
- 
+
 contains
-  !==========================================================================
+  !============================================================================
   subroutine PW_set_param(CompInfo, TypeAction)
 
     use CON_comp_info
@@ -34,14 +34,13 @@ contains
          nTotalLine, nAlt
     use ModCommonVariables, only: Altd
 
-    character (len=*), parameter :: NameSub='PW_set_param'
-
     ! Arguments
     type(CompInfoType), intent(inout):: CompInfo   ! Information for this comp.
     character (len=*), intent(in)    :: TypeAction ! What to do
 
     integer :: i
-    !-------------------------------------------------------------------------
+    character(len=*), parameter:: NameSub = 'PW_set_param'
+    !--------------------------------------------------------------------------
     select case(TypeAction)
     case('VERSION')
        call put(CompInfo,&
@@ -72,27 +71,25 @@ contains
        StringPrefix=''
 
     case('GRID')
-       ! We pretend to have an nRadius*nLine 2D grid, 
+       ! We pretend to have an nRadius*nLine 2D grid,
        ! because it is unstructured in theta,phi
        call set_grid_descriptor( &
             PW_,                      &! component index
             nDim=2,                   &! dimensionality
-            nRootBlock_D=(/1,nProc/), &! distributed in the second dimension
-            nCell_D =(/ nAlt, nTotalLine /),          &! size of the grid
-            XyzMin_D=(/Altd(1), 1.0/),                &! min altitude and index
-            XyzMax_D=(/Altd(nAlt), real(nTotalLine)/),&! max altitude and index
+            nRootBlock_D=[1,nProc], &! distributed in the second dimension
+            nCell_D =[ nAlt, nTotalLine ],          &! size of the grid
+            XyzMin_D=[Altd(1), 1.0],                &! min altitude and index
+            XyzMax_D=[Altd(nAlt), real(nTotalLine)],&! max altitude and index
             Coord1_I = Altd(1:nAlt),                  &! altitudes
-            Coord2_I= (/ (real(i), i=1,nTotalLine) /),   &! indexes
-            TypeCoord='SMG')                           ! 
+            Coord2_I= [ (real(i), i=1,nTotalLine) ],   &! indexes
+            TypeCoord='SMG')                           !
 
     case default
        call CON_stop(NameSub//': PW_ERROR: empty version cannot be used!')
     end select
 
   end subroutine PW_set_param
-
   !============================================================================
-
   subroutine PW_init_session(iSession, TimeSimulation)
     use ModPWOM, ONLY: iProc, UseIE, Time
     use ModPwTime
@@ -100,18 +97,16 @@ contains
     use CON_coupler, ONLY: Couple_CC, IE_, PW_
     use CON_physics, ONLY: get_time
 
-    !INPUT PARAMETERS:
     integer,  intent(in) :: iSession         ! session number (starting from 1)
     real,     intent(in) :: TimeSimulation   ! seconds from start time
 
-    character(len=*), parameter :: NameSub='PW_init_session'
-
     logical :: DoInitialize = .true.
+    character(len=*), parameter:: NameSub = 'PW_init_session'
     !--------------------------------------------------------------------------
     UseIE = Couple_CC(IE_, PW_) % DoThis
 
     if(DoInitialize) then
-       ! Set time related variables for UA 
+       ! Set time related variables for UA
        call get_time(tStartOut = StartTime)
        CurrentTime = StartTime + TimeSimulation
        call time_real_to_int(StartTime, iStartTime)
@@ -119,15 +114,13 @@ contains
        call PW_initialize
        if(Time /= TimeSimulation .and. iProc==0) &
             write(*,*)'WARNING ',NameSub,': PWOM Time=',Time, &
-            ' differs from SWMF TimeSimulation=',TimeSimulation 
+            ' differs from SWMF TimeSimulation=',TimeSimulation
        Time = TimeSimulation
     endif
     DoInitialize = .false.
 
   end subroutine PW_init_session
-
   !============================================================================
-
   subroutine PW_finalize(TimeSimulation)
 
     use ModPWOM, ONLY: iLine, nLine, iUnitGraphics, iUnitOutput, &
@@ -140,23 +133,22 @@ contains
          NameRestartIn, NameRestart, NameGraphics,          &
          NameOutput,  iUnitRestart, iUnitRestartIn
 
-    !INPUT PARAMETERS:
     real,     intent(in) :: TimeSimulation   ! seconds from start time
 
-    character(len=*), parameter :: NameSub='PW_finalize'
-    !-------------------------------------------------------------------------
+    character(len=*), parameter:: NameSub = 'PW_finalize'
+    !--------------------------------------------------------------------------
     if (nLog == -1) then
        do iLine=1,nLine
           close(iUnitOutput(iLine))
        enddo
     elseif(nLog ==0) then
-       !do nothing in this case
+       ! do nothing in this case
     elseif(nLog==iLineGlobal(iLine)) then
        close(iUnitOutput(iLine))
     else
     end if
 
-    ! Deallocate variables needed for simulation 
+    ! Deallocate variables needed for simulation
     deallocate(r_C, State_CVI, GeoMagLat_I,GeoMagLon_I,     &
          ThetaLine_I, PhiLine_I, xLine_I, yLine_I, zLine_I, &
          xLineOld_I, yLineOld_I, zLineOld_I, UthetaLine_I,  &
@@ -166,24 +158,28 @@ contains
          NameOutput,  iUnitRestart, iUnitRestartIn,         &
          iUnitGraphics,iUnitOutput, iLineGlobal)
 
-
   end subroutine PW_finalize
-
   !============================================================================
-
   subroutine PW_save_restart(TimeSimulation)
 
-    use ModPWOM, only: &
-         nAlt,r_C,GeoMagLat_I,GeoMagLon_I,DtVertical,&
-         nStep,NameRestart, &
-         State_CVI,nLine,UseParticles
+    use CON_coupler, ONLY: NameRestartOutDirComp
+    use ModPWOM, ONLY: &
+         nAlt, r_C, GeoMagLat_I, GeoMagLon_I, DtVertical,&
+         nStep, NameRestart, State_CVI, nLine, UseParticles, iLineGlobal
+    use ModCommonVariables, ONLY: NameRestartOutDir
     use ModParticle, ONLY: disinter_line, bury_line,write_restart_particle
-    !INPUT PARAMETERS:
     real,     intent(in) :: TimeSimulation   ! seconds from start time
 
     integer :: iLine
-    character(len=*), parameter :: NameSub='PW_save_restart'
+    character(len=*), parameter:: NameSub = 'PW_save_restart'
     !--------------------------------------------------------------------------
+    if(NameRestartOutDirComp /= '')then
+       NameRestartOutDir = NameRestartOutDirComp
+       do iLine = 1, nLine
+          write(NameRestart(iLine),"(a,i4.4,a)") trim(NameRestartOutDir) // &
+               'restart_iline',iLineGlobal(iLine),'.dat'
+       end do
+    end if
 
     do iLine=1,nLine
        call PW_write_restart(&
@@ -199,24 +195,20 @@ contains
     enddo
 
   end subroutine PW_save_restart
-
   !============================================================================
-
   subroutine PW_run(TimeSimulation,TimeSimulationLimit)
 
     use ModPWOM, ONLY: iLine, nLine, Time, nStep, DtHorizontalOrig, &
          DtHorizontal, DtOutput, &
          DoPlotElectrodynamics, DtPlotElectrodynamics, &
          Tmax, UseIE
-    use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines
-    !INPUT/OUTPUT ARGUMENTS:
+    use ModReGrid, ONLY: DoRegrid, DtRegrid, regrid_lines
     real, intent(inout) :: TimeSimulation   ! current time of component
 
-    !INPUT ARGUMENTS:
     real, intent(in):: TimeSimulationLimit ! simulation time not to be exceeded
 
-    character(len=*), parameter :: NameSub='PW_run'
     logical :: DoTest, DoTestMe
+    character(len=*), parameter:: NameSub = 'PW_run'
     !--------------------------------------------------------------------------
     call CON_set_do_test(NameSub, DoTest, DoTestMe)
     if(DoTestMe)write(*,*) NameSub, &
@@ -236,24 +228,22 @@ contains
        TimeSimulation = TimeSimulationLimit
        RETURN
     end if
-    
+
     if (DoRegrid) then
        if (floor((Time+1.0e-5)/DtRegrid) /= &
-            floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then 
+            floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then
           call regrid_lines
        endif
     endif
 
-    
     ! Need to get electrodynamics in SA mode
     if(.not. UseIE)call PW_get_electrodynamics
 
-    
     do iLine=1,nLine
        call move_line
        call PW_advance_line
     end do
-    !Output the electrodynamics info
+    ! Output the electrodynamics info
     if (DoPlotElectrodynamics) then
        if (floor(Time/DtPlotElectrodynamics) &
             /= floor((Time-DtHorizontal)/DtPlotElectrodynamics) ) &
@@ -265,9 +255,7 @@ contains
          nStep, TimeSimulation
 
   end subroutine PW_run
-
   !============================================================================
-
   subroutine PW_put_from_ie(Buffer_IIV, iSize, jSize, nVarIn, &
        Name_V, iBlock)
 
@@ -276,9 +264,6 @@ contains
          DtPlotElectrodynamics,DtHorizontal
     use CON_coupler, ONLY: Grid_C, IE_
 
-    character(len=*), parameter :: NameSub='PW_put_from_ie'
-
-    !INPUT ARGUMENTS:
     integer, intent(in):: iSize, jSize, nVarIn, iBlock
     real, intent(in) :: Buffer_IIV(iSize, jSize, nVarIn)
     character(len=*), intent(in) :: Name_V(nVarIn)
@@ -289,9 +274,8 @@ contains
     logical :: IsPotFound, IsJrFound, IsAveFound, IsEfluxFound
 
     integer :: i, j, iVar, nThetaIono, nPhiIono
+    character(len=*), parameter:: NameSub = 'PW_put_from_ie'
     !--------------------------------------------------------------------------
-    !if(iBlock /= north_) RETURN
-
     if(.not.allocated(Phi_G))then
        nThetaIono = Grid_C(IE_) % nCoord_D(1)
        nPhiIono   = Grid_C(IE_) % nCoord_D(2)
@@ -312,7 +296,7 @@ contains
        end do
 
        ! This has to be initialized (values will be replaced below)
-       Potential_G = 0.0 
+       Potential_G = 0.0
 
        call PW_get_electrodynamics
        call initial_line_location
@@ -340,7 +324,7 @@ contains
           IsAveFound = .true.
           do i=1,iSize
              do j=1,jSize
-                AvE_G(j,i) = Buffer_IIV(i, j, iVar)*1000.0 !convert keV to eV
+                AvE_G(j,i) = Buffer_IIV(i, j, iVar)*1000.0 ! convert keV to eV
              end do
           end do
        case('Tot')
@@ -362,7 +346,7 @@ contains
 
     call PW_get_electrodynamics
 
-    !Output the electrodynamics info
+    ! Output the electrodynamics info
     if (DoPlotElectrodynamics) then
        if (floor(Time/DtPlotElectrodynamics) &
             /= floor((Time-DtHorizontal)/DtPlotElectrodynamics) ) &
@@ -370,9 +354,7 @@ contains
     endif
 
   end subroutine PW_put_from_ie
-
   !============================================================================
-
   subroutine PW_get_for_gm(Buffer_VI, nVar, nLineTotal, Name_V, tSimulation)
 
     use ModPWOM, only : iComm,nProc,&
@@ -382,8 +364,6 @@ contains
          nLine_P, nLineBefore_P
     use ModCommonPlanet, only: RhoO_,RhoH_,RhoHe_,uO_,uH_,uHe_
     use ModMpi
-
-    character (len=*),parameter :: NameSub='PW_get_for_gm'
 
     integer, intent(in)           :: nVar, nLineTotal
     real, intent(out)             :: Buffer_VI(nVar, nLineTotal)
@@ -397,6 +377,7 @@ contains
     real,    allocatable :: SendBuffer_VI(:,:)
 
     logical :: DoTest, DoTestMe
+    character(len=*), parameter:: NameSub = 'PW_get_for_gm'
     !--------------------------------------------------------------------------
     call CON_set_do_test(NameSub, DoTest, DoTestMe)
 
@@ -438,8 +419,7 @@ contains
     ! The recieve buffer is Buffer_VI allocated in CON_couple_pw_gm
     iSendCount=nVar*nLine
 
-
-    ! Gather all data to the root processor 
+    ! Gather all data to the root processor
     call MPI_GATHERV(SendBuffer_VI, iSendCount, MPI_REAL, &
          Buffer_VI, iRecieveCount_P, iDisplacement_P, MPI_REAL, &
          0, iComm, iError)
@@ -452,9 +432,7 @@ contains
     deallocate(iRecieveCount_P, iDisplacement_P, SendBuffer_VI)
 
   end subroutine PW_get_for_gm
-
   !============================================================================
-
   subroutine PW_put_from_gm(nTotalLine, Buffer_I)
     use ModPWOM, ONLY: nLine,iLineGlobal
     use ModGmPressure
@@ -465,24 +443,25 @@ contains
 
     integer            :: iLine
 
-    character (len=*),parameter :: NameSub = 'PW_put_from_gm'
+    character(len=*), parameter:: NameSub = 'PW_put_from_gm'
     !--------------------------------------------------------------------------
 
-    !Make sure pressure array is allocated, if it isn't then allocate
+    ! Make sure pressure array is allocated, if it isn't then allocate
     if(.not.allocated(p_I)) then
        allocate(p_I(nLine))
     end if
 
-    !Fill pressure array with GM pressure
+    ! Fill pressure array with GM pressure
     do iLine=1,nLine
        p_I(iLine) = Buffer_I(iLineGlobal(iLine))
     enddo
 
-    !Convert from SI to CGS
+    ! Convert from SI to CGS
     p_I = p_I * 10.0  ! N/m^2 --> dynes/cm^2
 
-    UseGmToPw = Couple_CC(GM_, PW_) % DoThis  
+    UseGmToPw = Couple_CC(GM_, PW_) % DoThis
 
   end subroutine PW_put_from_gm
-
+  !============================================================================
 end module PW_wrapper
+!==============================================================================
