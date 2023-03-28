@@ -223,15 +223,18 @@ Default value is "ascii".
   <parameter name="DtSavePlot" type="real" min="-1" default="10.0" />
   <parameter name="DnSavePlot" type="integer" min="-1" default="-1" />
   <parameter name="DoSaveFirst" type="logical" default="T" />
+  <parameter name="DoAppendPlot" type="logical" default="F" />
 
 #SAVEPLOT
 10.0			DtSavePlot
 -1			DnSavePlot
 T			DoSaveFirst
+F			DoAppendPlot
 
 The frequency which plot files are written out are defined here. 
-As is whether or not to save a plot on the first call. The 
-default values are shown.
+DoSaveFirst determines whether or not to save a plot on the first call.
+DoAppendPlot sets appending or not to previous plot file.
+Default values are shown.
 </command>
 
 <command name="SAVEPLOTELECTRODYNAMICS">
