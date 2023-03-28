@@ -29,7 +29,7 @@ PWOMXML:
 	@perl -e 'for $$i (glob("../../PARAM.XML ../../[A-Z][A-Z]/*/PARAM.XML")){`${SCRIPTDIR}/XmlToTex.pl $$i >> PWOMXML.tex`}'
 	@echo "${SCRIPTDIR}/XmlToTex.pl */PARAM.XML > PWOMXML.tex"
 
-PWOM.dvi: \
+PWOM.pdf: \
 	PWOM.tex \
 	HEADER.tex \
 	PWOM_introduction.tex \
