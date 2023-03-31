@@ -224,40 +224,44 @@ test_rundir:
 test_run:
 	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe | tee runlog
 
+BLESS=NO
+
+DIFFNUM = ${SCRIPTDIR}/DiffNum.pl -BLESS=${BLESS}
+
 test_check:
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0001.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0001.dat \
 		> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0002.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0002.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0003.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0003.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0004.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0004.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0005.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0005.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0006.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0006.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0007.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0007.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-9 \
+	-@(${DIFFNUM} -b -r=1e-9 \
 		${TESTDIR}/PW/restartOUT/restart_iline0008.dat \
 		data/output/${PLANET}/${SEDIR}/restart_iline0008.dat \
 		>> test_${PLANET}${MYTEST}.diff)
-	-@(${SCRIPTDIR}/DiffNum.pl -b -r=1e-7 \
+	-@(${DIFFNUM} -b -r=1e-7 \
 		${TESTDIR}/PW/plots/north_plots_iline0001.out \
 		data/output/${PLANET}/${SEDIR}/north_plots_iline0001.out \
 		> test_${PLANET}${MYTEST}_plots.diff)
