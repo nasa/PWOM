@@ -5,7 +5,7 @@ F		IsCentrifugal
 1.0		DtSavePlot
 -1		DnSavePlot
 F		SaveFirst
-T			DoAppendPlot
+F			DoAppendPlot
 
 #SCHEME
 Rusanov		TypeSolver
