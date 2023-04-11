@@ -325,4 +325,4 @@ allclean:
 	cd srcTWOSTREAM; make distclean
 	cd srcSTET; make distclean
 	cd doc/Tex; make distclean
-	rm -rf Makefile.planet *~ bin ${INSTALLFILES}
+	rm -rf config.log Makefile.planet *~ bin ${INSTALLFILES}
