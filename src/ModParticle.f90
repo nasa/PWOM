@@ -55,7 +55,7 @@ Module ModParticle
   
   !Output Params outputs
   real,public :: DtSaveProfile=300
-  real,public :: DtSaveDF=60.0
+  real,public :: DtSaveDF=5.0
   logical,public :: DoSavePlotParticle = .false.
   
   real :: DtSplitJoin=60.0
@@ -65,10 +65,17 @@ Module ModParticle
   !integer::iAltsDF_I(nSaveDfAlts)=(/26,76,151/)
   !real,allocatable :: SaveDfAlts_I(:)
 
-  integer,parameter :: nSaveDfAlts=14
+  integer,parameter :: nSaveDfAlts=5
 
-  integer::iAltsDF_I(nSaveDfAlts)=(/1,13,25,37,49,61,73,85,97,109,121,174,175,176/)
+  integer::iAltsDF_I(nSaveDfAlts)=(/1,12,25,50,75/)
 
+  !for spectrum output choose if we have a fixed energy output grid or if we
+  !just use the thermal spread to define the grid.
+  integer, public :: nSpecGrid=25
+  real, allocatable, public :: EnerSpecGrid_C(:),EnerSpecGrid_F(:)
+  real, public :: EmaxSpecGrid=1.0e-1, EminSpecGrid=100.0
+  character(len=100),public :: TypeSpecGrid='log' !log or linear
+  
 !  integer,parameter :: nSaveDfAlts=1
 !  integer::iAltsDF_I(nSaveDfAlts)=(/1/)
   !hold the buried lines
@@ -1166,77 +1173,82 @@ contains
     integer,intent(in) :: iSpecies,iCell
     integer :: nParticleInCell
     
-    real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
-    real :: dVel, vMin, vMax,dTheta, ThetaMin, ThetaMax
+    !real :: density,uBulkPar,uBulkPerp,Pressure,Temp, uTherm
+    !real :: dVel, vMin, vMax,dTheta, ThetaMin, ThetaMax
     real :: Velx,Vely,phi
-    real, parameter :: VelSc = 50e5
-    real :: Tpar,Tperp,Hpar,Hperp
-    integer, parameter :: nVel = 100, nTheta = 18, Flux_=1, Angle_=2, E_=3, nVar=3
-    real :: v_C(nVel),Energy_C(nVel), Theta_C(nTheta)
-    real :: Velocity, Theta, DeltaE
-    integer :: iVel, iParticle, iTheta
+    real, parameter :: VelSc = 0.0!VelSc = 50e5
+
+    integer, parameter :: nTheta = 18, Flux_=1, Angle_=2, E_=3, nVar=3
+    
+    real :: Velocity, Theta, DeltaE, Energy
+    integer :: iVel, iParticle, iEnergy!,iTheta
+    real :: dLogE, dE
     real, allocatable   :: Coord_I(:), PlotState_IV(:,:)
     !grid parameters
     integer, parameter :: nDim =1
     !plot variables
     character(len=100) :: NamePlot
-    character(len=100),parameter :: NamePlotVar='E[KeV]  Flux[cm-2sr-1s-1KeV-1] AveAngle[deg] E[KeV] g'
+    character(len=100),parameter :: NamePlotVar='E[eV]  Flux[cm-2sr-1s-1eV-1] AveAngle[deg] E[eV] g'
     character(len=*),parameter :: NameHeader='distribution function'
     character(len=5) :: TypePlot='ascii'
     !here true particles is particles in energy bin, unlike other routines
     real,allocatable :: TrueParticles_I(:) 
 
-    real,parameter :: cEvToKeV = .001, cErgToEv = 6.242e11
+    real,parameter :: cEvToKeV = 1.0e-3, cErgToEv = 6.242e11
     integer,save :: iCounter=0
+
+    logical, save :: IsFirstCall = .true.
     !---------------------------------------------------------------------------
-    if(.not.allocated(TrueParticles_I))allocate(TrueParticles_I(nVel))
+
+
+    if (IsFirstCall) then
+       allocate(EnerSpecGrid_C(nSpecGrid))
+       allocate(EnerSpecGrid_F(nSpecGrid+1))
+       ! create the energy grid based on type
+       select case(TypeSpecGrid)
+       case('log')
+          dLogE = (log10(EmaxSpecGrid)-log10(EminSpecGrid))/nSpecGrid
+          do iEnergy=1,nSpecGrid
+             EnerSpecGrid_C(iEnergy) = 10.0**(log10(EminSpecGrid) &
+                  +(real(iEnergy)-0.5)*dLogE)
+             EnerSpecGrid_F(iEnergy) = 10.0**(log10(EminSpecGrid) &
+                  +(real(iEnergy)-1.0)*dLogE)
+             write(*,*) 'iEnergy,EnerSpecGrid_C(iEnergy)',iEnergy,EnerSpecGrid_C(iEnergy)
+          enddo
+          EnerSpecGrid_F(nSpecGrid+1) = 10.0**(log10(EminSpecGrid) &
+                  +real(nSpecGrid)*dLogE)
+       case('linear')
+          dE = (EmaxSpecGrid-EminSpecGrid)/nSpecGrid
+          do iEnergy=1,nSpecGrid
+             EnerSpecGrid_C(iEnergy) = EminSpecGrid  &
+                  +(real(iEnergy)-0.5)*dE
+             EnerSpecGrid_F(iEnergy) = EminSpecGrid  &
+                  +(real(iEnergy)-1.0)*dE
+          enddo
+          EnerSpecGrid_F(nSpecGrid+1) = EminSpecGrid  &
+                  +real(nSpecGrid)*dE
+       case DEFAULT
+          call con_stop('PW ERROR: TypeSpecGrid not defined')
+       end select
+       IsFirstCall = .false.
+    endif
+    
+    if(.not.allocated(TrueParticles_I))allocate(TrueParticles_I(nSpecGrid))
+           
     TrueParticles_I(:)=0
         
     nParticleInCell=nSortedParticle_II(iSpecies,iCell)
     if(nParticleInCell==0)return
-    allocate(Coord_I(nVel),PlotState_IV(nVel,nVar))
+    allocate(Coord_I(nSpecGrid),PlotState_IV(nSpecGrid,nVar))
     
-    ! get moments in cell so we can calculate thermal velocity
-    call calc_moments_cell(iSpecies,iCell,&
-         density,uBulkPar,uBulkPerp,Pressure,Temp,Tpar,Tperp,Hpar,Hperp)
-    
-    !write(*,*) 'density,uBulkPar,uBulkPerp,Pressure,Temp'&
-   !      ,density,uBulkPar,uBulkPerp,Pressure,Temp
-    ! calculate thermal velocity
-
-    uTherm=sqrt(8.0*cBoltzmannCGS*Temp/Mass_I(iSpecies)/cPi)
-
-    ! discretize velocity space, using magnitude and angle
-    ! constrain binning to 10 thermal velocities in mag
-    ! with grid size .1 uTherm, and 5 deg PA steps 
-    vMin=0.0
-    vMax=10.0*uTherm
-    ThetaMin=0.0
-    ThetaMax=cPi
-    dVel=(vMax-vMin)/nVel
-    dTheta=(ThetaMax-ThetaMin)/nTheta
-    do iVel=1,nVel
-       v_C(iVel)=vMin+iVel*dVel
-    enddo
-
-    do iVel=1,nVel
-       Energy_C(iVel) = 0.5*Mass_I(iSpecies)*v_C(iVel)**2 * cErgToEv*cEvToKeV
-    enddo
-
-    do iTheta=1,nTheta
-       Theta_C(iTheta)=ThetaMin+iTheta*dTheta
-    enddo
-
-    do iVel=1,nVel
-       Coord_I(iVel)=Energy_C(iVel)
-    enddo
-    
+    Coord_I(:)=EnerSpecGrid_C(:)
+        
     PlotState_IV=0.0
     !Sort particles into bins
     do iParticle=1,nParticleInCell
        !get theta and vel for particle
        Velocity = &
-            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar*2.0 &
+            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar**2.0&
             + SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp**2.0)
 
        !kludge here we add the spacecraft velocity
@@ -1245,9 +1257,11 @@ contains
        Velx=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp*cos(phi)
        Vely=SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp*sin(phi)
        Velocity = &
-            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar*2.0 &
+            sqrt(SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar**2.0&
             + (Velx-VelSc)**2.0 + Vely**2)
 
+       Energy = 0.5*Mass_I(iSpecies)*Velocity**2 * cErgToEv!*cEvToKeV
+       
        !end kludge
 
 
@@ -1255,15 +1269,21 @@ contains
             SortParticles_III(iParticle,iSpecies,iCell)%Particle%vperp,&
             SortParticles_III(iParticle,iSpecies,iCell)%Particle%vpar)
        
-       iTheta =floor((Theta-ThetaMin )/dTheta)
-       iVel =floor((Velocity-vMin )/dVel)
-       
-       if (iVel>0 .and.iVel<=nVel) then
-          if (iVel==nVel) then
-             DeltaE = (Energy_C(iVel)-Energy_C(iVel-1))*cEvToKeV
-          else
-             DeltaE = (Energy_C(iVel+1)-Energy_C(iVel))*cEvToKeV
+       !iTheta =floor((Theta-ThetaMin )/dTheta)
+
+       !find which bin (iVel) we are in
+       iVel =-1
+       ENERGY_LOCATE: do iEnergy=1,nSpecGrid
+          if (EnerSpecGrid_F(iEnergy)<Energy &
+               .and. EnerSpecGrid_F(iEnergy+1)>=Energy) then
+             iVel=iEnergy
+             exit ENERGY_LOCATE
           endif
+       enddo ENERGY_LOCATE
+    
+       if (iVel>0 .and.iVel<=nSpecGrid) then
+          DeltaE = (EnerSpecGrid_F(iVel+1)-EnerSpecGrid_F(iVel))!*cEvToKeV
+              
           PlotState_IV(iVel,Flux_)=&
                PlotState_IV(iVel,Flux_)&
            +SortParticles_III(iParticle,iSpecies,iCell)%Particle%NumPerParticle&
@@ -1282,18 +1302,18 @@ contains
     
     ! divide the angle*particles in each velocity bin by the
     ! number of particles to get the average theta
-    do iVel = 1,nVel
-       if (TrueParticles_I(iVel) == 0) then
-          PlotState_IV(iVel,Angle_) = 0.0
+    do iEnergy = 1,nSpecGrid
+       if (TrueParticles_I(iEnergy) == 0) then
+          PlotState_IV(iEnergy,Angle_) = 0.0
        else
-          PlotState_IV(iVel,Angle_) = PlotState_IV(iVel,Angle_)&
-               /TrueParticles_I(iVel)
+          PlotState_IV(iEnergy,Angle_) = PlotState_IV(iEnergy,Angle_)&
+               /TrueParticles_I(iEnergy)
        endif
     enddo
-
+    
     !for now add energy as a variable as well as a coordinate so that I can
     !plot with the line class of spacepy. later we will have to update the class
-    PlotState_IV(:,E_)= Energy_C(:)
+    PlotState_IV(:,E_)= EnerSpecGrid_C(:)
 
     !Plot 
     write(NamePlot,"(a,a,a,i5.5,a,i5.5,a)") &

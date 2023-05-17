@@ -252,6 +252,27 @@ be saved with this command. The frequency of output is determined by the
 DtPlotElectrodynamics parameter.
 </command>
 
+<command name="PLOTENERGYGRID">
+  <parameter name="TypeSpecGrid" type="string" length="100" />
+  <parameter name="EminSpecGrid" type="real" min="0" default="0.1" />
+  <parameter name="EmaxSpecGrid" type="real" min="0" default="100.0" />
+  <parameter name="nSpecGrid" type="integer" min="2" default="25.0"/>
+  
+	
+#PLOTENERGYGRID
+log			TypeSpecGrid
+0.1                     EminSpecGrid
+100.0                   EmaxSpecGrid
+25			nSpecGrid
+
+These are parameters for the flux spectrum particle output grid. It defines the type of
+grid (linear or log), the minimum energy, the maximum energy, and the number of grid
+points. Defaults are shown. Note that this is just the output grid and does not affect the 
+calculation itself.
+</command>
+
+
+
 <command name="STATICATMOSPHERE">
   <parameter name="UseStaticAtmosphere" type="logical" default="F" />
 

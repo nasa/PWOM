@@ -26,7 +26,8 @@ subroutine PW_set_parameters(NameAction)
        SpectralIndexAur, rWaveRefAur, E2waveRefAur, fWaveRefAur, &
        SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap, &
        DoSavePlotParticle,DtSaveProfile, DtSaveDF,&
-       nWaveFile, NameWaveFile
+       nWaveFile, NameWaveFile,nSpecGrid,&
+       TypeSpecGrid, EminSpecGrid, EmaxSpecGrid
   use ModReGrid, ONLY: DoRegrid,DtRegrid,DoSavePoints
   use ModPwIndices, ONLY: UsePwIndicesFile 
   implicit none
@@ -36,8 +37,8 @@ subroutine PW_set_parameters(NameAction)
   character (len=100) :: StringLine
   character (len=100) :: StringLine_I(100)
   character (len=100) :: NameCommand
-  real:: Vx, Bx, Bz, By, HPI
-  integer:: iDate, iError
+  real:: Vx, Bx, Bz, By, HPI, Energy
+  integer:: iDate, iError, iEnergy
 
   character (len=*), parameter  :: NameSub = 'PW_set_parameters'
   !---------------------------------------------------------------------------
@@ -291,10 +292,13 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DoSavePlotParticle',  DoSavePlotParticle)
         call read_var('DtSaveProfile',  DtSaveProfile)
         call read_var('DtSaveDF',  DtSaveDF)
-        
 
-
-        
+     case('#PLOTENERGYGRID')
+        call read_var('TypeSpecGrid' ,     TypeSpecGrid)
+        call read_var('EminSpecGrid' ,     EminSpecGrid)
+        call read_var('EmaxSpecGrid' ,     EmaxSpecGrid)
+        call read_var('nSpecGrid'    ,     nSpecGrid)
+                
      case('#WPI')
         call read_var('TypeWPI',  TypeWPI)
         if (TypeWPI == 'File') then
