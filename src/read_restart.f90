@@ -3,7 +3,8 @@
 
 subroutine PW_read_restart
   use ModNumConst,    ONLY: cDegToRad
-  use ModIoUnit,      ONLY: io_unit_new,UnitTmp_
+  use ModIoUnit,      ONLY: io_unit_new, UnitTmp_
+  use ModUtilities,   ONLY: open_file, close_file
   use ModPwom,        ONLY: nLine, Time, GeoMagLat_I, GeoMagLon_I, nStep, &
                             ThetaLine_I, PhiLine_I , State_CVI, nAlt, &
                             NameRestartIn, Dt_I,IsNorth_I
@@ -23,7 +24,7 @@ subroutine PW_read_restart
   !read in restart data for each line
   allocate(IsNorth_I(nLine))
   do iLine=1,nLine
-     OPEN(UNIT=UnitTmp_, FILE=NameRestartIn(iLine), STATUS='OLD')
+     call open_file(FILE=NameRestartIn(iLine), STATUS='OLD')
      READ (UnitTmp_,*) Time,Dt_I(iLine),nAltFile, nStep
      READ (UnitTmp_,*) GeoMagLat_I(iLine),GeoMagLon_I(iLine)
      
@@ -50,7 +51,7 @@ subroutine PW_read_restart
              i=1,nAltFile)
      enddo
      
-     CLOSE(UNIT=UnitTmp_)
+     call close_file
   enddo
 
   !check that restart data has same resolution as called for in the simulation
