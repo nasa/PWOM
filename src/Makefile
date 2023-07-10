@@ -6,9 +6,8 @@ SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRI
 include ../Makefile.conf
 
 include Makefile.planet
-include Makefile.DEPEND
-
-include Makefile.RULES
+-include Makefile.DEPEND
+-include Makefile.RULES
 
 MODULES = \
 	ModPwIndices.o\
