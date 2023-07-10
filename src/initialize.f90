@@ -1,7 +1,10 @@
 !  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine PW_initialize
-  
+
+  ! Initialize PWOM
+
+  use ModUtilities, ONLY: CON_stop, open_file, touch_file
   use ModPlanetConst, ONLY: Planet_, NamePlanet_I
   use ModNumConst, ONLY: cDegToRad
   use ModMpi
@@ -34,23 +37,18 @@ subroutine PW_initialize
   integer:: ns, iPe, iError,iIon
   integer:: iYear, iDOY
 
-  integer, external :: julianday
+  integer, external:: julianday
 
   ! AMU in grams
-  real, parameter :: AMUinGrams=1.6606655E-24
+  real, parameter:: AMUinGrams=1.6606655E-24
   
   !for particles
-  real,allocatable :: Density_IC(:,:),Velocity_IC(:,:),Temperature_IC(:,:)
-  
+  real, allocatable:: Density_IC(:,:), Velocity_IC(:,:), Temperature_IC(:,:)
   !---------------------------------------------------------------------------
-  !***************************************************************************
-  !  Set the number of fieldlines that each processor solves for
-  !***************************************************************************
-  
-  if (nTotalLine < nProc) &
-       call con_stop(&
-       "PW ERROR:nTotalLine<nProc. Reduce number of procs for PW in LAYOUT.in")
+  if (nTotalLine < nProc) call CON_stop(&
+       "PW ERROR: nTotalLine < nProc. Reduce number of PEs for PW")
 
+  ! Set the number of fieldlines that each processor solves for
   if (iProc < mod(nTotalLine,nProc)) then
      nLine= (nTotalLine+nProc-1)/nProc
   else
@@ -133,19 +131,16 @@ subroutine PW_initialize
         write(NameOutput(iLine),"(a,i4.4,a)") &
              'PW/log_iline',iLineGlobal(iLine),'.out'   
         iUnitOutput(iLine)  = io_unit_new()
-        open(iUnitOutput(iLine),FILE=NameOutput(iLine))    
+        call open_file(iUnitOutput(iLine), FILE=NameOutput(iLine))    
      elseif(nLog ==0) then
         !do nothing in this case
      elseif(nLog==iLineGlobal(iLine)) then
         write(NameOutput(iLine),"(a,i4.4,a)") &
              'PW/log_iline',iLineGlobal(iLine),'.out'      
         iUnitOutput(iLine)  = io_unit_new()
-        open(iUnitOutput(iLine),FILE=NameOutput(iLine))     
+        call open_file(iUnitOutput(iLine), FILE=NameOutput(iLine))     
      else
-     end if
-
-     
-     
+     end if     
   enddo
 
 !******************************************************************************
@@ -173,13 +168,8 @@ subroutine PW_initialize
         write(NameGraphics(iLine),"(a,i4.4,a)") &
              'PW/plots/south_plots_iline',iLineGlobal(iLine),'.out'
      endif
+     call touch_file(NameGraphics(iLine))
 
-     if (DoAppendPlot) then 
-        open(UnitTmp_,FILE=NameGraphics(iLine),status="old", position="append")
-     else
-        open(UnitTmp_,FILE=NameGraphics(iLine),STATUS='replace')
-     endif
-     close(UnitTmp_)
   enddo
   !****************************************************************************
   ! Set vertical field-line grid
