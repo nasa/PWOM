@@ -4,9 +4,7 @@ SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRI
 
 include ../Makefile.conf
 
-include Makefile.DEPEND
-
-include Makefile.RULES
+-include Makefile.DEPEND
 
 MODULES = \
 	ModGrid.o\
@@ -20,9 +18,7 @@ MODULES = \
 	Mod3DAtmos.o
 
 
-METHODS = \
-
-LIBOBJECTS = ${MODULES} ${METHODS}
+LIBOBJECTS = ${MODULES}
 
 EXEOBJECTS = main_twostream.o ${LIBOBJECTS}
 
@@ -37,8 +33,6 @@ LIB:	DEPEND
 	@echo
 	@echo ${MY_LIB} has been brought up to date.
 	@echo
-
-
 
 ${MY_LIB}: ${LIBOBJECTS}
 	rm -f ${MY_LIB}

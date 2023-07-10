@@ -4,10 +4,6 @@ SEARCHDIR = -I${SHAREDIR}
 
 include ../Makefile.conf
 
-include Makefile.DEPEND
-
-include Makefile.RULES
-
 MODULES = \
 	ModGitmAtmos.o
 
