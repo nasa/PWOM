@@ -1,37 +1,35 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+! portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
-!******************************************************************************
-!  This subroutine gets the electrodynamic parameters, and gets the convection
-!  velocity. 
-!******************************************************************************
 subroutine PW_get_electrodynamics
+
+  !  get the electrodynamic parameters and the convection velocity. 
+
+  use ModPWOM
   use ModNumConst, ONLY: cTwoPi
   use ModIoUnit, ONLY: UnitTmp_
-  use ModPWOM
-  use ModNumConst, ONLY:cDegToRad
+  use ModNumConst, ONLY: cDegToRad
   use ModAurora , ONLY: set_aurora
-  use ModCommonVariables,ONLY:Ap
-  use ModUtilities, ONLY: CON_stop
+  use ModCommonVariables, ONLY: Ap
+  use ModUtilities, ONLY: CON_stop, open_file, close_file
+
   implicit none
 
-  character (len=100), dimension(100):: Lines_I
-  integer :: iError
-  logical,save :: IsFirst = .true.
-  real :: dTheta1, dPhi1
+  character(len=100):: Lines_I(100)
+  integer:: iError
+  logical:: IsFirst = .true.
+  real:: dTheta1, dPhi1
   !---------------------------------------------------------------------------
-  
   if ((IsStandAlone .or. .not. UseIE) .and. .not.UseWeimer) then
-     open(UnitTmp_, FILE=NamePhiNorth)  
+     call open_file(FILE=NamePhiNorth)  
      if(IsFirst)then
         call allocate_ie_variables(257, 65)
-        do iPhi=1,nPhi
-           do iTheta=1,nTheta
-              read(unit=UnitTmp_,fmt='(6(1PE13.5))') &
-                   Theta_G(iPhi,iTheta),Phi_G(iPhi,iTheta),SigmaH_G(iPhi,iTheta),&
-                   SigmaP_G(iPhi,iTheta),Jr_G(iPhi,iTheta),Potential_G(iPhi,iTheta)
-              
-           enddo
-        enddo
+        do iPhi = 1, nPhi; do iTheta = 1, nTheta
+           read(unit=UnitTmp_,fmt='(6(1PE13.5))') &
+                Theta_G(iPhi,iTheta), Phi_G(iPhi,iTheta), &
+                SigmaH_G(iPhi,iTheta), SigmaP_G(iPhi,iTheta), &
+                Jr_G(iPhi,iTheta), Potential_G(iPhi,iTheta)
+        enddo; enddo
         !  Change angles to radians
         Theta_G(1:nPhi,1:nTheta) = Theta_G(1:nPhi,1:nTheta)*cDegToRad
         Phi_G  (1:nPhi,1:nTheta) = Phi_G  (1:nPhi,1:nTheta)*cDegToRad
@@ -39,35 +37,35 @@ subroutine PW_get_electrodynamics
         Potential_G(1:nPhi,1:nTheta) = Potential_G(1:nPhi,1:nTheta)*1.0e3
         !  Convert microA/m^2 --> A/m^2
         Jr_G(1:nPhi,1:nTheta) = Jr_G(1:nPhi,1:nTheta) * 1.0e-6 
-        close(UnitTmp_)   
+        call close_file
      endif
   elseif (UseWeimer) then
      call get_weimer_potential
   endif
-  
+
   ! Set EIE for Aurora when weimer not used
   if (.not.UseWeimer .and. UseAurora .and. IsFirst) then
-          Lines_I(1) = "#BACKGROUND"
-          Lines_I(2) = "EIE/"
-          Lines_I(3) = "zero"
-          Lines_I(4) = "ihp"
-          Lines_I(5) = "idontknow"
-          Lines_I(6) = ""
-          Lines_I(7) = "#DEBUG"
-          Lines_I(8) = "0"
-          Lines_I(9) = "0"
-          Lines_I(10) = ""
-          Lines_I(11) = "#END"
-          
+     Lines_I(1) = "#BACKGROUND"
+     Lines_I(2) = "EIE/"
+     Lines_I(3) = "zero"
+     Lines_I(4) = "ihp"
+     Lines_I(5) = "idontknow"
+     Lines_I(6) = ""
+     Lines_I(7) = "#DEBUG"
+     Lines_I(8) = "0"
+     Lines_I(9) = "0"
+     Lines_I(10) = ""
+     Lines_I(11) = "#END"
+
      call EIE_set_inputs(Lines_I)
-     
+
      call EIE_Initialize(iError)
      if (iError /= 0) then
         call con_stop('PW_ERROR: EIE_Initialize failed at get_electrodynamic')
      endif
 
   end if
-  
+
   ! Set AvE_G and Eflux_G when using empirical Aurora
   if (UseAurora) then
      call set_aurora
@@ -75,9 +73,8 @@ subroutine PW_get_electrodynamics
      Eflux_G(1:nPhi,1:nTheta) = ElectronEnergyFlux_C   (1:nPhi,1:nTheta)
   end if
 
-!******************************************************************************
-!  Calc Bfield components
-!******************************************************************************
+  !  Calc Bfield components
+
   OmegaPlanet    = cTwoPi/24.0/3600.
   rPlanet        = 6378000.0
   rLowerBoundary = rPlanet+110.0e3
@@ -87,14 +84,13 @@ subroutine PW_get_electrodynamics
      do iTheta=1,nTheta
         Br_G(iPhi,iTheta)     = -Bcoef*2.0*cos(Theta_G(iPhi,iTheta))
         Btheta_G(iPhi,iTheta) = -Bcoef*sin(Theta_G(iPhi,iTheta))
-    enddo
+     enddo
   enddo
-  
+
   BmagnitudeSquared_G(1:nPhi,1:nTheta) = &
        Br_G(1:nPhi,1:nTheta)**2 + Btheta_G(1:nPhi,1:nTheta)**2
-!******************************************************************************
-!  Fill Ghost cells
-!******************************************************************************
+
+  !  Fill Ghost cells
   Theta_G    (nPhi+1,1:nTheta) = Theta_G    (2,1:nTheta) 
   Phi_G      (nPhi+1,1:nTheta) = Phi_G      (2,1:nTheta)
   SigmaH_G   (nPhi+1,1:nTheta) = SigmaH_G   (2,1:nTheta)
@@ -141,10 +137,7 @@ subroutine PW_get_electrodynamics
      AvE_G (:,:) = 0.0
      Eflux_G(:,:) = 0.0
   endif
-
-!******************************************************************************
-!  Calc electric field from E=-grad Potential
-!******************************************************************************
+  !  Calc electric field from E=-grad Potential
   do iPhi=1,nPhi
      do iTheta=1,nTheta
         DTheta1=abs(Theta_G(iPhi,iTheta)-Theta_G(iPhi,iTheta-1))
@@ -160,26 +153,22 @@ subroutine PW_get_electrodynamics
                 / ((rLowerBoundary)*2.0*DPhi1  &
                 * sin(Theta_G(iPhi,iTheta)))
         endif
-    enddo
+     enddo
   enddo
   Er_C(:,:) = 0.0
 
-!******************************************************************************
-!  Calc VelocityExB drift from E and B, add corotation velocity to uExBphi_C
-!******************************************************************************
-  
-
+  !  Calc VelocityExB drift from E and B, add corotation velocity to uExBphi_C
   do iPhi=1,nPhi
      do iTheta=1,nTheta
         uExBtheta_C(iPhi,iTheta) = &
              (Ephi_C(iPhi,iTheta)*Br_G(iPhi,iTheta)) &
              / BmagnitudeSquared_G(iPhi,iTheta)
-        
+
         uExBphi_C(iPhi,iTheta)   = &
              (-Etheta_C(iPhi,iTheta)*Br_G(iPhi,iTheta)) &
              / BmagnitudeSquared_G(iPhi,iTheta) &
              + OmegaPlanet*rPlanet*sin(Theta_G(iPhi,iTheta)) !corotation
-        
+
         uExBr_C(iPhi,iTheta)     = &
              (-Ephi_C(iPhi,iTheta)*Btheta_G(iPhi,iTheta)) &
              / BmagnitudeSquared_G(iPhi,iTheta)
@@ -189,12 +178,12 @@ subroutine PW_get_electrodynamics
   enddo
   uExBtheta_C(:,1) = uExBtheta_C(:,2)
   uExBphi_C  (:,1) = uExBphi_C  (:,2)
-  
-!  if (.not.DoMoveLine) Then 
-!     uExBtheta_C(:,:) = 0.0
-!     uExBphi_C  (:,:) = 0.0
-!     uExBr_C    (:,:) = 0.0
-!  endif
+
+  !  if (.not.DoMoveLine) Then 
+  !     uExBtheta_C(:,:) = 0.0
+  !     uExBphi_C  (:,:) = 0.0
+  !     uExBr_C    (:,:) = 0.0
+  !  endif
 
   if (.not.UseJr) Then 
      Jr_G(:,:) = 0.0
@@ -203,6 +192,6 @@ subroutine PW_get_electrodynamics
   IsFirst = .false.
 
   !set auroral heating 
-!  call set_theta0(nPhi,nTheta,uExBphi_C,uExBtheta_C,Theta_G)
-!  call set_Emax(Ap(1))
+  !  call set_theta0(nPhi,nTheta,uExBphi_C,uExBtheta_C,Theta_G)
+  !  call set_Emax(Ap(1))
 end subroutine PW_get_electrodynamics
