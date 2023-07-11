@@ -21,7 +21,7 @@ subroutine PW_get_electrodynamics
   real:: dTheta1, dPhi1
   !---------------------------------------------------------------------------
   if ((IsStandAlone .or. .not. UseIE) .and. .not.UseWeimer) then
-     call open_file(FILE=NamePhiNorth)  
+     call open_file(FILE=NamePhiNorth, STATUS="OLD")
      if(IsFirst)then
         call allocate_ie_variables(257, 65)
         do iPhi = 1, nPhi; do iTheta = 1, nTheta
