@@ -31,7 +31,7 @@ my $NewPlanet;
 #PWOM non-SWMF developers should use the following gitdir
 #my $GITDIR   = "https://github.com/MSTEM-QUDA";
 #SWMF developers should use the following gitdir
-my $GITDIR   = "git\@gitlab.umich.edu:swmf_software";
+my $GITDIR   = "git\@github.com:SWMFsoftware";
 
 my $config   = "share/Scripts/Config.pl";
 my $gitclone = "share/Scripts/gitclone -s";
