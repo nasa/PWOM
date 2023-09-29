@@ -49,6 +49,8 @@ module ModCommonVariables
   Logical :: UsePhotoElectronHeatFlux = .true., UseAuroralHeatFlux = .true., &
              UseCuspHeatFlux = .true.
 
+  Logical :: UseFluidWPI = .false.
+  
   REAL QOXYG(MaxGrid),QHEL(MaxGrid),QHYD(MaxGrid),&
        QELECT(MaxGrid)
   REAL ELFXIN
