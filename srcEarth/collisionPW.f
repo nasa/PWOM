@@ -7,12 +7,21 @@ CALEX then calculates the momentum and energy collision terms
       use ModPWOM  ,ONLY: UseAurora
       use ModPhotoElectron
       use ModCommonPlanet,ONLY: HLPO,HLPH,HLPHE,HLPE
+!      use ModParticle,    ONLY: SpectralIndexAur,rWaveRefAur,E2waveRefAur,fWaveRefAur,SpectralIndexCap, rWaveRefCap, E2waveRefCap, fWaveRefCap
       
       integer, intent(in) :: N 
       real,    intent(in) :: StateIn_GV(-1:N+2,nVar)
       
       real :: dT_II(nIon,nSpecies),dU2_II(nIon,nSpecies)
       real :: AuroralHeatCoef
+
+      !WPI values from Bartakat and Schunk 2001
+      real :: DperpAur_I(2) =[6.94e5,4.45e7],DexpAur_I(2)=[13.3,7.95]
+      real :: DperpCap_I(2) =[9.55e2,5.77e3],DexpCap_I(2)=[13.3,7.95]
+      logical :: IsCuspOrAurora
+      real, parameter :: CuspAuroraPrecipThreshold=0.5
+
+      IsCuspOrAurora=(EfluxIE>CuspAuroraPrecipThreshold)
 C     
 C
 C
@@ -294,7 +303,30 @@ CALEX These are the energy collision terms as seen in eq 4.86 in Nagy
          !add the energy deposition from SEs
          Source_CV(I,pE_) =Source_CV(I,pE_)+SeHeat_C(I)
       endif
-         
+
+      if(UseFluidWPI) then
+         ! add heating term due to WPI =4*rho*D (Glocer 2016 eq 15.2)
+         if (IsCuspOrAurora) then
+            Source_CV(I,pO_) =
+     &           Source_CV(I,pO_)
+     &           + 4.0*StateIn_GV(I,RhoO_)*DperpAur_I(Ion1_)
+     &           *(RAD(I)/RAD(1))**DexpAur_I(Ion1_)
+            Source_CV(I,pH_) =
+     &           Source_CV(I,pH_)
+     &           + 4.0*StateIn_GV(I,RhoH_)*DperpAur_I(Ion2_)
+     &           *(RAD(I)/RAD(1))**DexpAur_I(Ion2_)
+         else 
+            Source_CV(I,pO_) =
+     &           Source_CV(I,pO_)
+     &           + 4.0*StateIn_GV(I,RhoO_)*DperpCap_I(Ion1_)
+     &           *(RAD(I)/RAD(1))**DexpCap_I(Ion1_)
+            Source_CV(I,pH_) =
+     &           Source_CV(I,pH_)
+     &           + 4.0*StateIn_GV(I,RhoH_)*DperpCap_I(Ion2_)
+     &           *(RAD(I)/RAD(1))**DexpCap_I(Ion2_)
+           
+         endif
+      endif
 !      write(*,*) I, (StateIn_GV(I,RhoO_)/Mass_I(Ion1_)**2.0)/ AuroralHeatCoefLower*HeatingRate_C(I), 
 !     &     Source_CV(I,pO_),Source_CV(I,pH_),Source_CV(I,pHe_)
 C

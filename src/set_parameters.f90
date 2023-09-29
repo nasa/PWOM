@@ -11,7 +11,7 @@ subroutine PW_set_parameters(NameAction)
   use ModReadParam
   use ModCommonVariables, ONLY: F107,F107A,AP,UseStaticAtmosphere,DrBnd,&
                                 UsePhotoElectronHeatFlux,UseAuroralHeatFlux, &
-                                UseCuspHeatFlux
+                                UseCuspHeatFlux, UseFluidWPI
   use ModPwTime
   use ModPwPlots, ONLY: TypePlot
   use ModPwWaves, ONLY: UseWaveAcceleration 
@@ -316,6 +316,9 @@ subroutine PW_set_parameters(NameAction)
            call read_var('E2WaveRefCap',  E2WaveRefCap)
            call read_var('fWaveRefCap', fWaveRefCap)
         end if
+        
+     case('#FLUIDWPI')
+        call read_var('UseFluidWPI',  UseFluidWPI)
         
      case('#UPPERBC')
         call read_var('NameUpperBC',  NameUpperBC)
