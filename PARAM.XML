@@ -369,7 +369,7 @@ maximum number of iterations for non-timeaccurate mode.
 <commandgroup name="PHYSICS">
 
 <command name="FLUIDPWI">
-  <parameter name="UseFluidWPI" type="logical" default="F" />
+  <parameter name="UseFluidPWI" type="logical" default="F" />
 
 #FLUIDPWI
 T               UseFluidPWI
