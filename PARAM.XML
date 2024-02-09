@@ -72,6 +72,24 @@ Sets the beta parameter in the Rusanov scheme.
 Sets the number of grid points in the vertical direction and the grid spacing. 
 </command>
 
+<command name="REGRID">
+  <parameter name="DoRegrid" type="logical" default="F" />
+  <parameter name="DtRegrid" type="real" min="0" if="$DoRegrid"/>
+  <parameter name="DoSavePoints" type="logical" default="F" if="$DoRegrid"/>
+
+#REGRID
+T			DoRegrid (rest of parameters read if true)
+T			DtRegrid
+F			DoSavePoints
+
+If DoRegrid is true then regrid the field footpoints every DtRegrid seconds.
+If DoSavePoints is true, save the footpoints and the triangulation before
+the regridding is done. The goal is to maintain a relatively uniform
+coverage of the polar region.
+
+Default is DoRegrid false.
+</command>
+
 <command name="TIMEACCURATE">
   <parameter name="IsTimeAccurate" type="logical" default="T" />
 

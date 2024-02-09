@@ -119,9 +119,12 @@ subroutine PW_set_parameters(NameAction)
         call read_var('IsRestart', IsRestart)
 
      case('#REGRID')
-        call read_var('DoRegrid',DoRegrid)
-        call read_var('DtRegrid',DtRegrid)
-        call read_var('DoSavePoints',DoSavePoints)
+        call read_var('DoRegrid', DoRegrid)
+        if(DoRegrid)then
+           call read_var('DtRegrid', DtRegrid)
+           call read_var('DoSavePoints',DoSavePoints)
+        end if
+
      case('#MOTION')
         call read_var('DoMoveLine', DoMoveLine)
 
