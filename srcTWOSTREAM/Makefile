@@ -51,7 +51,7 @@ ${EXE}:	${EXEOBJECTS}
 TWOSTREAM_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR}  -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE -lTIMING \
-		-lGITMREADER ${Lflag1}
+		-lGITMREADER ${LflagMpi}
 
 TWOSTREAM_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_
@@ -61,7 +61,7 @@ TWOSTREAM_for_Darwin:
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a
 		ar -x ${LIBDIR}/libGITMREADER.a
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${LflagMpi}
 	rm -rf Tmp_
 
 clean: cleanfiles

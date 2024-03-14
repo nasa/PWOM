@@ -61,7 +61,7 @@ ${EXE}:	${EXEOBJECTS}
 STET_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR}  -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE -lTIMING \
-		${Lflag1}
+		${LflagMpi}
 
 STET_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_
@@ -70,7 +70,7 @@ STET_for_Darwin:
 		ar -x ${LIBDIR}/libEMPIRICALUA.a; \
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${LflagMpi}
 	rm -rf Tmp_
 
 clean: cleanfiles
