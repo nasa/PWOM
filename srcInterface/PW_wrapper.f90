@@ -199,11 +199,11 @@ contains
   subroutine PW_run(TimeSimulation,TimeSimulationLimit)
 
     use ModPWOM, ONLY: iLine, nLine, Time, nStep, DtHorizontalOrig, &
-         DtHorizontal, DtOutput, &
+         DtHorizontal, DtOutput, nTheta,nPhi,Phi_G, Theta_G,&
          DoPlotElectrodynamics, DtPlotElectrodynamics, &
          Tmax, UseIE, Jr_G, Eflux_G
     use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines,DoAdaptGrid,&
-       update_remap_criteri,TypeAdaptCriteria
+       update_remap_criteria,TypeAdaptCriteria
     !INPUT/OUTPUT ARGUMENTS:
 
     real, intent(inout) :: TimeSimulation   ! current time of component
