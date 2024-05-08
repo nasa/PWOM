@@ -24,6 +24,7 @@ subroutine PW_get_electrodynamics
      open(UnitTmp_, FILE=NamePhiNorth)  
      if(IsFirst)then
         call allocate_ie_variables(257, 65)
+        Jr_G=0.0
         do iPhi=1,nPhi
            do iTheta=1,nTheta
               read(unit=UnitTmp_,fmt='(6(1PE13.5))') &
@@ -41,6 +42,7 @@ subroutine PW_get_electrodynamics
         Jr_G(1:nPhi,1:nTheta) = Jr_G(1:nPhi,1:nTheta) * 1.0e-6 
         close(UnitTmp_)   
      endif
+
   elseif (UseWeimer) then
      call get_weimer_potential
   endif

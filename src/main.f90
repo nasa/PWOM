@@ -7,7 +7,8 @@ program pw
   use ModCommonPlanet,only:NamePlanet
   use ModMpi
   use ModReadParam
-  use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines
+  use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines,DoAdaptGrid,&
+       update_remap_criteria,TypeAdaptCriteria
   use CON_planet,  ONLY: init_planet_const, set_planet_defaults,is_planet_init
   use ModUtilities,ONLY: CON_stop
   implicit none
@@ -68,7 +69,7 @@ program pw
   !****************************************************************************
   ! Move the flux tube, solve each fieldline, and advance the time
   !****************************************************************************
-
+  !Jr_G=0.0
   if (IsTimeAccurate) then
      TIMELOOP:do
         if (Time >= Tmax) exit TIMELOOP
@@ -80,12 +81,27 @@ program pw
         
         ! Get electrodynamics information before updating lines
         call PW_get_electrodynamics
-
+        
         if (DoRegrid) then
            if (floor((Time+1.0e-5)/DtRegrid) /= &
                 floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then 
               call timing_start('regrid_lines')
               !if (iProc==0) write(*,*) 'before',ThetaLine_I(1),PhiLine_I(1)
+              if (DoAdaptGrid) then
+                 !write(*,*) Jr_G
+                 !write(*,*) Theta_G
+                 !write(*,*) 'test1',maxval(Jr_G(1:nPhi,1:nTheta))
+                 select case(TypeAdaptCriteria)
+                 case('Jr')
+                    call update_remap_criteria(nTheta,nPhi, Theta_G,Phi_G,&
+                         abs(Jr_G))
+                 case('eFlux')
+                    call update_remap_criteria(nTheta,nPhi, Theta_G,Phi_G,&
+                         abs(Eflux_G))
+                 case DEFAULT
+                    call con_stop('PW Error: no TypeAdaptCriteria supplied.')
+                 end select
+              endif
               call regrid_lines
               !if (iProc==0) write(*,*) 'after',ThetaLine_I(1),PhiLine_I(1)
               call timing_stop('regrid_lines')

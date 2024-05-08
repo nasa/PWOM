@@ -28,7 +28,9 @@ subroutine PW_set_parameters(NameAction)
        DoSavePlotParticle,DtSaveProfile, DtSaveDF,&
        nWaveFile, NameWaveFile,nSpecGrid,&
        TypeSpecGrid, EminSpecGrid, EmaxSpecGrid
-  use ModReGrid, ONLY: DoRegrid,DtRegrid,DoSavePoints
+  use ModReGrid, ONLY: DoRegrid,DtRegrid,DoSavePoints,DoAdaptGrid,&
+       TypeAdaptCriteria
+
   use ModPwIndices, ONLY: UsePwIndicesFile 
   implicit none
 
@@ -122,6 +124,10 @@ subroutine PW_set_parameters(NameAction)
         call read_var('DoRegrid',DoRegrid)
         call read_var('DtRegrid',DtRegrid)
         call read_var('DoSavePoints',DoSavePoints)
+        call read_var('DoAdaptGrid',DoAdaptGrid)
+        if(DoAdaptGrid) then
+           call read_var('TypeAdaptCriteria',TypeAdaptCriteria)
+        endif
      case('#MOTION')
         call read_var('DoMoveLine', DoMoveLine)
 

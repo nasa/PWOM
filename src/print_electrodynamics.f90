@@ -86,17 +86,17 @@ subroutine PW_print_electrodynamics
        'PW/Electrodynamics_Time',TimeOut,'.dat'
   open(UnitTmp_,FILE=NameElectrodynamics)
   write(UnitTmp_,'(a)') &
-     'VARIABLES = "Y", "X", "Z", "Uy [m/s]", "Ux [m/s]", "Uz [m/s]", '&
-     // '"Pot [volts]", "Ey", "Ex", "Ez", "Jr", "Eflux [Ergs/cm2/s]", "AvE [keV]"'
+     'VARIABLES = "X", "Y", "Z", "Ux [m/s]", "Uy [m/s]", "Uz [m/s]", '&
+     // '"Pot [volts]", "Ex", "Ey", "Ez", "Jr", "Eflux [Ergs/cm2/s]", "AvE [keV]"'
   write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nPhi, ', J=', nTheta,', DATAPACKING=POINT'
   
   do iTheta=1,nTheta
      do iPhi=1,nPhi
         write(UnitTmp_,"(100es18.10)") &
-             y(iPhi,iTheta),x(iPhi,iTheta),z(iPhi,iTheta),     &
-             -1.0*uy(iPhi,iTheta),ux(iPhi,iTheta),uz(iPhi,iTheta),  &
+             x(iPhi,iTheta),y(iPhi,iTheta),z(iPhi,iTheta),     &
+             ux(iPhi,iTheta),uy(iPhi,iTheta),uz(iPhi,iTheta),  &
              Potential_G(iPhi,iTheta),                         &
-             -1.0*Ey(iPhi,iTheta), Ex(iPhi,iTheta), Ez(iPhi,iTheta),&
+             Ex(iPhi,iTheta), Ey(iPhi,iTheta), Ez(iPhi,iTheta),&
              Jr_G(iPhi,iTheta),Eflux_G(iPhi,iTheta),AvE_G(iPhi,iTheta)
         
      enddo

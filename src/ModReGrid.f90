@@ -98,8 +98,31 @@ Module ModReGrid
   !vars for anchor points
   integer,parameter    :: nAnchorZones = 16
 
+  !vars for adapting the remap grid
+  logical, public :: DoAdaptGrid = .true.
+  integer, public :: nAdaptPointsN = 30
+  integer, public :: nAdaptPointsS = 10
+
+  !the base remap grid which is uniformally distrubted over the cap
+  integer :: nRemapPointBaseN=-1,nRemapPointBaseS=-1
+  real,allocatable :: RemapThetaBaseN_I(:),RemapPhiBaseN_I(:)
+  real,allocatable :: RemapThetaBaseS_I(:),RemapPhiBaseS_I(:)
+
+  !triangulation vars for base remap grid
+  integer, allocatable :: listBaseN_I(:),lptrBaseN_I(:), lendBaseN_I(:),&
+       listBaseS_I(:), lptrBaseS_I(:), lendBaseS_I(:)
+  
+
+  !adaptive remap criteria on a theta,phi grid
+  real, allocatable :: AdaptCriteria_G(:,:)
+  integer :: nThetaAdapt=-1, nPhiAdapt=-1
+  real :: DphiAdapt, DthetaAdapt
+  real,allocatable  :: PhiAdapt_G(:,:), ThetaAdapt_G(:,:)
+  Character(len=10),public :: TypeAdaptCriteria='Jr'
+  
   !main calling routine is public
   public :: regrid_lines
+  public :: update_remap_criteria
 contains
   !type bound proceedure to update line xyz
   subroutine line_calc_xyz(this)
@@ -240,25 +263,85 @@ contains
     call MPI_bcast(nNorth,1,MPI_INTEGER,0,iComm,iError)
     call MPI_bcast(nSouth,1,MPI_INTEGER,0,iComm,iError)
 
-    !define the remap grid in each hemisphere
-    if (nNorth>0) then
-       call define_remap_grid(nNorth,.true.)
+    if (iProc == 0) then
+       !define the remap grid in each hemisphere
+       if (nNorth>0) then
+          if (.not.allocated(RemapThetaN_I)) then
+             allocate(RemapThetaN_I(nNorth))
+             allocate(RemapPhiN_I(nNorth))
+          endif
+          if (DoAdaptGrid) then
+             call define_base_remap_grid(nNorth-nAdaptPointsN,.true.)
+             !update the number of adapt points to include any left out of base
+             nAdaptPointsN = nNorth-nRemapPointBaseN
+             nRemapPointN=nNorth
+             
+             !Allocate triangulation for base remap grid
+             !allocate triangulation arrays
+             if (nRemapPointN>0) then
+                allocate(listBaseN_I(6*(nRemapPointN-2)))
+                allocate(lptrBaseN_I(6*(nRemapPointN-2)))
+                allocate(lendBaseN_I(6*(nRemapPointN)))
+             endif
+             
+             !add in adapt points
+             !call adapt_remap_grid
+             
+          else
+             call define_base_remap_grid(nNorth,.true.)
+             nRemapPointN=nRemapPointBaseN
+             RemapThetaN_I=RemapThetaBaseN_I
+             RemapPhiN_I=RemapPhiBaseN_I
+          endif
+          
+          
+       endif
+       
+       if (nSouth>0) then
+          if (.not.allocated(RemapThetaS_I)) then
+             allocate(RemapThetaS_I(nSouth))
+             allocate(RemapPhiS_I(nSouth))
+          endif
+          if (DoAdaptGrid) then
+             call define_base_remap_grid(nSouth-nAdaptPointsS,.false.)
+             !update the number of adapt points to include any left out of base
+             nAdaptPointsS = nSouth-nRemapPointBaseS
+             nRemapPointS=nSouth
+             
+             !Allocate triangulation for base remap grid
+             !allocate triangulation arrays
+             if (nRemapPointS>0) then
+                allocate(listBaseS_I(6*(nRemapPointS-2)))
+                allocate(lptrBaseS_I(6*(nRemapPointS-2)))
+                allocate(lendBaseS_I(6*(nRemapPointS)))
+             endif
+             
+             !add in adapt points
+             !call adapt_remap_grid
+          else
+             call define_base_remap_grid(nSouth,.false.)
+             nRemapPointS=nRemapPointBaseS
+             RemapThetaS_I=RemapThetaBaseS_I
+             RemapPhiS_I=RemapPhiBaseS_I
+          endif
+       endif
+
     endif
-    
-    if (nSouth>0) then
-       call define_remap_grid(nSouth,.false.)
-    endif
-    
+
+    !distrubute the umber of north and south remap points
+    call MPI_bcast(nRemapPointN,1,MPI_INTEGER,0,iComm,iError)
+    call MPI_bcast(nRemapPointS,1,MPI_INTEGER,0,iComm,iError)
+
     
   end subroutine init_regrid
   !============================================================================
-  ! Define the initial remap grid for a given hemisphere. Approach is to
+  ! Define the initial base remap grid for a given hemisphere. Approach is to
   ! distribute points on the the spherical cap with as close to equal
   ! areas as possible. Note that it is possible that the number of remap point
   ! would be less than the number of available points. This is ok as it would
   ! mean that we remap to a fewer number of points. this should only be called
   ! by processor 0
-  subroutine define_remap_grid(nPoint,IsNorth)
+  subroutine define_base_remap_grid(nPoint,IsNorth)
     use ModIoUnit, ONLY: UnitTmp_
     use ModNumConst, ONLY: cPi
     integer, intent(in) :: nPoint
@@ -277,18 +360,18 @@ contains
 
     !allocate remap grid if not allocated
     if (IsNorth) then
-       if (.not.allocated(RemapThetaN_I)) then
-          allocate(RemapThetaN_I(nPoint))
-          allocate(RemapPhiN_I(nPoint))
+       if (.not.allocated(RemapThetaBaseN_I)) then
+          allocate(RemapThetaBaseN_I(nPoint))
+          allocate(RemapPhiBaseN_I(nPoint))
        else
-          call con_stop('PW ERROR: defining a remap grid can only be called once')
+          call con_stop('PW ERROR: defining a base remap grid can only be called once')
        endif
     else
-       if (.not.allocated(RemapThetaS_I)) then
-          allocate(RemapThetaS_I(nPoint))
-          allocate(RemapPhiS_I(nPoint))
+       if (.not.allocated(RemapThetaBaseS_I)) then
+          allocate(RemapThetaBaseS_I(nPoint))
+          allocate(RemapPhiBaseS_I(nPoint))
        else
-          call con_stop('PW ERROR: defining a remap grid can only be called once')
+          call con_stop('PW ERROR: defining a base remap grid can only be called once')
        endif
     endif
     
@@ -311,13 +394,13 @@ contains
           !write(*,*) theta, phi
           iCount=iCount+1
           if(IsNorth) then
-             RemapThetaN_I(iCount)=theta
-             RemapPhiN_I(iCount)=phi
-             nRemapPointN = iCount
+             RemapThetaBaseN_I(iCount)=theta
+             RemapPhiBaseN_I(iCount)=phi
+             nRemapPointBaseN = iCount
           else
-             RemapThetaS_I(iCount)=cPi-1.0*theta
-             RemapPhiS_I(iCount)=phi
-             nRemapPointS = iCount
+             RemapThetaBaseS_I(iCount)=cPi-1.0*theta
+             RemapPhiBaseS_I(iCount)=phi
+             nRemapPointBaseS = iCount
           endif
           
           !make sure you do not exceed the max number of points
@@ -338,22 +421,377 @@ contains
        if (IsNorth) then
           do iTheta=1,iCount
              write(UnitTmp_,"(100es18.10)") &
-                  sin(RemapThetaN_I(iTheta))*cos(RemapPhiN_I(iTheta)), &
-                  sin(RemapThetaN_I(iTheta))*sin(RemapPhiN_I(iTheta)), &
-                  cos(RemapThetaN_I(itheta))
+                  sin(RemapThetaBaseN_I(iTheta))*cos(RemapPhiBaseN_I(iTheta)), &
+                  sin(RemapThetaBaseN_I(iTheta))*sin(RemapPhiBaseN_I(iTheta)), &
+                  cos(RemapThetaBaseN_I(itheta))
           enddo
           close(UnitTmp_)
        else
           do iTheta=1,iCount
              write(UnitTmp_,"(100es18.10)") &
-                  sin(RemapThetaS_I(iTheta))*cos(RemapPhiS_I(iTheta)), &
-                  sin(RemapThetaS_I(iTheta))*sin(RemapPhiS_I(iTheta)), &
-                  cos(RemapThetaS_I(itheta))
+                  sin(RemapThetaBaseS_I(iTheta))*cos(RemapPhiBaseS_I(iTheta)), &
+                  sin(RemapThetaBaseS_I(iTheta))*sin(RemapPhiBaseS_I(iTheta)), &
+                  cos(RemapThetaBaseS_I(itheta))
           enddo
            close(UnitTmp_)
        endif
     endif
-  end subroutine define_remap_grid
+  end subroutine define_base_remap_grid
+
+  !============================================================================
+  ! routine to get triangulation for north and south base remap grids,
+  ! this is only called on iProc0. This is needed for grid adaptation
+  subroutine get_triangulation_base_remap_grid
+    use ModTriangulateSpherical,ONLY:trmesh, trplot
+    use ModIoUnit, ONLY: UnitTmp_
+    real, allocatable :: xNorth_I(:),yNorth_I(:),zNorth_I(:)
+    real, allocatable :: xSouth_I(:),ySouth_I(:),zSouth_I(:)
+    integer :: iLine, iError,TimeOut
+    real    :: Theta, Phi
+    logical :: DoSaveTriangulate = .False.
+    Character(len=100) :: NameFile
+    character (len=*),parameter :: NameSub='get_triangulation_base_remap_grid'
+    !--------------------------------------------------------------------------
+
+    if (iProc>0) &
+         call con_stop(NameSub//' called by iProc>0')
+    
+    !allocate x,y,z arrays for north and south
+    if (.not.allocated(xNorth_I) .and. nRemapPointBaseN>0) &
+         allocate(xNorth_I(nRemapPointBaseN))
+    if (.not.allocated(yNorth_I) .and. nRemapPointBaseN>0) &
+         allocate(yNorth_I(nRemapPointBaseN))
+    if (.not.allocated(zNorth_I) .and. nRemapPointBaseN>0) &
+         allocate(zNorth_I(nRemapPointBaseN))
+
+    if (.not.allocated(xSouth_I) .and. nRemapPointBaseS>0) &
+         allocate(xSouth_I(nRemapPointBaseS))
+    if (.not.allocated(ySouth_I) .and. nRemapPointBaseS>0) &
+         allocate(ySouth_I(nRemapPointBaseS))
+    if (.not.allocated(zSouth_I) .and. nRemapPointBaseS>0) &
+         allocate(zSouth_I(nRemapPointBaseS))
+
+    
+    !construct north triangulation
+    if (nRemapPointBaseN>0) then
+       !unpack positions 
+       do iLine=1,nRemapPointBaseN
+          Theta=RemapThetaBaseN_I(iLine)
+          Phi=RemapPhiBaseN_I(iLine)
+          
+          xNorth_I(iLine) = sin(Theta)*cos(Phi)
+          yNorth_I(iLine) = sin(Theta)*sin(Phi)
+          zNorth_I(iLine) = cos(Theta)
+
+       enddo
+
+       !write(*,*) 'TestB', Time
+       !write(*,*) nNorth
+       !do iLine=1,nNorth
+       !   write(*,*) iLine,xNorth_I(iLine),yNorth_I(iLine),zNorth_I(iLine)
+       !enddo
+       
+       !create the triangulation
+       call trmesh ( nRemapPointBaseN, xNorth_I, yNorth_I, zNorth_I, &
+            listBaseN_I, lptrBaseN_I, lendBaseN_I, iError )
+
+       if ( iError == -2 ) then
+          write(*,*)NameSub, &
+               ' WARNING: Error in TRMESH, First three nodes are collinear'
+          call CON_stop(NameSub//' Problem With Triangulation')
+       else if ( iError > 0 ) then
+          write(*,*) 'ERROR: duplicate node iError=',iError
+          write(*,*)NameSub// &
+               ' ERROR: Error in TRMESH, Duplicate nodes encountered'
+          call CON_stop(NameSub//' Problem With Triangulation')
+       end if
+    endif
+    
+    !construct north triangulation
+    if (nSouth>0) then
+       !unpack positions 
+       do iLine=1,nRemapPointBaseS
+          Theta=RemapThetaBaseS_I(iLine)
+          Phi=RemapPhiBaseS_I(iLine)
+          
+          xSouth_I(iLine) = sin(Theta)*cos(Phi)
+          ySouth_I(iLine) = sin(Theta)*sin(Phi)
+          zSouth_I(iLine) = cos(Theta)
+       enddo
+
+       !create the triangulation
+       call trmesh ( nRemapPointBaseS, xSouth_I, ySouth_I, zSouth_I, &
+            listBaseS_I, lptrBaseS_I, lendBaseS_I, iError )
+
+       if ( iError == -2 ) then
+          write(*,*)NameSub, &
+               ' WARNING: Error in TRMESH, First three nodes are collinear'
+          call CON_stop(NameSub//' Problem With Triangulation')
+       else if ( iError > 0 ) then
+          write(*,*)NameSub// &
+               ' ERROR: Error in TRMESH, Duplicate nodes encountered'
+          call CON_stop(NameSub//' Problem With Triangulation')
+       end if
+    endif
+
+    !write triangulation output if requested
+    if (DoSaveTriangulate) then
+       if (nRemapPointBaseN>0) then
+          ! Northern Hemi
+          TimeOut=int(Time)
+          write(NameFile,"(a,i8.8,a)") &
+               'PW/plots/TriangulationBaseNorth_',TimeOut,'.eps'
+          open ( UnitTmp_, file = NameFile)
+          call trplot ( UnitTmp_, 7.5, 90.0, 0.0, 90.0, nRemapPointBaseN, &
+               xNorth_I, yNorth_I, zNorth_I, listBaseN_I, lptrBaseN_I, &
+               lendBaseN_I, 'test1 triangulation',.true., iError )
+          close(UnitTmp_)
+       endif
+       if (nRemapPointBaseS>0) then
+          ! Southern Hemi
+          TimeOut=int(Time)
+          write(NameFile,"(a,i8.8,a)") &
+               'PW/plots/TriangulationBaseSouth_',TimeOut,'.eps'
+          open ( UnitTmp_, file = NameFile)
+          call trplot ( UnitTmp_, 7.5, 90.0, 0.0, 90.0, nRemapPointBaseS, &
+               xSouth_I, ySouth_I, zSouth_I, listBaseS_I, lptrBaseS_I, &
+               lendBaseS_I, 'test1 triangulation',.true., iError )
+          close(UnitTmp_)
+       endif
+    endif
+  end subroutine get_triangulation_base_remap_grid
+
+  !============================================================================
+  ! adapt the remap grid
+  subroutine adapt_remap_grid
+    use ModInterpolate, ONLY: bilinear
+    use ModSort, ONLY: sort_quick
+    use ModTriangulateSpherical,ONLY:trlist
+    use ModNumConst, ONLY: cTwoPi
+    integer,parameter :: nRow=6
+    integer :: iError,iTriangle,iNode,iNode_I(3),iPoint
+    real    :: Theta_I(3),Phi_I(3)
+    real    :: Xyz_DI(3,3)
+    real, save,allocatable :: &
+         XyzCentroidN_DI(:,:),ThetaCentroidN_I(:), PhiCentroidN_I(:),&
+         XyzCentroidS_DI(:,:),ThetaCentroidS_I(:), PhiCentroidS_I(:)
+    real, allocatable :: CriteriaCentroidN_I(:),CriteriaCentroidS_I(:)
+    integer,save, allocatable :: ltriBaseN_II(:,:),ltriBaseS_II(:,:)
+    integer,save             :: nTriangleBaseN,nTriangleBaseS
+    
+    integer,allocatable:: IndexSortN_I(:),IndexSortS_I(:)
+    logical, save :: IsFirstCallN=.true., IsFirstCallS=.true.
+    !--------------------------------------------------------------------------
+
+    !Refine north first
+    if (nRemapPointN>0) then
+       ! convert the triangulation into a triangle list
+       if (.not.allocated(ltriBaseN_II))&
+            allocate(ltriBaseN_II(nRow,2*nRemapPointN-4))
+       call trlist ( nRemapPointBaseN, listBaseN_I, lptrBaseN_I, &
+            lendBaseN_I, nRow, nTriangleBaseN, ltriBaseN_II, iError)
+       !write(*,*) 'nTriangleBaseN',nTriangleBaseN
+       !write(*,*) 'listBaseN_I',listBaseN_I
+       !write(*,*) 'lptrBaseN_I',lptrBaseN_I
+       !write(*,*) 'lendBaseN_I',lendBaseN_I
+       !allocate arrays to hold centroid information of base grid
+       if (.not.allocated(XyzCentroidN_DI))  &
+            allocate(XyzCentroidN_DI(3,nTriangleBaseN))
+       if (.not.allocated(ThetaCentroidN_I)) &
+            allocate(ThetaCentroidN_I(nTriangleBaseN))
+       if (.not.allocated(PhiCentroidN_I))   &
+            allocate(PhiCentroidN_I(nTriangleBaseN))
+       if (.not.allocated(CriteriaCentroidN_I))   &
+            allocate(CriteriaCentroidN_I(nTriangleBaseN))
+       
+       !loop over triangles and evaluate value of refinment criteria at centroid
+       if (IsFirstCallN) then
+          do iTriangle = 1, nTriangleBaseN
+             !extract node indices for each triangle
+             iNode_I(1)=ltriBaseN_II(1,iTriangle)
+             iNode_I(2)=ltriBaseN_II(2,iTriangle)
+             iNode_I(3)=ltriBaseN_II(3,iTriangle)
+             
+             !for each node, get the theta and phi position
+             do iNode = 1,3
+                Theta_I(iNode) = RemapThetaBaseN_I(iNode_I(iNode))
+                Phi_I  (iNode) = RemapPhiBaseN_I(iNode_I(iNode))
+                
+                !for each theta and phi position, get the xyz position
+                Xyz_DI(1,iNode) = sin(Theta_I(iNode))*cos(Phi_I(iNode))
+                Xyz_DI(2,iNode) = sin(Theta_I(iNode))*sin(Phi_I(iNode))
+                Xyz_DI(3,iNode) = cos(Theta_I(iNode))
+             enddo
+             
+             !Get and save centroid
+             XyzCentroidN_DI(1,iTriangle)=sum(Xyz_DI(1,1:3))/3.0
+             XyzCentroidN_DI(2,iTriangle)=sum(Xyz_DI(2,1:3))/3.0
+             XyzCentroidN_DI(3,iTriangle)=sum(Xyz_DI(3,1:3))/3.0
+             
+             ThetaCentroidN_I(iTriangle) = acos(XyzCentroidN_DI(3,iTriangle))
+             PhiCentroidN_I(iTriangle)   = &
+                  modulo(atan2(XyzCentroidN_DI(2,iTriangle),&
+                  XyzCentroidN_DI(1,iTriangle)),cTwoPi)
+          enddo
+          IsFirstCallN=.false.
+       endif
+
+       !write(*,*) 'nTriangleBaseN',nTriangleBaseN
+       ! get remap criteria value at centroid
+       !write(*,*) 'maxval(AdaptCriteria_G)',maxval(AdaptCriteria_G)
+       !call con_stop('')
+       do iTriangle=1,nTriangleBaseN
+          !write(*,*)'ha',PhiCentroidN_I(iTriangle)/DphiAdapt+1.0,ThetaCentroidN_I(iTriangle)/DthetaAdapt+1.0,DphiAdapt,DthetaAdapt
+          !write(*,*)'ha',PhiCentroidN_I(iTriangle),ThetaCentroidN_I(iTriangle)
+          CriteriaCentroidN_I(iTriangle) = &
+               bilinear(AdaptCriteria_G, 0,nPhiAdapt+1,0,nThetaAdapt+1, &
+               (/ PhiCentroidN_I(iTriangle)/DphiAdapt+1.0,&
+               ThetaCentroidN_I(iTriangle)/DthetaAdapt+1.0 /) )
+          !write(*,*) iTriangle,CriteriaCentroidN_I(iTriangle)
+       end do
+       
+       if (.not.allocated(IndexSortN_I)) allocate(IndexSortN_I(nTriangleBaseN))
+       
+       !get index array that sorts CriteriaCentroid_I from
+       !lowest to biggest value
+       call sort_quick(nTriangleBaseN,CriteriaCentroidN_I,IndexSortN_I)
+       
+       !take the centroid points (up to nAdaptPointsN) with the largest criteria
+       !and add them to the remap grid. First Points are the base grid.
+       RemapThetaN_I(1:nRemapPointBaseN)= RemapThetaBaseN_I(1:nRemapPointBaseN)
+       RemapPhiN_I(1:nRemapPointBaseN)  = RemapPhiBaseN_I(1:nRemapPointBaseN)
+       
+       iPoint=nRemapPointBaseN
+       do iTriangle=nTriangleBaseN,nTriangleBaseN-nAdaptPointsN+1,-1
+          iNode = IndexSortN_I(iTriangle)
+          iPoint = iPoint+1
+          RemapThetaN_I(iPoint) = ThetaCentroidN_I(iNode)
+          RemapPhiN_I(iPoint)   = PhiCentroidN_I(iNode)
+          !write(*,*) iPoint, nRemapPointBaseN, nNorth,CriteriaCentroidN_I(iNode),maxval(AdaptCriteria_G)
+       enddo
+       
+       
+       deallocate(IndexSortN_I)
+    endif
+
+    !Refine south 
+    if (nRemapPointS>0) then
+       ! convert the triangulation into a triangle list
+       if (.not.allocated(ltriBaseS_II))&
+            allocate(ltriBaseS_II(nRow,2*nRemapPointS-4))
+       call trlist ( nRemapPointBaseS, listBaseS_I, lptrBaseS_I, &
+            lendBaseS_I, nRow, nTriangleBaseS, ltriBaseS_II, iError)
+       
+       !allocate arrays to hold centroid information of base grid
+       if (.not.allocated(XyzCentroidS_DI))  &
+            allocate(XyzCentroidS_DI(3,nTriangleBaseS))
+       if (.not.allocated(ThetaCentroidS_I)) &
+            allocate(ThetaCentroidS_I(nTriangleBaseS))
+       if (.not.allocated(PhiCentroidS_I))   &
+            allocate(PhiCentroidS_I(nTriangleBaseS))
+       if (.not.allocated(CriteriaCentroidS_I))   &
+            allocate(CriteriaCentroidS_I(nTriangleBaseS))
+       
+       !loop over triangles and evaluate value of refinment criteria at centroid
+       if (IsFirstCallS) then
+          do iTriangle = 1, nTriangleBaseS
+             !extract node indices for each triangle
+             iNode_I(1)=ltriBaseS_II(1,iTriangle)
+             iNode_I(2)=ltriBaseS_II(2,iTriangle)
+             iNode_I(3)=ltriBaseS_II(3,iTriangle)
+             
+             !for each node, get the theta and phi position
+             do iNode = 1,3
+                Theta_I(iNode) = RemapThetaBaseS_I(iNode_I(iNode))
+                Phi_I  (iNode) = RemapPhiBaseS_I(iNode_I(iNode))
+                
+                !for each theta and phi position, get the xyz position
+                Xyz_DI(1,iNode) = sin(Theta_I(iNode))*cos(Phi_I(iNode))
+                Xyz_DI(2,iNode) = sin(Theta_I(iNode))*sin(Phi_I(iNode))
+                Xyz_DI(3,iNode) = cos(Theta_I(iNode))
+             enddo
+             
+             !Get and save centroid
+             XyzCentroidS_DI(1,iTriangle)=sum(Xyz_DI(1,1:3))/3.0
+             XyzCentroidS_DI(2,iTriangle)=sum(Xyz_DI(2,1:3))/3.0
+             XyzCentroidS_DI(3,iTriangle)=sum(Xyz_DI(3,1:3))/3.0
+             
+             ThetaCentroidS_I(iTriangle) = acos(XyzCentroidS_DI(3,iTriangle))
+             PhiCentroidN_I(iTriangle)   = &
+                  atan2(XyzCentroidS_DI(2,iTriangle),&
+                  XyzCentroidS_DI(1,iTriangle))
+          enddo
+          IsFirstCallS=.false.
+       endif
+       ! get remap criteria value at centroid
+       do iTriangle=1,nTriangleBaseS
+          CriteriaCentroidS_I(iTriangle) = &
+               bilinear(AdaptCriteria_G, 0,nPhiAdapt+1,0,nThetaAdapt+1, &
+               (/ PhiCentroidS_I(iTriangle)/DphiAdapt+1.0,&
+               ThetaCentroidS_I(iTriangle)/DthetaAdapt+1.0 /) )
+       end do
+       
+       if (.not.allocated(IndexSortS_I)) allocate(IndexSortS_I(nTriangleBaseS))
+       
+       !get index array that sorts CriteriaCentroid_I from
+       !lowest to biggest value
+       call sort_quick(nTriangleBaseS,CriteriaCentroidS_I,IndexSortS_I)
+       
+       !take the centroid points (up to nAdaptPointsN) with the largest criteria
+       !and add them to the remap grid. First Points are the base grid.
+       RemapThetaS_I(1:nRemapPointBaseS)= RemapThetaBaseS_I(1:nRemapPointBaseS)
+       RemapPhiS_I(1:nRemapPointBaseS)  = RemapPhiBaseS_I(1:nRemapPointBaseS)
+       
+       iPoint=nRemapPointBaseS
+       do iTriangle=nTriangleBaseS,nTriangleBaseS-nAdaptPointsS+1,-1
+          iNode = IndexSortS_I(iTriangle)
+          iPoint = iPoint+1
+          RemapThetaS_I(iPoint) = ThetaCentroidS_I(iNode)
+          RemapPhiS_I(iPoint)   = PhiCentroidS_I(iNode)
+       enddo
+       
+       
+       deallocate(IndexSortS_I)
+    endif
+
+    
+  end subroutine adapt_remap_grid
+
+  !============================================================================
+  ! Update the remap adapt criteria values. Pass values on remap grid
+  subroutine update_remap_criteria(nThetaIn,nPhiIn, ThetaIn_G,PhiIn_G,&
+       AdaptCriteriaIn_G)
+    use ModNumConst, ONLY: cTwoPi
+    integer, intent(in) :: nThetaIn,nPhiIn
+    real   , intent(in) :: ThetaIn_G(0:nPhiIn+1,0:nThetaIn+1)
+    real   , intent(in) :: PhiIn_G(0:nPhiIn+1,0:nThetaIn+1)
+    real   , intent(in) :: AdaptCriteriaIn_G(0:nPhiIn+1,0:nThetaIn+1)
+    !---------------------------------------------------------------------------
+
+    !on allocate arrays, save the adapt criteria grids
+    if (.not. allocated(AdaptCriteria_G)) then
+       nThetaAdapt = nThetaIn
+       nPhiAdapt   = nPhiIn
+       allocate(AdaptCriteria_G(0:nPhiAdapt+1, 0:nThetaAdapt+1))
+       allocate(PhiAdapt_G(0:nPhiAdapt+1, 0:nThetaAdapt+1))
+       allocate(ThetaAdapt_G(0:nPhiAdapt+1, 0:nThetaAdapt+1))
+
+       ThetaAdapt_G = ThetaIn_G
+       PhiAdapt_G   = PhiIn_G
+       ! set Dtheta and Dphi
+       !DthetaAdapt = maxval( ThetaAdapt_G(1:nPhiAdapt,1:nThetaAdapt)) &
+       !write(*,*) ThetaAdapt_G
+       DthetaAdapt = maxval( ThetaAdapt_G(1,1:nThetaAdapt)) &
+            / (nThetaAdapt - 1)
+       DphiAdapt   = cTwoPi / (nPhiAdapt - 1)
+    endif
+
+    !set the adapt criteria
+    AdaptCriteria_G = AdaptCriteriaIn_G
+
+    !write(*,*) 'test',maxval(AdaptCriteriaIn_G)
+  end subroutine update_remap_criteria
+  
   !============================================================================
   ! routine to gather the grid info from across procs to the zero proc
   subroutine update_grid_info
@@ -1745,6 +2183,10 @@ contains
        IsFirstCall=.false.
     end if
 
+    if (DoAdaptGrid .and. iProc==0) then
+       call get_triangulation_base_remap_grid
+       call adapt_remap_grid
+    endif
     !if(iProc==0) then
        !write(*,*) 'line list before update_grid_info'
        ! call print_line_list
@@ -1897,4 +2339,5 @@ contains
     endif
     
   end subroutine save_plot_points
+  
 end Module ModReGrid

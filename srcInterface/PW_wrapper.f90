@@ -201,8 +201,11 @@ contains
     use ModPWOM, ONLY: iLine, nLine, Time, nStep, DtHorizontalOrig, &
          DtHorizontal, DtOutput, &
          DoPlotElectrodynamics, DtPlotElectrodynamics, &
-         Tmax, UseIE
-    use ModReGrid, ONLY: DoRegrid, DtRegrid, regrid_lines
+         Tmax, UseIE, Jr_G, Eflux_G
+    use ModReGrid  , ONLY: DoRegrid, DtRegrid, regrid_lines,DoAdaptGrid,&
+       update_remap_criteri,TypeAdaptCriteria
+    !INPUT/OUTPUT ARGUMENTS:
+
     real, intent(inout) :: TimeSimulation   ! current time of component
 
     real, intent(in):: TimeSimulationLimit ! simulation time not to be exceeded
@@ -231,7 +234,21 @@ contains
 
     if (DoRegrid) then
        if (floor((Time+1.0e-5)/DtRegrid) /= &
-            floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then
+            floor((Time+1.0e-5-DtHorizontal)/DtRegrid) )then 
+          if (DoAdaptGrid) then
+             !call update_remap_criteria(nTheta,nPhi, Theta_G,Phi_G,&
+             !     abs(Jr_G))
+             select case(TypeAdaptCriteria)
+             case('Jr')
+                call update_remap_criteria(nTheta,nPhi, Theta_G,Phi_G,&
+                     abs(Jr_G))
+             case('eFlux')
+                call update_remap_criteria(nTheta,nPhi, Theta_G,Phi_G,&
+                     abs(Eflux_G))
+             case DEFAULT
+                call con_stop('PW Error: no TypeAdaptCriteria supplied.')
+             end select
+          endif
           call regrid_lines
        endif
     endif
