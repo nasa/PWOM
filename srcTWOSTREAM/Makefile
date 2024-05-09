@@ -4,9 +4,7 @@ SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRI
 
 include ../Makefile.conf
 
-include Makefile.DEPEND
-
-include Makefile.RULES
+-include Makefile.DEPEND
 
 MODULES = \
 	ModGrid.o\
@@ -20,9 +18,7 @@ MODULES = \
 	Mod3DAtmos.o
 
 
-METHODS = \
-
-LIBOBJECTS = ${MODULES} ${METHODS}
+LIBOBJECTS = ${MODULES}
 
 EXEOBJECTS = main_twostream.o ${LIBOBJECTS}
 
@@ -37,8 +33,6 @@ LIB:	DEPEND
 	@echo
 	@echo ${MY_LIB} has been brought up to date.
 	@echo
-
-
 
 ${MY_LIB}: ${LIBOBJECTS}
 	rm -f ${MY_LIB}
@@ -57,7 +51,7 @@ ${EXE}:	${EXEOBJECTS}
 TWOSTREAM_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR}  -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE -lTIMING \
-		-lGITMREADER ${Lflag1}
+		-lGITMREADER ${LflagMpi}
 
 TWOSTREAM_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_
@@ -67,7 +61,7 @@ TWOSTREAM_for_Darwin:
 		ar -x ${LIBDIR}/libINDICES.a; \
 		ar -x ${LIBDIR}/libSHARE.a
 		ar -x ${LIBDIR}/libGITMREADER.a
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${LflagMpi}
 	rm -rf Tmp_
 
 clean: cleanfiles

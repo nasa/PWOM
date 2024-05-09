@@ -6,9 +6,8 @@ SEARCHDIR = -I${SHAREDIR} -I${DATAREADINDICESDIR} -I${EMPIRICALIEDIR} -I${EMPIRI
 include ../Makefile.conf
 
 include Makefile.planet
-include Makefile.DEPEND
-
-include Makefile.RULES
+-include Makefile.DEPEND
+-include Makefile.RULES
 
 MODULES = \
 	ModPwIndices.o\
@@ -101,13 +100,13 @@ ${EXE}:	${EXEOBJECTS}
 		ar -x ${LIBDIR}/libTIMING.a; \
 		ar -x ${LIBDIR}/libGITMREADER.a;\
 		ar -x ${LIBDIR}/libSE.a 
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${LflagMpi}
 
 PWOM_from_lib:	${EXEOBJECTS}
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR} -lEMPIRICALIE -lEMPIRICALUA -lINDICES  \
 		-lTIMING  -lGITMREADER -lSE -lSHARE\
-		${Lflag1}
+		${LflagMpi}
 
 
 clean: cleanfiles

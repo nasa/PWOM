@@ -4,10 +4,6 @@ SEARCHDIR = -I${SHAREDIR}
 
 include ../Makefile.conf
 
-include Makefile.DEPEND
-
-include Makefile.RULES
-
 MODULES = \
 	ModGitmAtmos.o
 
@@ -48,13 +44,13 @@ ${EXE}:	${EXEOBJECTS}
 gitmreader_general:
 	${LINK.f90} -o ${EXE} ${EXEOBJECTS} \
 		-L${LIBDIR}  -lSHARE \
-		${Lflag1}
+		${LflagMpi}
 
 gitmreader_for_Darwin:
 	rm -rf Tmp_; mkdir Tmp_
 	cd Tmp_; \
 		ar -x ${LIBDIR}/libSHARE.a
-	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${Lflag1}
+	${LINK.f90} -o ${EXE} ${EXEOBJECTS} Tmp_/*.o ${LBLAS} ${LflagMpi}
 	rm -rf Tmp_
 
 clean: cleanfiles
