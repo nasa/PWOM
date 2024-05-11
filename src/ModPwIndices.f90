@@ -251,21 +251,25 @@ contains
   ! F107A - 81 day AVERAGE OF F10.7 FLUX (centered on day)
   subroutine get_pw_indices_F107A(tSimulation,F107A)
     use ModInterpolate, only: linear
-      use ModUtilities,ONLY: CON_stop
+    use ModUtilities,ONLY: CON_stop
+    
     real, intent(in) :: tSimulation
     real, intent(out):: F107A
     real :: F107,Time,CurrentTime
     integer :: iDay,iCount
     real, parameter:: SecondsPerDay=86400.0
+
     !---------------------------------------------------------------------------
     CurrentTime=StartTime+tSimulation
 
     !loop over days starting 40 back from current
     F107A=0.0
-    iCount=iCount+1
+    iCount=0
     do iDay=-40,40
        Time= CurrentTime-real(iDay)*SecondsPerDay
+
        F107 = linear(F107_I(:),1,nData,Time,Time_I)
+
        if (F107>0) then
           F107A = F107A+F107
           iCount=iCount+1
