@@ -101,7 +101,7 @@ Module ModReGrid
   !vars for adapting the remap grid
   logical, public :: DoAdaptGrid = .true.
   integer, public :: nAdaptPointsN = 30
-  integer, public :: nAdaptPointsS = 10
+  integer, public :: nAdaptPointsS = 30
 
   !the base remap grid which is uniformally distrubted over the cap
   integer :: nRemapPointBaseN=-1,nRemapPointBaseS=-1
@@ -717,9 +717,10 @@ contains
              XyzCentroidS_DI(3,iTriangle)=sum(Xyz_DI(3,1:3))/3.0
              
              ThetaCentroidS_I(iTriangle) = acos(XyzCentroidS_DI(3,iTriangle))
-             PhiCentroidN_I(iTriangle)   = &
-                  atan2(XyzCentroidS_DI(2,iTriangle),&
-                  XyzCentroidS_DI(1,iTriangle))
+             PhiCentroidS_I(iTriangle)   = &
+                  modulo(atan2(XyzCentroidS_DI(2,iTriangle),&
+                  XyzCentroidS_DI(1,iTriangle)),cTwoPi)
+             
           enddo
           IsFirstCallS=.false.
        endif
@@ -761,11 +762,13 @@ contains
   ! Update the remap adapt criteria values. Pass values on remap grid
   subroutine update_remap_criteria(nThetaIn,nPhiIn, ThetaIn_G,PhiIn_G,&
        AdaptCriteriaIn_G)
+    use ModIoUnit, ONLY: UnitTmp_
     use ModNumConst, ONLY: cTwoPi
     integer, intent(in) :: nThetaIn,nPhiIn
     real   , intent(in) :: ThetaIn_G(0:nPhiIn+1,0:nThetaIn+1)
     real   , intent(in) :: PhiIn_G(0:nPhiIn+1,0:nThetaIn+1)
     real   , intent(in) :: AdaptCriteriaIn_G(0:nPhiIn+1,0:nThetaIn+1)
+    integer :: iPhi, iTheta
     !---------------------------------------------------------------------------
 
     !on allocate arrays, save the adapt criteria grids
@@ -790,6 +793,21 @@ contains
     AdaptCriteria_G = AdaptCriteriaIn_G
 
     !write(*,*) 'test',maxval(AdaptCriteriaIn_G)
+
+    !write adapt criteria
+!    open(UnitTmp_,file='PW/plots/AdaptCriteria.dat')
+!    write(UnitTmp_,'(a)') &
+!            'VARIABLES = "X", "Y", "Z", "Var"'
+!    write(UnitTmp_,'(a,i3,a,i3,a,i3,a)') 'Zone I=', nPhiAdapt,', J=', nThetaAdapt, ', DATAPACKING=POINT'
+!    do iTheta=1,nThetaAdapt
+!       do iPhi=1,nPhiAdapt
+!          write(UnitTmp_,"(100es18.10)") &
+!               sin(ThetaAdapt_G(iPhi,iTheta))*cos(PhiAdapt_G(iPhi,iTheta)), &
+!               sin(ThetaAdapt_G(iPhi,iTheta))*sin(PhiAdapt_G(iPhi,iTheta)), &
+!               cos(ThetaAdapt_G(iPhi,iTheta)), AdaptCriteria_G(iPhi,iTheta)
+!       enddo
+!    enddo
+!    close(UnitTmp_)
   end subroutine update_remap_criteria
   
   !============================================================================
