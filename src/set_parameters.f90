@@ -39,7 +39,7 @@ subroutine PW_set_parameters(NameAction)
   character (len=100) :: StringLine
   character (len=100) :: StringLine_I(100)
   character (len=100) :: NameCommand
-  real:: Vx, Bx, Bz, By, HPI, Energy
+  real:: SwDen, Vx, Bx, Bz, By, HPI, Energy
   integer:: iDate, iError, iEnergy
 
   character (len=*), parameter  :: NameSub = 'PW_set_parameters'
@@ -198,9 +198,11 @@ subroutine PW_set_parameters(NameAction)
         call read_var('By', By)
         call read_var('Bz', Bz)
         call read_var('Vx', Vx)
+        call read_var('SwDen', SwDen)
         call IO_set_imf_by_single(By)
         call IO_set_imf_bz_single(Bz)
         call IO_set_sw_v_single(abs(Vx))
+        call IO_set_SW_n_single(SwDen)
         ! When using fixed solar wind data, use the Weimer potential
         UseWeimer = .true.
         UseConstantIMF = .true.

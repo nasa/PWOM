@@ -14,7 +14,7 @@ subroutine get_weimer_potential
   real    :: temp, dTheta, dPhi
   logical,save :: UseIMF, IsFirst=.true.
   !real :: MLT_C(257,65), MLatitude_C(257,65),TempPotential_C(257,65)
-  real,save :: MLT_C(360,90), MLatitude_C(360,90)
+  real,save :: MLT_C(360,180), MLatitude_C(360,180)
   !----------------------------------------------------------------------------
 
 
@@ -23,8 +23,8 @@ subroutine get_weimer_potential
 
   if (IsFirst) then 
      !Setup Theta and Phi Grids
-     call allocate_ie_variables(360, 90)
-     dTheta=cHalfPi/(real(nTheta)-1.0)
+     call allocate_ie_variables(360, 180)
+     dTheta=cPi/(real(nTheta)-1.0)
      dPhi  =cTwoPi /(real(nPhi)-1.0)
 
      Theta_G(:,1) = 0.0

@@ -165,7 +165,8 @@ subroutine move_line
   ! Get the velocity of field line advection from a
   ! bilinear interpolation.
  
-  if (IsStandAlone .and. ThetaLine_I(iLine) > 90 * cDegToRad) then
+  if (IsStandAlone .and. ThetaLine_I(iLine) > 90 * cDegToRad &
+       .and. (.not. UseWeimer)) then
      sTheta = 180*cDegToRad-ThetaLine_I(iLine)
   else
      sTheta = ThetaLine_I(iLine)

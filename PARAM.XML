@@ -368,7 +368,8 @@ Set whether or not to include auroral ionization and bulk heating.
 0			Bx
 0			By
 0			Bz
-400			Vx
+400.0			Vx
+10.0			SwDen
 
 This command sets the solar wind parameters for the Weimer model. The solar 
 wind parameters are constant if this command is used
