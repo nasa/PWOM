@@ -2,7 +2,6 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 subroutine calc_dt
   use ModCommonVariables, ONLY: State_GV,StateOld_GV,nDim,nIon,iRho_I,iP_I,Dt
-  use ModNumConst,        ONLY: cHalf
   use ModPWOM,            ONLY: DtVertical
   implicit none
   real, parameter   :: RatioMin = 0.8, RatioMax = 1.2, cIncrease = 1.2
@@ -36,7 +35,7 @@ subroutine calc_dt
   if (pRatioMin < RatioMin .or. pRatioMax > RatioMax &
        .or. RhoRatioMin < RatioMin .or. RhoRatioMax > RatioMax) then
 !     write(*,*) 'reducing orig timestep, Dt = ',Dt 
-     Dt = Dt * cHalf
+     Dt = 0.5*Dt
      Dt = max(Dt,DtMin)
      Dt = min(Dt,DtVertical)
 !     write(*,*) 'reducing timestep, Dt = ',Dt
