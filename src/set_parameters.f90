@@ -122,12 +122,15 @@ subroutine PW_set_parameters(NameAction)
 
      case('#REGRID')
         call read_var('DoRegrid',DoRegrid)
-        call read_var('DtRegrid',DtRegrid)
-        call read_var('DoSavePoints',DoSavePoints)
-        call read_var('DoAdaptGrid',DoAdaptGrid)
-        if(DoAdaptGrid) then
-           call read_var('TypeAdaptCriteria',TypeAdaptCriteria)
+        if(DoRegrid)then
+           call read_var('DtRegrid',DtRegrid)
+           call read_var('DoSavePoints',DoSavePoints)
+           call read_var('DoAdaptGrid',DoAdaptGrid)
+           if(DoAdaptGrid) then
+              call read_var('TypeAdaptCriteria',TypeAdaptCriteria)
+           endif
         endif
+
      case('#MOTION')
         call read_var('DoMoveLine', DoMoveLine)
 

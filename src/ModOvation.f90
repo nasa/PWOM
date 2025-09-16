@@ -1,61 +1,66 @@
 module ModOvation
-implicit none
 
-private
+  use ModUtilities, ONLY: open_file, close_file
+  use ModIoUnit, ONLY: UnitTmp_
+  
+  implicit none
 
-logical,public:: UseOvation = .false.
-logical,public:: DoPlotOvation = .false.
-real,public :: StartTime
-real,public :: OvationEmin,OvationEmax
-! Time Cadence at which ovation data is provided
-integer,parameter :: DtReadOvation = 300.0
+  private
 
-! parameters for ovation grid
-integer,parameter :: nMlt=96,nLat=80
-!integer,parameter :: nMlt=80,nLat=96
-real ,parameter   :: LatMax=89.5,LatMin=50
-integer :: Mlt_=1,Lat_=2
+  logical,public:: UseOvation = .false.
+  logical,public:: DoPlotOvation = .false.
+  real,public :: StartTime
+  real,public :: OvationEmin,OvationEmax
+  ! Time Cadence at which ovation data is provided
+  integer,parameter :: DtReadOvation = 300.0
 
-! hold ovation data
-real :: efluxDiff_G(0:nMlt+1,0:nLat+1)
-real :: nfluxDiff_G(0:nMlt+1,0:nLat+1)
-real :: CoordDiff_DG(2,0:nMlt+1,0:nLat+1)
+  ! parameters for ovation grid
+  integer,parameter :: nMlt=96,nLat=80
+  !integer,parameter :: nMlt=80,nLat=96
+  real ,parameter   :: LatMax=89.5,LatMin=50
+  integer :: Mlt_=1,Lat_=2
 
-real :: efluxMono_G(0:nMlt+1,0:nLat+1)
-real :: nfluxMono_G(0:nMlt+1,0:nLat+1)
-real :: CoordMono_DG(2,0:nMlt+1,0:nLat+1)
+  ! hold ovation data
+  real :: efluxDiff_G(0:nMlt+1,0:nLat+1)
+  real :: nfluxDiff_G(0:nMlt+1,0:nLat+1)
+  real :: CoordDiff_DG(2,0:nMlt+1,0:nLat+1)
 
-real :: efluxWave_G(0:nMlt+1,0:nLat+1)
-real :: nfluxWave_G(0:nMlt+1,0:nLat+1)
-real :: CoordWave_DG(2,0:nMlt+1,0:nLat+1)
-! current ovation data file
-Character(len=200) :: NameFile
+  real :: efluxMono_G(0:nMlt+1,0:nLat+1)
+  real :: nfluxMono_G(0:nMlt+1,0:nLat+1)
+  real :: CoordMono_DG(2,0:nMlt+1,0:nLat+1)
 
-integer :: iTimeRead_I(7)
+  real :: efluxWave_G(0:nMlt+1,0:nLat+1)
+  real :: nfluxWave_G(0:nMlt+1,0:nLat+1)
+  real :: CoordWave_DG(2,0:nMlt+1,0:nLat+1)
+  ! current ovation data file
+  Character(len=200) :: NameFile
 
-character(len=3)::NameMonth
+  integer :: iTimeRead_I(7)
 
-! public methods
-public :: unit_test_ovation
-public :: get_ovation_point
-public :: read_ovation_all
-public :: plot_ovation_polar    
+  character(len=3)::NameMonth
+
+  ! public methods
+  public :: unit_test_ovation
+  public :: get_ovation_point
+  public :: read_ovation_all
+  public :: plot_ovation_polar    
 
 contains
-  !=============================================================================
-  ! get Eflux[ergs/cm2/s] and Emean[eV] for input SmLat and SmLon for 
-  ! each type of precip
+  !============================================================================
   subroutine get_ovation_point(SmLat,SmLon,EMeanDiff,EFluxDiff,&
        EMeanWave,EFluxWave,EMeanMono,EFluxMono)
+
+    ! get Eflux[ergs/cm2/s] and Emean[eV] for input SmLat and SmLon for 
+    ! each type of precip
     use ModInterpolate, ONLY: bilinear
+
     real, intent(in) :: SmLat,SmLon !input in degrees
     real, intent(out):: EMeanDiff,EFluxDiff,&
          EMeanWave,EFluxWave,EMeanMono,EFluxMono
     real,parameter :: cLonToMlt=0.0666667 !lon (deg) to mlt
     real,parameter :: cErgToeV=6.242e11
     real :: nFluxDiff, nFluxMono, nFluxWave,Mlt
-    !---------------------------------------------------------------------------
-    
+    !--------------------------------------------------------------------------
     if (SmLat>CoordDiff_DG(Lat_,1,1)) then
        Mlt = modulo(SmLon*cLonToMlt+12.0,24.0)
        EfluxDiff= &
@@ -73,7 +78,7 @@ contains
             bilinear(nfluxMono_G,0,nMlt+1,0,nLat+1,(/Mlt,SmLat/),&
             CoordMono_DG(Mlt_,:,1),CoordMono_DG(Lat_,1,:),DoExtrapolate=.true.)
        EMeanMono=EfluxMono/nFluxMono*cErgToeV
-       
+
        EfluxWave= &
             bilinear(efluxWave_G,0,nMlt+1,0,nLat+1,(/Mlt,SmLat/),&
             CoordWave_DG(Mlt_,:,1),CoordWave_DG(Lat_,1,:),DoExtrapolate=.true.)
@@ -90,22 +95,21 @@ contains
        EfluxWave=0.0
        EMeanWave=0.0
     endif
-    
-    
+
+
   end subroutine get_ovation_point
-  !=============================================================================
+  !============================================================================
   subroutine read_ovation_all(tSimulation)
     real, intent(in) :: tSimulation
-    
+    !--------------------------------------------------------------------------
     call read_ovation(tSimulation,'diff')
     call read_ovation(tSimulation,'wave')
     call read_ovation(tSimulation,'mono')
   end subroutine read_ovation_all
-
-  !=============================================================================
+  !============================================================================
   subroutine read_ovation(tSimulation,TypePrecip)
+
     use ModTimeConvert, ONLY: time_real_to_int
-    use ModIoUnit, ONLY: io_unit_new,UnitTmp_
     !use ModPwTime,ONLY: StartTime,
     real, intent(in) :: tSimulation
     character(len=4) :: TypePrecip
@@ -114,22 +118,21 @@ contains
     real :: nflux_G(0:nMlt+1,0:nLat+1)
     real :: Coord_DG(2,0:nMlt+1,0:nLat+1)
     integer, parameter :: Year_=1,Month_=2,Day_=3,Hour_=4,Minute_=5,Second_=6
-    
+
     !file names
     Character(len=100) :: NameFileEflux,NameFileNumberFlux
     Character(len=200) :: header
-    
+
     integer :: iMlt, iLat
-    
-    !---------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     CurrentTime=StartTime+tSimulation
     ! get read time closest to simulation time without going over
     TimeRead = (floor(CurrentTime/DtReadOvation) * DtReadOvation)
     call time_real_to_int(TimeRead,iTimeRead_I)
-    
+
     ! make sure seconds are cleaned up
     iTimeRead_I(Second_) = 0
-     
+
     ! Get 3 character month string that corresponds to numerical month
     if (iTimeRead_I(Month_)==1) then
        NameMonth = 'Jan'
@@ -156,7 +159,7 @@ contains
     elseif (iTimeRead_I(Month_)==12) then
        NameMonth = 'Dec'
     endif
-    
+
     !sample name: epoch_2013_energy_flux_for_1998-Sep-25_2355.txt
     !reconstruct the file name
     write(NameFile,"(a,a,a,i4.4,a,a,a,i2.2,a,i2.2,i2.2,a,a,a)") &
@@ -166,7 +169,7 @@ contains
     write(*,*) NameFile
 
     !open file for reading
-    open(UnitTmp_,file=NameFile,status="old")
+    call open_file(FILE=NameFile, STATUS="old")
     !discard header
     read(UnitTmp_,*) header
 
@@ -176,7 +179,7 @@ contains
                eflux_G(iMlt,iLat)
        enddo
     enddo
-    close(UnitTmp_)
+    call close_file
 
     ! Now get filename for number flux and read
     write(NameFile,"(a,a,a,i4.4,a,a,a,i2.2,a,i2.2,i2.2,a,a,a)") &
@@ -185,7 +188,7 @@ contains
          iTimeRead_I(Hour_),iTimeRead_I(Minute_),'_',TypePrecip,'.txt'   
 
     !open file for reading
-    open(UnitTmp_,file=NameFile,status="old")
+    call open_file(FILE=NameFile, STATUS="old")
     !discard header
     read(UnitTmp_,*) header
 
@@ -195,8 +198,7 @@ contains
                nflux_G(iMlt,iLat)
        enddo
     enddo
-    close(UnitTmp_)
-    
+    call close_file
 
     ! fill ghost cells
     Coord_DG(Mlt_,nMlt+1,:)=24.0
@@ -214,13 +216,13 @@ contains
 
     eflux_G(:,0)= eflux_G(:,1)
     eflux_G(:,nLat+1)= eflux_G(:,nLat)
-    
+
     nflux_G(nMlt+1,:)= nflux_G(1,:)
     nflux_G(0,:)= nflux_G(nMlt,:)
 
     nflux_G(:,0)= nflux_G(:,1)
     nflux_G(:,nLat+1)= nflux_G(:,nLat)
-      
+
     ! put into appropriate array
     select case(TypePrecip)
     case('diff')
@@ -237,30 +239,30 @@ contains
        CoordWave_DG=Coord_DG
        efluxWave_G= eflux_G
        nfluxWave_G= nflux_G
-       
+
     end select
 
   end subroutine read_ovation
-  !===========================================================================
+  !============================================================================
   subroutine plot_ovation
-    use ModIoUnit,    ONLY: UnitTmp_
+
     use ModNumConst, ONLY: cDegToRad, cRadToDeg
     integer :: iLat, iMlt
     Character(len=200) :: NameFileOut
     integer, parameter :: Year_=1,Month_=2,Day_=3,Hour_=4,Minute_=5,Second_=6
-    !filename for plotting output
+    !--------------------------------------------------------------------------
     write(NameFileOut,"(a,i4.4,a,a,a,i2.2,a,i2.2,i2.2,a)") &
          'PW/OVATION/plots/precip_for_',&
          iTimeRead_I(Year_),'-',NameMonth,'-',iTimeRead_I(Day_),'_',&
          iTimeRead_I(Hour_),iTimeRead_I(Minute_),'.dat'   
 
-    
-    open(UnitTmp_,FILE=NameFileOut)
+    call open_file(UnitTmp_,FILE=NameFileOut)
     write(UnitTmp_,'(a)') &
-         'VARIABLES = "Lat", "MLT", "efluxDiff" "nfluxDiff", "efluxMono", "nfluxMono", "efluxWave" "nfluxWave"'
+         'VARIABLES = "Lat", "MLT", "efluxDiff" "nfluxDiff", "efluxMono", '// &
+         '"nfluxMono", "efluxWave" "nfluxWave"'
     write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nLat, &
          ', J=', nMLT+1,', DATAPACKING=POINT'
-    
+
     do iMlt = 1, nMlt+1
        do iLat = 1, nLat
           write(UnitTmp_,"(100es18.10)") CoordDiff_DG(Lat_,iMLT,iLat),&
@@ -270,30 +272,31 @@ contains
                nfluxWave_G(iMlt,iLat)
        enddo
     enddo
-    close(UnitTmp_)
+    call close_file(UnitTmp_)
+
   end subroutine plot_ovation
   !===========================================================================
   subroutine plot_ovation_polar
-    use ModIoUnit,    ONLY: UnitTmp_
-    use ModNumConst, ONLY: cDegToRad, cRadToDeg,cPi
+
+    use ModNumConst, ONLY: cDegToRad, cRadToDeg, cPi
+
     integer :: iLat, iMlt
     real :: theta,phi,xpos,ypos
     Character(len=200) :: NameFileOut
     integer, parameter :: Year_=1,Month_=2,Day_=3,Hour_=4,Minute_=5,Second_=6
-    !---------------------------------------------------------------------------
-
-    !filename for plotting output
+    !--------------------------------------------------------------------------
     write(NameFileOut,"(a,i4.4,a,a,a,i2.2,a,i2.2,i2.2,a)") &
          'PW/OVATION/plots/polar_precip_for_',&
          iTimeRead_I(Year_),'-',NameMonth,'-',iTimeRead_I(Day_),'_',&
          iTimeRead_I(Hour_),iTimeRead_I(Minute_),'.dat'   
 
-    open(UnitTmp_,FILE=NameFileOut)
+    call open_file(FILE=NameFileOut)
     write(UnitTmp_,'(a)') &
-         'VARIABLES = "Y", "X", "Lat", "Mlt", "efluxDiff" "nfluxDiff", "efluxMono", "nfluxMono", "efluxWave" "nfluxWave"'
+         'VARIABLES = "Y", "X", "Lat", "Mlt", "efluxDiff" "nfluxDiff", '// &
+         '"efluxMono", "nfluxMono", "efluxWave" "nfluxWave"'
     write(UnitTmp_,'(a,i3,a,i3,a)') 'Zone I=', nLat, &
          ', J=', nMLT+1,', DATAPACKING=POINT'
-    
+
     do iMlt = 1, nMlt+1
        do iLat = 1, nLat
           phi=modulo((CoordDiff_DG(Mlt_,iMLT,iLat)-12.0),24.0)*cPi/12
@@ -308,18 +311,19 @@ contains
                nfluxWave_G(iMlt,iLat)
        enddo
     enddo
-    close(UnitTmp_)
-  end subroutine plot_ovation_polar
+    call close_file(UnitTmp_)
 
+  end subroutine plot_ovation_polar
   !============================================================================
   subroutine unit_test_ovation
+
     use ModTimeConvert, ONLY: time_int_to_real
     integer :: iStartTime_I(7)=(/1998,9,25,23,55,0,0/)
     real :: time=0.0
-!    real :: SmLat=77.0,SmLon=0.0
+    !    real :: SmLat=77.0,SmLon=0.0
     real :: SmLat=66.0,SmLon=180.0
     real ::EMeanDiff,EFluxDiff,EMeanWave,EFluxWave,EMeanMono,EFluxMono
-    !---------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     write(*,*) 'testing for time'
     write(*,*) 'year:',iStartTime_I(1)
     write(*,*) 'month:',iStartTime_I(2)
@@ -332,7 +336,7 @@ contains
     call time_int_to_real(iStartTime_I,StartTime)
 
     call read_ovation_all(time)
-    
+
     call plot_ovation_polar
     call plot_ovation
 
@@ -343,8 +347,8 @@ contains
     write(*,*) 'Diff:', EFluxDiff,EMeanDiff
     write(*,*) 'Mono:', EFluxMono,EMeanMono
     write(*,*) 'Wave:', EFluxWave,EMeanWave
-    
+
   end subroutine unit_test_ovation
-
-
+  !============================================================================
 end module ModOvation
+!==============================================================================

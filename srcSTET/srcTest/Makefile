@@ -46,7 +46,7 @@ unit_test_grid_potential_exe:
 	@make unit_test_grid_potential.o 
 	${LINK.f90} -o unit_test_grid_potential.exe ${OBJ_GRID_POT} \
 		unit_test_grid_potential.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_grid_potential: 
 	@echo unit_test_grid_potential starting
@@ -70,7 +70,7 @@ unit_test_update_plasmasphere_exe:
 	@make unit_test_update_plasmasphere.o 
 	${LINK.f90} -o unit_test_update_plasmasphere.exe ${OBJ_UPDATE_PLAS} \
 		unit_test_update_plasmasphere.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_plasmasphere: 
 	@echo unit_test_update_plasmasphere starting
@@ -94,7 +94,7 @@ unit_test_update_plasmasphere_pot_exe:
 	${LINK.f90} -o unit_test_update_plasmasphere_pot.exe \
 		${OBJ_UPDATE_PLAS_POT} unit_test_update_plasmasphere_pot.o \
 		-L${LIBDIR}  -lEMPIRICALIE -lEMPIRICALUA -lINDICES -lSHARE \
-		-lTIMING ${Lflag1}
+		-lTIMING ${LflagMpi}
 
 unit_test_update_plasmasphere_pot: 
 	@echo unit_test_update_plasmasphere_pot starting
@@ -123,7 +123,7 @@ unit_test_update_iono_exe:
 	@make unit_test_update_iono.o 
 	${LINK.f90} -o unit_test_update_iono.exe ${OBJ_UPDATE_IONO} \
 		unit_test_update_iono.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_iono: 
 	@echo unit_test_update_iono starting
@@ -152,7 +152,7 @@ unit_test_update_iono_pot_exe:
 	@make unit_test_update_iono_pot.o 
 	${LINK.f90} -o unit_test_update_iono_pot.exe ${OBJ_UPDATE_IONO_POT} \
 		unit_test_update_iono_pot.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_iono_pot: 
 	@echo unit_test_update_iono_pot starting
@@ -180,7 +180,7 @@ unit_test_update_iono_plas_pot_exe:
 	@make unit_test_update_iono_plas_pot.o 
 	${LINK.f90} -o unit_test_update_iono_plas_pot.exe ${OBJ_UPDATE_IONO_PLAS_POT} \
 		unit_test_update_iono_plas_pot.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_iono_plas_pot: 
 	@echo unit_test_update_iono_plas_pot starting
@@ -204,7 +204,7 @@ unit_test_update_iono_nosources_exe:
 	@make unit_test_update_iono_nosources.o 
 	${LINK.f90} -o unit_test_update_iono_nosources.exe ${OBJ_UPDATE_IONO_NOSOURCES} \
 		unit_test_update_iono_nosources.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_iono_nosources: 
 	@echo unit_test_update_iono_nosources starting
@@ -227,7 +227,7 @@ unit_test_update_iono_nosources_pot_exe:
 	@make unit_test_update_iono_nosources_pot.o 
 	${LINK.f90} -o unit_test_update_iono_nosources_pot.exe ${OBJ_UPDATE_IONO_NOSOURCES_POT} \
 		unit_test_update_iono_nosources_pot.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_update_iono_nosources_pot: 
 	@echo unit_test_update_iono_nosources_pot starting
@@ -253,7 +253,7 @@ unit_test_background_exe:
 	@make unit_test_background.o 
 	${LINK.f90} -o unit_test_background.exe ${OBJ_BACKGROUND} \
 		unit_test_background.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_background: 
 	@echo unit_test_background starting
@@ -275,7 +275,7 @@ unit_test_res_scatter_exe:
 	@make unit_test_res_scatter.o 
 	${LINK.f90} -o unit_test_res_scatter.exe ${OBJ_RESSCATTER} \
 		unit_test_res_scatter.o -L${LIBDIR}  -lEMPIRICALIE \
-		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${Lflag1}
+		-lEMPIRICALUA -lINDICES -lSHARE -lTIMING ${LflagMpi}
 
 unit_test_res_scatter: 
 	@echo unit_test_res_scatter starting

@@ -1,29 +1,32 @@
-!  Copyright (C) 2002 Regents of the University of Michigan, portions used with permission 
+!  Copyright (C) 2002 Regents of the University of Michigan,
+!  portions used with permission 
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModPWOM
 
   use ModParameters
   use ModCommonPlanet, ONLY: nVar
+
   implicit none
 
   logical :: IsStandAlone = .false.
-  logical :: UseIonHeat=.true.,UseEleHeat=.true.,UseExplicitHeat=.false.
+  logical :: UseIonHeat=.true., UseEleHeat=.true., UseExplicitHeat=.false.
   logical :: UseIndicies=.false.
   integer :: iUnitOut
-  character (len=7) :: StringPrefix=''
+  character(len=7) :: StringPrefix=''
 
   integer :: iProc, nProc, iComm,errcode
 
   integer :: iProcTest = 0, iLineTest = 1
-  character (len=100):: StringTest = ''
+  character(len=100):: StringTest = ''
 
   integer, parameter :: MaxLine = 500
   
   integer :: nTotalLine=1
   integer :: iTheta, iPhi, iUnitSouth,iUnitNorth,i,iLine=0
-  integer, dimension(:), allocatable::iLineGlobal
+  integer, dimension(:), allocatable:: iLineGlobal
 
-  real    ::   Bcoef,MagMoment,rPlanet,OmegaPlanet,Dtheta,Dphi,rLowerBoundary
+  real    :: Bcoef, MagMoment, rPlanet, OmegaPlanet, &
+       Dtheta, Dphi, rLowerBoundary
 
   integer :: nLine,nLog=0
 
@@ -34,8 +37,6 @@ module ModPWOM
   integer :: nAltParticles,iAltParticle
   real    :: AltMinParticles,AltMaxParticles !in cm
   character(len=100) :: TypeParticleGrid='Uniform'
-  
-
 
   ! The number of lines on each processor and on the processors with lower rank
   integer, allocatable :: nLine_P(:), nLineBefore_P(:)
@@ -47,11 +48,11 @@ module ModPWOM
   ! ionosphere variables
   integer :: nTheta = -1, nPhi = -1
   real, dimension(:,:), allocatable :: &
-       Theta_G,Phi_G,SigmaH_G,SigmaP_G, &
-       Jr_G,Potential_G,Br_G,Btheta_G,  &
+       Theta_G, Phi_G, SigmaH_G, SigmaP_G, &
+       Jr_G, Potential_G, Br_G, Btheta_G,  &
        BmagnitudeSquared_G, &
-       Ephi_C,Etheta_C,Er_C, uExBtheta_C,&
-       uExBphi_C,uExBr_C,ElectronEnergyFlux_C,&
+       Ephi_C, Etheta_C, Er_C, uExBtheta_C,&
+       uExBphi_C, uExBr_C, ElectronEnergyFlux_C,&
        ElectronAverageEnergy_C, AvE_G, Eflux_G
 
 
@@ -64,11 +65,11 @@ module ModPWOM
        ThetaLineOld_I, PhiLineOld_I,     &
        UxLine_I,UyLine_I,UzLine_I,       &
        OmegaLine_I,                      &
-       JrLine_I,EfluxLine_I,AvELine_I
+       JrLine_I, EfluxLine_I, AvELine_I
   
   integer :: nStep=0
   
-  integer, dimension(:), allocatable        ::  iThetaLine_I,iPhiLine_I
+  integer, dimension(:), allocatable:: iThetaLine_I, iPhiLine_I
   real   ::  DtHorizontalOrig = 60.0, DtHorizontal=60.0, Time, TimeMax
   real, allocatable   ::  Dt_I(:)
   logical::  DoMoveLine=.true., UseJr=.true., UseCentrifugal=.true.
@@ -78,22 +79,20 @@ module ModPWOM
   logical::  DoSavePlot=.true., DoAppendPlot=.false.
   character(len=100) :: NamePhiNorth, NamePhiSouth
 
-  character(len=100) :: NameInput,  &
-                   NameCollision,NameSourceGraphics
+  character(len=100) :: NameInput, NameCollision, NameSourceGraphics
 
-  character(len=100),dimension(:), allocatable:: &
+  character(len=100), dimension(:), allocatable:: &
        NameRestartIn, NameRestart, NameGraphics,NameOutput
 
-  integer       :: iUnitInput,iUnitSourceGraphics,&
-                   iUnitCollision,nAlt=390
+  integer:: iUnitInput, iUnitSourceGraphics, iUnitCollision, nAlt=390
                  
   integer, dimension(:), allocatable :: &
-       iUnitRestart,iUnitRestartIn,iUnitGraphics,iUnitOutput
+       iUnitRestart, iUnitRestartIn, iUnitGraphics, iUnitOutput
   
   real,allocatable :: r_C(:)
   real,allocatable :: State_CVI(:,:,:)
 
-  real :: DToutput=50.0, DtVertical=0.05, Tmax=100.0,DtPlotElectrodynamics=10.0
+  real:: DtOutput=3600.0, DtVertical=0.05, Tmax=100.0, DtPlotElectrodynamics=-1.0
   integer :: MaxStep = -1, DnOutput=-1
   logical :: IsTimeAccurate = .true.
 
@@ -104,14 +103,14 @@ module ModPWOM
        IsRestart          = .true.,   &
        IsVariableDt       = .false.
 
-  character(7)   :: TypeSolver='Godunov'
-  character(100)  :: TypeFlux='Rusanov'
+  character(len=7)   :: TypeSolver='Godunov'
+  character(len=100) :: TypeFlux='Rusanov'
   real ::  BetaIn = 1.0  ! limiter beta: 1 <= Beta <= 2, 0 for first order
   real ::  Beta = 1.0    ! actual beta used (changes in implicit scheme) 
 
-  character(100)  :: NameUpperBC='ScaleHeight'
+  character(len=100) :: NameUpperBC='ScaleHeight'
   
-  logical, dimension(:),allocatable :: IsNorth_I
+  logical, allocatable :: IsNorth_I(:)
 
 contains
   !==========================================================================

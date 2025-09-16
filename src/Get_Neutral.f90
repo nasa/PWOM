@@ -5,6 +5,7 @@ subroutine GetNeutralData
   ! Read in an input file produced by GITM and store the values in a module
 
   use ModNeutralPW
+  use ModUtilities, ONLY: open_file, close_file
 
   Logical       :: IsFirstCall = .true.
   Character*100 :: NameGITM
@@ -14,7 +15,7 @@ subroutine GetNeutralData
   
   If (IsFirstCall) Then
      call init_mod_neutral
-     open(iUnitGITM,file=NameGITM)
+     call open_file(iUnitGITM, FILE=NameGITM)
      do iLon=1,nlon 
         do iLat=1,nLat 
            do iAlt=1,nAlt
@@ -43,53 +44,46 @@ subroutine GetNeutralData
            enddo
         enddo
      enddo
-     close(iUnitGITM)
+     call close_file(iUnitGITM)
      IsFirstCall=.false.
   endif
 
 end subroutine GetNeutralData
-
 !******************************************************************************
-! Get_Neutrals searches the Neutral Atmosphere array from GITM and returns
-! the Neutral densities and other parameters at the input point
-!******************************************************************************
-
 subroutine Get_Neutrals (glatin,glonin,gAltin,Temperature_Out,DensityO_Out,&
-                     DensityO2_Out,DensityN2_Out,DensityNO_Out,            &
-                     IonizationEUV_Out, IonizationAurora_Out)
+     DensityO2_Out,DensityN2_Out,DensityNO_Out,            &
+     IonizationEUV_Out, IonizationAurora_Out)
   use ModNeutralPW
-  
+
+  ! Get_Neutrals searches the Neutral Atmosphere array from GITM and returns
+  ! the Neutral densities and other parameters at the input point
+
   integer  ::  iLon,iLat,iAlt, iGlat, iGlon,iGAlt
 
-!These are output variables
+  !These are output variables
   real,intent(out)::Temperature_Out,DensityO_Out,DensityO2_Out,        &
-                  DensityN2_Out,DensityNO_Out,IonizationEUV_Out,       &
-                  IonizationAurora_Out                        !  &
-                  !,DensityN_4S_Out,                                    &
-                  !DensityN_2D_Out,uNeutralEast_Out,uNeutralNorth_Out,  &
-                  !uNeutralUp_Out,uIonEast_Out,                         &
-                  !uIonNorth_Out, uIonUp_Out,Potential_Out,             &
-                  !uNeutralUpO_Out,uNeutralUpO2_Out,uNeutralUpN2_Out,   &
-                  !uNeutralUpN_Out
+       DensityN2_Out,DensityNO_Out,IonizationEUV_Out,       &
+       IonizationAurora_Out                        !  &
+  !,DensityN_4S_Out,                                    &
+  !DensityN_2D_Out,uNeutralEast_Out,uNeutralNorth_Out,  &
+  !uNeutralUp_Out,uIonEast_Out,                         &
+  !uIonNorth_Out, uIonUp_Out,Potential_Out,             &
+  !uNeutralUpO_Out,uNeutralUpO2_Out,uNeutralUpN2_Out,   &
+  !uNeutralUpN_Out
 
 
   real, intent(in) :: glatin,glonin,gAltin
   real             :: glat,glon,gAlt
-  
-  real    ::  ScaleHeightO, ScaleHeightO2, ScaleHeightN2, ScaleHeightNO 
 
+  real    ::  ScaleHeightO, ScaleHeightO2, ScaleHeightN2, ScaleHeightNO 
 
   !convert input lat and lon to radians and alt to m
   glat=glatin*3.14159265358979/180.0
   glon=glonin*3.14159265358979/180.0
   gAlt=gAltin*1.0e3
 
-  
-
-
-! Find the associated latitude and longitude index and then extract an 
-! altitude line-slice of parameters
-
+  ! Find the associated latitude and longitude index and then extract an 
+  ! altitude line-slice of parameters
 
   if (glat .le.Latitude(1,floor(nLat/2.0),1)) Then
 
@@ -101,7 +95,6 @@ subroutine Get_Neutrals (glatin,glonin,gAltin,Temperature_Out,DensityO_Out,&
            endif
         enddo
      else
-
         do iLat=floor(nLat/4.0)+1,floor(nLat/2.0)
            if (glat .le. Latitude(1,iLat,1)) Then
               iGlat=iLat
@@ -206,24 +199,20 @@ subroutine Get_Neutrals (glatin,glonin,gAltin,Temperature_Out,DensityO_Out,&
      iGAlt=nAlt+1
   endif
 
+  !  write(*,*) 'lat', iGlat, Latitude(1,iGlat,1)*180.0/3.14159265358979, &
+  !       Latitude(iGlon,iGlat,1)*180.0/3.14159265358979&
+  !       ,gLat*180.0/3.14159265358979
+  !  
+  !  write(*,*) 'lon', iGlon, Longitude(iGlon,1,1)*180.0/3.14159265358979, &
+  !       Longitude(iGlon,iGlat,1)*180.0/3.14159265358979,&
+  !       gLon*180.0/3.14159265358979
+  !  
+  !  write(*,*) 'Alt', iGAlt, Altitude(1,1,iGAlt), &
+  !       Altitude(iGlon,iGlat,iGAlt),&
+  !       gAlt
 
- 
+  ! convert output densities to cm^-3
 
-  
-!  write(*,*) 'lat', iGlat, Latitude(1,iGlat,1)*180.0/3.14159265358979, &
-!       Latitude(iGlon,iGlat,1)*180.0/3.14159265358979&
-!       ,gLat*180.0/3.14159265358979
-!  
-!  write(*,*) 'lon', iGlon, Longitude(iGlon,1,1)*180.0/3.14159265358979, &
-!       Longitude(iGlon,iGlat,1)*180.0/3.14159265358979,&
-!       gLon*180.0/3.14159265358979
-!  
-!  write(*,*) 'Alt', iGAlt, Altitude(1,1,iGAlt), &
-!       Altitude(iGlon,iGlat,iGAlt),&
-!       gAlt
-
-! convert output densities to cm^-3
-  
   If (iGAlt .le. nAlt) then
      Temperature_Out=Temperature(iGlon,iGlat,iGAlt)  
      DensityO_Out   = DensityO  (iGlon,iGlat,iGAlt)*1.0e-6 
@@ -234,21 +223,21 @@ subroutine Get_Neutrals (glatin,glonin,gAltin,Temperature_Out,DensityO_Out,&
      IonizationAurora_Out= IonizationAurora(iGlon,iGlat,iGAlt)
   else
      Temperature_Out=Temperature(iGlon,iGlat,nAlt)  
-     
+
      ScaleHeightO   = 1.38e-23*Temperature_Out/(2.67e-26*9.8) 
      ScaleHeightO2  = 1.38e-23*Temperature_Out/(5.31e-26*9.8) 
      ScaleHeightN2  = 1.38e-23*Temperature_Out/(4.65e-26*9.8) 
      ScaleHeightNO  = 1.38e-23*Temperature_Out/(4.98e-26*9.8) 
 
      DensityO_Out   = DensityO(iGlon,iGlat,nAlt)*1.0e-6&
-                      * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO)
+          * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO)
      DensityO2_Out  = DensityO2(iGlon,iGlat,nAlt)*1.0e-6&
-                      * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO2)
+          * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO2)
      DensityN2_Out  = DensityN2(iGlon,iGlat,nAlt)*1.0e-6&
-                      * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN2)
+          * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN2)
      DensityNO_Out  = DensityNO(iGlon,iGlat,nAlt)*1.0e-6&
-                      * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN0)
- 
+          * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN0)
+
      IonizationEUV_Out = IonizationEUV(iGlon,iGlat,nAlt) &
           * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN0)
 
@@ -256,12 +245,8 @@ subroutine Get_Neutrals (glatin,glonin,gAltin,Temperature_Out,DensityO_Out,&
           * exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightN0)
 
 
-!     write(*,*) ScaleHeightO, DensityO_Out,DensityO(iGlon,iGlat,nAlt),&
-!          GAlt,Altitude(iGlon,iGlat,nAlt)-GAlt,exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO)
+     !     write(*,*) ScaleHeightO, DensityO_Out,DensityO(iGlon,iGlat,nAlt),&
+     !          GAlt,Altitude(iGlon,iGlat,nAlt)-GAlt,exp((Altitude(iGlon,iGlat,nAlt)-GAlt)/ScaleHeightO)
   endif
-
-
-  
-
 
 end subroutine Get_Neutrals

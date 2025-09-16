@@ -61,8 +61,6 @@ The default values are shown.
 Sets the beta parameter in the Rusanov scheme.
 </command>
 
-
-
 <command name="VERTICALGRID">
   <parameter name="nPoints" type="integer" min="0" default="390" />
   <parameter name="DeltaR" type="real" min="0" default="2e6" />
@@ -74,28 +72,23 @@ Sets the beta parameter in the Rusanov scheme.
 Sets the number of grid points in the vertical direction and the grid spacing. 
 </command>
 
+<command name="REGRID">
+  <parameter name="DoRegrid" type="logical" default="F" />
+  <parameter name="DtRegrid" type="real" min="0" if="$DoRegrid"/>
+  <parameter name="DoSavePoints" type="logical" default="F" if="$DoRegrid"/>
 
-<command name="STARTTIME">
-  <parameter name="iYear" type="integer" min="0" default="0" />
-  <parameter name="iMonth" type="integer" min="0" default="0" />
-  <parameter name="iDay" type="integer" min="0" default="0" />
-  <parameter name="iHour" type="integer" min="0" default="0" />
-  <parameter name="iMinute" type="integer" min="0" default="0" />
-  <parameter name="iSecond" type="integer" min="0" default="0" />
+#REGRID
+T			DoRegrid (rest of parameters read if true)
+T			DtRegrid
+F			DoSavePoints
 
-#STARTTIME
-2006			iYear
-7			iMonth
-19			iDay
-0			iHour
-0			iMinute
-0			iSecond
+If DoRegrid is true then regrid the field footpoints every DtRegrid seconds.
+If DoSavePoints is true, save the footpoints and the triangulation before
+the regridding is done. The goal is to maintain a relatively uniform
+coverage of the polar region.
 
-The STARTTIME command sets the integer year, month, day, hour, minute and 
-second at which the simulation begins. This command is only used in standalone 
-mode.
+Default is DoRegrid false.
 </command>
-
 
 <command name="TIMEACCURATE">
   <parameter name="IsTimeAccurate" type="logical" default="T" />
@@ -106,7 +99,6 @@ T		IsTimeAccurate
 DoTimAccurate determines if the field lines are solved in time accurate mode or 
 in steady state mode.
 </command>
-
 
 <command name="TIMESTEP">
   <parameter name="DtHorizontal" type="real" min="0" default="50" />
@@ -127,7 +119,6 @@ F			IsVariableDt
 When IsVariableDt=T then the vertical time step is variable based
 on the change in pressure. 
 </command>
-
 
 <command name="MOTION">
   <parameter name="DoMoveLine" type="logical" default="T"/>
@@ -150,14 +141,14 @@ This command determines whether centrifugal forces should be included. The
 default is shown. 
 </command>
 
-<command name="FAC">
-  <parameter name="UseJr" type="logical" default="F" />
+<command name="FIELDLINE">
+  <parameter name="nTotalLine" type="integer" default="1" />
 
-#FAC
-F               UseJr
+#FIELDLINE
+1		nTotalLine
 
-UseJr determines whether to use field aligned currents to affect the ion
-outflow. The default is shown.
+nTotalLine sets the number of field lines included in the simulation.
+The default is shown.
 </command>
 
 </commandgroup>
@@ -179,16 +170,6 @@ the tested processor is iProcTest, and the tested field line is iLineTest.
 If iLineTest is 0, all field lines produce test output.
 
 Default is an empty StringTest, i.e. no test output is produced.
-</command>
-
-<command name="FIELDLINE">
-  <parameter name="nTotalLine" type="integer" default="1" />
-
-#FIELDLINE
-1		nTotalLine
-
-nTotalLine sets the number of field lines included in the simulation.
-The default is shown.
 </command>
 
 <command name="RESTART">
@@ -258,54 +239,17 @@ DtPlotElectrodynamics parameter.
   <parameter name="EmaxSpecGrid" type="real" min="0" default="100.0" />
   <parameter name="nSpecGrid" type="integer" min="2" default="25.0"/>
   
-	
 #PLOTENERGYGRID
 log			TypeSpecGrid
 0.1                     EminSpecGrid
 100.0                   EmaxSpecGrid
 25			nSpecGrid
 
-These are parameters for the flux spectrum particle output grid. It defines the type of
-grid (linear or log), the minimum energy, the maximum energy, and the number of grid
-points. Defaults are shown. Note that this is just the output grid and does not affect the 
+These are parameters for the flux spectrum particle output grid. It
+defines the type of grid (linear or log), the minimum energy, the
+maximum energy, and the number of grid points. Defaults are
+shown. Note that this is just the output grid and does not affect the
 calculation itself.
-</command>
-
-
-
-<command name="STATICATMOSPHERE">
-  <parameter name="UseStaticAtmosphere" type="logical" default="F" />
-
-#STATICATMOSPHERE
-T			UseStaticAtmosphere
-
-To keep the MSIS atmosphere constant set UseStaticAtmosphere to True.
-</command>
-
-<command name="MSISPARAM">
-  <parameter name="F107"  type="real" min="0" default="0" />
-  <parameter name="F107A" type="real" min="0" default="0" />
-  <parameter name="AP1" type="real" min="0" default="0" />
-  <parameter name="AP2" type="real" min="0" default="0" />
-  <parameter name="AP3" type="real" min="0" default="0" />
-  <parameter name="AP4" type="real" min="0" default="0" />
-  <parameter name="AP5" type="real" min="0" default="0" />
-  <parameter name="AP6" type="real" min="0" default="0" />
-  <parameter name="AP7" type="real" min="0" default="0" />
-
-#MSISPARAM
-60			F107
-60			F107A
-4			AP1
-4			AP2
-4			AP3
-4			AP4
-4			AP5
-4			AP6
-4			AP7
-
-This command sets the MSIS parameters for the the neutral atmosphere. The 
-defaults are shown.
 </command>
 
 <command name="NGDC_INDICES">
@@ -390,6 +334,10 @@ dependant in this case.
 
 </command>
 
+</commandgroup>
+
+<commandgroup name="CONTROL">
+
 <command name="END">
 
 #END
@@ -399,6 +347,27 @@ end of the PARAM.in file. Lines following the #END command are
 ignored. It is not required to use the #END command. The end
 of the included file or PARAM.in file is equivalent with an 
 #END command in the last line.
+</command>
+
+<command name="STARTTIME">
+  <parameter name="iYear" type="integer" min="0" default="0" />
+  <parameter name="iMonth" type="integer" min="0" default="0" />
+  <parameter name="iDay" type="integer" min="0" default="0" />
+  <parameter name="iHour" type="integer" min="0" default="0" />
+  <parameter name="iMinute" type="integer" min="0" default="0" />
+  <parameter name="iSecond" type="integer" min="0" default="0" />
+
+#STARTTIME
+2006			iYear
+7			iMonth
+19			iDay
+0			iHour
+0			iMinute
+0			iSecond
+
+The STARTTIME command sets the integer year, month, day, hour, minute and 
+second at which the simulation begins. This command is only used in standalone 
+mode.
 </command>
 
 <command name="STOP">
@@ -414,6 +383,65 @@ execution. Tmax sets the stop time in timeaccurate mode. and MaxStep sets the
 maximum number of iterations for non-timeaccurate mode.
 </command>
 
+</commandgroup>
+
+<commandgroup name="PHYSICS">
+
+<command name="FLUIDPWI">
+  <parameter name="UseFluidPWI" type="logical" default="F" />
+
+#FLUIDPWI
+T               UseFluidPWI
+
+Use wave-particle interaction for the fluid version of PWOM.
+Default is false.
+</command>
+  
+<command name="FAC">
+  <parameter name="UseJr" type="logical" default="F" />
+
+#FAC
+F               UseJr
+
+UseJr determines whether to use field aligned currents to affect the ion
+outflow. The default is shown.
+</command>
+  
+<command name="STATICATMOSPHERE">
+  <parameter name="UseStaticAtmosphere" type="logical" default="F" />
+
+#STATICATMOSPHERE
+T			UseStaticAtmosphere
+
+To keep the MSIS atmosphere constant set UseStaticAtmosphere to True.
+</command>
+
+<command name="MSISPARAM">
+  <parameter name="F107"  type="real" min="0" default="0" />
+  <parameter name="F107A" type="real" min="0" default="0" />
+  <parameter name="AP1" type="real" min="0" default="0" />
+  <parameter name="AP2" type="real" min="0" default="0" />
+  <parameter name="AP3" type="real" min="0" default="0" />
+  <parameter name="AP4" type="real" min="0" default="0" />
+  <parameter name="AP5" type="real" min="0" default="0" />
+  <parameter name="AP6" type="real" min="0" default="0" />
+  <parameter name="AP7" type="real" min="0" default="0" />
+
+#MSISPARAM
+60			F107
+60			F107A
+4			AP1
+4			AP2
+4			AP3
+4			AP4
+4			AP5
+4			AP6
+4			AP7
+
+This command sets the MSIS parameters for the the neutral atmosphere. The 
+defaults are shown.
+</command>
+  
 <command name="SE">
   <parameter name="DoCoupleSE" type="logical" default="T" />
   <if expr="$DoCoupleSE">
@@ -433,7 +461,6 @@ IsVerboseSE option tells if SE should write lots of output
 (good for debugging one line) or run quietly (good for lots of lines). DtGetSe 
 tells how frequently SE should be called.
 </command>
-
 
 <command name="SETPRECIP">
   <parameter name="UseFixedPrecip" type="logical" default="F"/>
