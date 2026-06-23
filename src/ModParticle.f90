@@ -1,6 +1,8 @@
-Module ModParticle
+module ModParticle
+
   use ModUtilities,    ONLY: CON_stop
   Use ModRandomNumber, ONLY: random_real
+
   implicit none
   
   private
@@ -13,10 +15,11 @@ Module ModParticle
      real    :: vpar, vperp !velocity in [cm/s]
      real    :: Alt ! position in configurational space [cm]
      real    :: NumPerParticle !the weight of the particle (how many real 
-     !particles one macro particle represents).
-     logical :: IsOpen,IsPad   ! defines if particle is in domain or index is avail.
+     ! particles one macro particle represents).
+     ! defines if particle is in domain or index is avail.
+     logical :: IsOpen, IsPad 
   end type particle
-  
+
   !type for holding pointer for particles of a specific species in a cell
   type particleCellSpecies
      type(particle),pointer :: Particle 
@@ -187,8 +190,10 @@ contains
 
   !============================================================================
   subroutine init_particle(nAltIn,AltMin,AltMax,TypeGrid)
-    use ModPlanetConst, ONLY: Planet_, NamePlanet_I, rPlanet_I
+
+    use CON_planet, ONLY: MassPlanet, RadiusPlanet, NamePlanet
     use ModIoUnit, ONLY: UnitTmp_
+
     integer,intent(in) :: nAltIn
     real,   intent(in) :: AltMin, AltMax
     character(len=100),intent(in):: TypeGrid
@@ -201,7 +206,7 @@ contains
     real :: dFrac
     !--------------------------------------------------------------------------
     !set number of species and mass
-    select case(NamePlanet_I(Planet_))
+    select case(NamePlanet)
     case('EARTH')
        nSpecies=3
        O_=1
@@ -364,9 +369,9 @@ contains
        dAlt_G=dAlt
 
        ! set area coef if A=alpha r^3 assuming crossection of 1 cm2 at base
-       rPlanetCM=rPlanet_I(Planet_)*cMtoCm
+       rPlanetCM=RadiusPlanet*cMtoCm
 
-       alpha= 1.0/(rPlanet_I(Planet_)*cMtoCm+AltMin)**3
+       alpha= 1.0/(RadiusPlanet*cMtoCm+AltMin)**3
        
        do iAlt=-1,nAlt+2
           ! set location of cell center and top and bottom faces
@@ -397,8 +402,8 @@ contains
   !============================================================================
   ! push guiding center of particles
   subroutine push_guiding_center
-    use ModPlanetConst, ONLY: Planet_, NamePlanet_I,mPlanet_I,rPlanet_I    
-    use ModConst,ONLY:cGravitation
+    use CON_planet, ONLY: MassPlanet, RadiusPlanet
+    use ModConst, ONLY: cGravitation
     use ModInterpolate, only: linear
     integer :: iParticle,iAlt
     real :: rCoord, Efield,acceleration,gravity,AltStart
@@ -415,10 +420,10 @@ contains
     !$OMP xAlt,iMin,iMax,Dx1,Dx2)
     do iParticle=1,nParticle
        AltStart=Particles_I(iParticle)%Alt
-       !set the radial distance and the gravitational acceleration 
-       ! at particle location. note need rCoord in cm but modplanetconst in SI
-       rCoord=rPlanet_I(Planet_)*cMtoCm+AltStart
-       gravity=cMtoCm**3*cGravitation*mPlanet_I(Planet_)/rCoord**2
+       !set the radial distance and the gravitational acceleration
+       ! at particle location. note need rCoord in cm but CON_planet in SI
+       rCoord=RadiusPlanet*cMtoCm+AltStart
+       gravity=cMtoCm**3*cGravitation*MassPlanet/rCoord**2
        
 
        ! interpolate electric field to particle (note ModInterpolate cannot be 
@@ -475,8 +480,9 @@ contains
   !============================================================================
   ! push guiding center of particles using rk4 method
   subroutine push_guiding_center_rk4
-    use ModPlanetConst, ONLY: Planet_, NamePlanet_I,mPlanet_I,rPlanet_I    
-    use ModConst,ONLY:cGravitation
+
+    use CON_planet, ONLY: MassPlanet, RadiusPlanet
+    use ModConst,ONLY: cGravitation
     use ModInterpolate, only: linear
     integer :: iParticle,iAlt
     real :: rCoord, Efield,acceleration,gravity,AltStart
@@ -486,8 +492,8 @@ contains
     integer :: iMin,iMax
 
     !variables for the rk4 method
-    real :: dAlt1,dAlt2,dAlt3,dAlt4,dVpar1,dVpar2,dVpar3,dVpar4,Vperp,VperpStart
-    real :: VparStart, Mass
+    real:: dAlt1,dAlt2,dAlt3,dAlt4,dVpar1,dVpar2,dVpar3,dVpar4,Vperp,VperpStart
+    real:: VparStart, Mass
     real, parameter ::OneOverSix=0.166666666666666666666666666666666666
     
     !conversion variables
@@ -497,8 +503,7 @@ contains
     !coef for calculation of gravity (to reduce repeated multiplies)
     real :: GravCoef
     !--------------------------------------------------------------------------
-
-    GravCoef = cMtoCm**3*cGravitation*mPlanet_I(Planet_)
+    GravCoef = cMtoCm**3*cGravitation*MassPlanet
 
     !$OMP PARALLEL DO PRIVATE(AltStart,rCoord,gravity,Efield,acceleration,iAlt,&
     !$OMP xAlt,iMin,iMax,Dx1,Dx2,&
@@ -512,8 +517,8 @@ contains
        Mass = Mass_I(Particles_I(iParticle)%iSpecies)
        
        !set the radial distance and the gravitational acceleration 
-       ! at particle location. note need rCoord in cm but modplanetconst in SI
-       rCoord=rPlanet_I(Planet_)*cMtoCm+AltStart
+       ! at particle location. note need rCoord in cm but CON_planet in SI
+       rCoord=RadiusPlanet*cMtoCm+AltStart
        gravity=GravCoef/rCoord**2
        
 
@@ -544,8 +549,8 @@ contains
        Vperp = VperpStart&
             *(AltStart/(AltStart+0.5*dAlt1))**1.5
        !set the radial distance and the gravitational acceleration 
-       ! at particle location. note need rCoord in cm but modplanetconst in SI
-       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+0.5*dAlt1)
+       ! at particle location. note need rCoord in cm but CON_planet in SI
+       rCoord=RadiusPlanet*cMtoCm+(AltStart+0.5*dAlt1)
        gravity=GravCoef/rCoord**2
        
 
@@ -575,8 +580,8 @@ contains
             *(AltStart/(AltStart+0.5*dAlt2))**1.5
 
        !set the radial distance and the gravitational acceleration 
-       ! at particle location. note need rCoord in cm but modplanetconst in SI
-       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+0.5*dAlt2)
+       ! at particle location. note need rCoord in cm but CON_planet in SI
+       rCoord=RadiusPlanet*cMtoCm+(AltStart+0.5*dAlt2)
        gravity=GravCoef/rCoord**2
        
 
@@ -607,8 +612,8 @@ contains
             *(AltStart/(AltStart+dAlt3))**1.5
 
        !set the radial distance and the gravitational acceleration 
-       ! at particle location. note need rCoord in cm but modplanetconst in SI
-       rCoord=rPlanet_I(Planet_)*cMtoCm+(AltStart+dAlt3)
+       ! at particle location. note need rCoord in cm but CON_planet in SI
+       rCoord=RadiusPlanet*cMtoCm+(AltStart+dAlt3)
        gravity=GravCoef/rCoord**2
        
 
@@ -2414,12 +2419,12 @@ contains
 
     !deallocate
     deallocate(iCollider1_I,iCollider2_I)
+
   end subroutine apply_coulomb_collision
-  
-  !=============================================================================
-  ! 
+  !============================================================================
   subroutine apply_wave_particle_interaction(rWaveRef)
-    use ModPlanetConst, ONLY: Planet_,rPlanet_I
+    
+    use CON_planet, ONLY: RadiusPlanet
     use ModNumConst, ONLY: cTwoPi
 
     real, intent(in):: rWaveRef
@@ -2449,7 +2454,7 @@ contains
        RandNum5_I(iParticle)=random_real(iSeed)
     enddo    
 
-    rPlanetCM=rPlanet_I(Planet_)*cMtoCm
+    rPlanetCM=RadiusPlanet*cMtoCm
     !$OMP PARALLEL PRIVATE(iParticle, iSpecies,vpar,vperp,vmag,rCoord,Dperp,&
     !$OMP variance,dVx,dVy,Velx,Vely,theta,phi, xAlt, iMin, iMax,Dx1,Dx2)
     
@@ -3673,9 +3678,11 @@ contains
   !============================================================================
   ! advance the particle solution for some DtAdvance
   subroutine run_particles(DtAdvance,IsCuspOrAurora,SmLat)
-    use ModConst,           ONLY: cElectronCharge
-    use ModPlanetConst,     ONLY: Planet_, NamePlanet_I, rPlanet_I
-    use ModInterpolate, only: linear
+
+    use ModConst, ONLY: cElectronCharge
+    use CON_planet, ONLY: RadiusPlanet
+    use ModInterpolate, ONLY: linear
+
     real, intent(in) :: DtAdvance,SmLat
     logical, intent(in) :: IsCuspOrAurora
 
@@ -3793,7 +3800,7 @@ contains
                 Dperp_I(He_)=0.0  
                 Dexp_I(He_)=7.95
              endif
-             rWaveRef= rPlanet_I(Planet_)*cMtoCm
+             rWaveRef= RadiusPlanet*cMtoCm
           case('General')
              ! uses approach described by Crew et al. [1990], as well as
              ! Retterer et al [1987],...
@@ -3903,11 +3910,14 @@ contains
   end subroutine run_particles
 
   !============================================================================
-  ! calculate the ion cyclotron frequency in hertz
   subroutine get_fci(AltRef, iIon,SmLat, fci)
-    use ModPlanetConst,     ONLY: Earth_,DipoleStrengthPlanet_I,rPlanet_I,Planet_
-    use ModNumConst,        ONLY: cDegToRad,cTwoPi
-    use ModConst,           ONLY: cElectronCharge
+
+    ! calculate the ion cyclotron frequency in hertz
+
+    use CON_planet, ONLY: DipoleStrength, RadiusPlanet
+    use ModNumConst, ONLY: cDegToRad, cTwoPi
+    use ModConst, ONLY: cElectronCharge
+
     real, intent(in):: AltRef !incomming reference alt [cm]
     real, intent(in):: SmLat !Lat in SM at foot of field line [degrees]
     integer, intent(in):: iIon !index of ion species
@@ -3916,19 +3926,18 @@ contains
     real  :: B0ref
     
     real, parameter :: cCmToM=1.0e-2, cGtoKg=1.0e-3
-    real    :: Lshell, rPlanet, dipmom, Lat
+    real    :: Lshell, dipmom, Lat
     real    :: rRef ! reference radius
     !--------------------------------------------------------------------------
-    rPlanet = rPlanet_I(Planet_)                            ! planet's radius (m)
-    dipmom  = abs(DipoleStrengthPlanet_I(Planet_)*rPlanet**3)  ! planet's dipole 
+    dipmom  = abs(DipoleStrength*RadiusPlanet**3)  ! planet's dipole 
     
     !set the reference radius
-    rRef = rPlanet+AltRef*cCmToM
+    rRef = RadiusPlanet+AltRef*cCmToM
     ! find corresponding l-shell
     Lshell = 1.0/(cos(SmLat*cDegToRad))**2.0
     
     ! find corresponding latitude for location on l-shell
-    Lat = acos(sqrt(rRef*cCmToM/(Lshell*rPlanet)))
+    Lat = acos(sqrt(rRef*cCmToM/(Lshell*RadiusPlanet)))
     
     ! get the magnetic field of the reference altitude
     B0ref = &
@@ -4827,6 +4836,5 @@ contains
     end do
        !    call plot_profile
   end subroutine test_combine_fluid_particle
-
-
-end Module ModParticle
+  
+end module ModParticle
