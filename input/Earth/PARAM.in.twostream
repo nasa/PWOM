@@ -7,7 +7,7 @@
 00
 
 #ROTATION
-F		IsCentrifugal
+F		UseCentrifugal
 
 #FIELDLINE
 8		nTotalLine

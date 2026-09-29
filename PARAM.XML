@@ -135,7 +135,7 @@ default value is shown.
   <parameter name="UseCentrifugal" type="logical" default="T" />
 
 #ROTATION
-T		UseCentrifugalForce
+T		UseCentrifugal
 
 This command determines whether centrifugal forces should be included. The
 default is shown. 

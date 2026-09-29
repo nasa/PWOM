@@ -1,35 +1,36 @@
 #ROTATION
-F		IsCentrifugal
+F			UseCentrifugal
 
 #SAVEPLOT
-1.0		DtSavePlot
--1		DnSavePlot
-T		SaveFirst
+1.0			DtSavePlot
+-1			DnSavePlot
+T			DoSaveFirst
+F			DoAppendPlot
 
 #SCHEME
-Rusanov		TypeSolver
-Rusanov		TypeFlux
-0.0001		DtVertical
-F		IsFullyImplicit
-T		IsPointImplicit
-F		IsPointImplicitAll
+Rusanov			TypeSolver
+Rusanov			TypeFlux
+0.0001			DtVertical
+F			IsFullyImplicit
+T			IsPointImplicit
+F			IsPointImplicitAll
 
 #LIMITER
-1.5		LimiterBeta
+1.5			LimiterBeta
 
 #MOTION
-F		IsMoveFluxTube
+F			DoMoveLine
 
 #FAC
-F		IsUseJr
+F			UseJr
 
 #VERTICALGRID
-800		nPoints
-0.75e7		DeltaR
+800			nPoints
+0.75e7			DeltaR
 
 #FIELDLINE
-8		nTotalLine
+8			nTotalLine
 
 #STOP
-10.0		Tmax
--1		MaxStep
+10.0			Tmax
+-1			MaxStep

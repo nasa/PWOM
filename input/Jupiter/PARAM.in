@@ -1,69 +1,70 @@
 #RESTART
-T		IsRestart
+T			IsRestart
 
 #ROTATION
-F		IsCentrifugal
+F			UseCentrifugal
 
 #SAVEPLOT
-1.0		DtSavePlot
--1		DnSavePlot
-T		SaveFirst
+1.0			DtSavePlot
+-1			DnSavePlot
+T			DoSaveFirst
+F			DoAppendPlot
 
 #SCHEME
-Rusanov		TypeSolver
-Rusanov		TypeFlux
-0.0001		DtVertical
-F		IsFullyImplicit
-T		IsPointImplicit
-F		IsPointImplicitAll
+Rusanov			TypeSolver
+Rusanov			TypeFlux
+0.0001			DtVertical
+F			IsFullyImplicit
+T			IsPointImplicit
+F			IsPointImplicitAll
 
 #LIMITER
-1.0		LimiterBeta
+1.0			LimiterBeta
 
 #MOTION
-F		IsMoveFluxTube
+F			DoMoveLine
 
 #FAC
-F		IsUseJr
+F			UseJr
 
 #VERTICALGRID
-550		nPoints
-0.75e7		DeltaR
+550			nPoints
+0.75e7			DeltaR
 
 VERTICALGRID
-800		nPoints
-0.75e7		DeltaR
+800			nPoints
+0.75e7			DeltaR
 
 #FIELDLINE
-4		nTotalLine
+4			nTotalLine
 
 #STOP
-2.0		Tmax
--1		MaxStep
+2.0			Tmax
+-1			MaxStep
 
 #MSISPARAM
-180.0		F107
-180.0		F107A
-4.0		AP(1)
-4.0		AP(2)
-4.0		AP(3)
-4.0		AP(4)
-4.0		AP(5)
-4.0		AP(6)
-4.0		AP(7)
+180.0			F107
+180.0			F107A
+4.0			AP1
+4.0			AP2
+4.0			AP3
+4.0			AP4
+4.0			AP5
+4.0			AP6
+4.0			AP7
 
 #SE
-T		DoCoupleSE
-T		UseFeedbackFromSE
-F		IsVerboseSE
-120		DtGetSe
+T			DoCoupleSE
+T			UseFeedbackFromSE
+F			IsVerboseSE
+120			DtGetSe
 
 #SETPRECIP
-F		UseFixedPrecip
-0        	PrecipEnergyMin        
-0		PrecipEnergyMax        
-0        	PrecipEnergyMean        
-0        	PrecipEnergyFlux        
+F			UseFixedPrecip
+0			PrecipEnergyMin
+0			PrecipEnergyMax
+0			PrecipEnergyMean
+0			PrecipEnergyFlux
 
 #UPPERBC
-FlowVac		NameUpperBC
+FlowVac			NameUpperBC
