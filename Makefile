@@ -277,7 +277,7 @@ test_restart:
 
 test_restart_save:
 	cp input/${PLANET}/PARAM.in.restartsave ${TESTDIR}/PARAM.in
-	cd ${TESTDIR}/PW/; rm -f restartIN; ln -s data/input/${PLANET}/restartfiles restartIN
+	cd ${TESTDIR}/PW/; rm -f restartIN; ln -s ${MYDIR}/data/input/${PLANET}/restartfiles restartIN
 	cd ${TESTDIR}; ${MPIRUN} ./PWOM.exe | tee runlog_restart_save
 	cd ${TESTDIR}/PW; rm -f restartIN; ln -s restartOUT restartIN
 	cd ${TESTDIR}/PW; rm -rf plot_save; mv plots plots_save; mkdir plots
