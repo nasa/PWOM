@@ -80,7 +80,7 @@ LIB:	DEPEND
 
 ${MY_LIB}: ${LIBSE} ${LIBOBJECTS}
 	cp -f ${LIBSE} ${MY_LIB}
-	${AR} ${MY_LIB} ${LIBGITMREADER} ${LIBOBJECTS}
+	${AR} ${MY_LIB} ${PWDIR}/ModGitmAtmos.o ${LIBOBJECTS}
 
 main.o: ${LIBSHARE}
 
